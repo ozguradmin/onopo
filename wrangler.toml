@@ -1,5 +1,6 @@
 name = "onopo123"
 
+# Bindings configured in Cloudflare Dashboard (required for Pages)
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = ".vercel/output/static"
