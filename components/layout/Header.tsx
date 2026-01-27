@@ -107,13 +107,15 @@ export function Header() {
                             </div>
 
                             {/* User */}
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="rounded-full w-10 h-10 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                            >
-                                <User className="w-5 h-5" />
-                            </Button>
+                            <a href="/admin/auth/login">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="rounded-full w-10 h-10 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                                >
+                                    <User className="w-5 h-5" />
+                                </Button>
+                            </a>
 
                             {/* Cart */}
                             <Button

@@ -5,39 +5,57 @@ import { motion, AnimatePresence } from "framer-motion"
 import { ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-const slides = [
-    {
-        id: 1,
-        headline: "Teknoloji'nin Geleceği",
-        subheadline: "Uzun ömürlü kullanım için tasarlanmış premium kablolar, şarj cihazları ve gadget'lar.",
-        cta: "Teknolojiyi Keşfet",
-        link: "/tech",
-        image: "https://images.unsplash.com/photo-1550009158-9ebf69173e03?q=80&w=2101&auto=format&fit=crop",
-        color: "from-blue-600/20 to-purple-600/20",
-        accent: "text-blue-400"
-    },
-    {
-        id: 2,
-        headline: "Rose Cosmetics: Işılda",
-        subheadline: "Profesyonel makyaj araçları ve cilt bakımı temelleri.",
-        cta: "Güzelliği Keşfet",
-        link: "/beauty",
-        image: "https://images.unsplash.com/photo-1596462502278-27bfdd403cc2?q=80&w=2070&auto=format&fit=crop",
-        color: "from-rose-500/20 to-orange-400/20",
-        accent: "text-rose-400"
-    }
-]
-
 export function HeroSection() {
     const [currentSlide, setCurrentSlide] = React.useState(0)
+    const [slides, setSlides] = React.useState<any[]>([])
+    const [loading, setLoading] = React.useState(true)
 
     React.useEffect(() => {
+        fetch('/api/hero')
+            .then(res => res.json())
+            .then(data => {
+                if (Array.isArray(data) && data.length > 0) {
+                    setSlides(data)
+                } else {
+                    // Fallback to defaults if DB is empty or fails
+                    setSlides([
+                        {
+                            id: 1,
+                            title: "Teknoloji'nin Geleceği",
+                            subtitle: "Uzun ömürlü kullanım için tasarlanmış premium kablolar, şarj cihazları ve gadget'lar.",
+                            button_text: "Teknolojiyi Keşfet",
+                            button_link: "/tech",
+                            image_url: "https://images.unsplash.com/photo-1550009158-9ebf69173e03?q=80&w=2101&auto=format&fit=crop",
+                        },
+                        {
+                            id: 2,
+                            title: "Rose Cosmetics: Işılda",
+                            subtitle: "Profesyonel makyaj araçları ve cilt bakımı temelleri.",
+                            button_text: "Güzelliği Keşfet",
+                            button_link: "/beauty",
+                            image_url: "https://images.unsplash.com/photo-1596462502278-27bfdd403cc2?q=80&w=2070&auto=format&fit=crop",
+                        }
+                    ])
+                }
+                setLoading(false)
+            })
+            .catch(() => setLoading(false))
+    }, [])
+
+    React.useEffect(() => {
+        if (slides.length === 0) return
+
         // User requested 2-3x slower: 5000 -> 12000
         const timer = setInterval(() => {
             setCurrentSlide((prev) => (prev + 1) % slides.length)
         }, 12000)
         return () => clearInterval(timer)
-    }, [])
+    }, [slides.length])
+
+    if (loading) return <div className="h-[90vh] bg-slate-950 flex items-center justify-center text-white">Yükleniyor...</div>
+    if (slides.length === 0) return null
+
+    const slide = slides[currentSlide]
 
     return (
         <section className="relative h-[90vh] w-full overflow-hidden bg-slate-950">
@@ -53,9 +71,9 @@ export function HeroSection() {
                     {/* Background Image with Overlay */}
                     <div
                         className="absolute inset-0 bg-cover bg-center"
-                        style={{ backgroundImage: `url(${slides[currentSlide].image})` }}
+                        style={{ backgroundImage: `url(${slide.image_url || slide.image})` }}
                     />
-                    <div className={`absolute inset-0 bg-gradient-to-r ${slides[currentSlide].color} mix-blend-overlay`} />
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 to-transparent mix-blend-overlay" />
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
 
                     {/* Content */}
@@ -64,25 +82,26 @@ export function HeroSection() {
                             initial={{ y: 20, opacity: 0 }}
                             animate={{ y: 0, opacity: 1 }}
                             transition={{ delay: 0.2, duration: 0.6 }}
-                            className="max-w-2xl"
+                            className="max-w-3xl"
                         >
-                            <span className={`inline-block py-1 px-3 rounded-full bg-white/10 border border-white/10 backdrop-blur-md text-sm font-medium mb-6 ${slides[currentSlide].accent}`}>
-                                Yeni Koleksiyon 2026
-                            </span>
-                            <h1 className="text-5xl md:text-7xl font-bold text-white font-heading tracking-tight mb-6 leading-tight">
-                                {slides[currentSlide].headline}
+                            {/* Removed 'Yeni Koleksiyon 2026' as requested */}
+
+                            <h1 className="text-5xl md:text-7xl font-bold text-white font-heading tracking-tight mb-6 leading-tight drop-shadow-lg">
+                                {slide.title || slide.headline}
                             </h1>
-                            <p className="text-xl text-slate-200 mb-8 max-w-lg leading-relaxed">
-                                {slides[currentSlide].subheadline}
+                            <p className="text-xl md:text-2xl text-slate-100 mb-10 max-w-lg leading-relaxed drop-shadow-md">
+                                {slide.subtitle || slide.subheadline}
                             </p>
-                            <div className="flex gap-4">
-                                <a href={slides[currentSlide].link}>
-                                    <Button size="lg" className="rounded-full text-base px-8 h-12 bg-white text-slate-950 hover:bg-slate-200 transition-all shadow-lg hover:shadow-xl hover:-translate-y-1">
-                                        {slides[currentSlide].cta} <ArrowRight className="ml-2 w-4 h-4" />
+
+                            <div className="flex flex-col sm:flex-row gap-4">
+                                <a href={slide.button_link || slide.link}>
+                                    <Button size="lg" className="w-full sm:w-auto rounded-full text-lg px-10 h-14 bg-white text-slate-950 hover:bg-slate-200 transition-all shadow-xl hover:-translate-y-1 font-semibold">
+                                        {slide.button_text || slide.cta} <ArrowRight className="ml-2 w-5 h-5" />
                                     </Button>
                                 </a>
-                                <a href={slides[currentSlide].link}>
-                                    <Button variant="outline" size="lg" className="rounded-full text-base px-8 h-12 border-white/30 text-white hover:bg-white/10 hover:text-white transition-all">
+                                {/* Refined Secondary Button */}
+                                <a href="/products">
+                                    <Button variant="outline" size="lg" className="w-full sm:w-auto rounded-full text-lg px-10 h-14 border-2 border-white/40 text-white bg-black/20 hover:bg-white/10 hover:border-white transition-all backdrop-blur-sm">
                                         Koleksiyonu İncele
                                     </Button>
                                 </a>
@@ -93,19 +112,21 @@ export function HeroSection() {
             </AnimatePresence>
 
             {/* Slider Controls */}
-            <div className="absolute bottom-10 left-0 right-0 z-20">
-                <div className="container mx-auto px-4 flex justify-center gap-3">
-                    {slides.map((slide, index) => (
-                        <button
-                            key={slide.id}
-                            onClick={() => setCurrentSlide(index)}
-                            className={`h-1.5 rounded-full transition-all duration-300 ${index === currentSlide ? "w-12 bg-white" : "w-6 bg-white/30 hover:bg-white/50"
-                                }`}
-                            aria-label={`Go to slide ${index + 1}`}
-                        />
-                    ))}
+            {slides.length > 1 && (
+                <div className="absolute bottom-10 left-0 right-0 z-20">
+                    <div className="container mx-auto px-4 flex justify-center gap-3">
+                        {slides.map((s, index) => (
+                            <button
+                                key={s.id || index}
+                                onClick={() => setCurrentSlide(index)}
+                                className={`h-1.5 rounded-full transition-all duration-300 shadow-sm ${index === currentSlide ? "w-12 bg-white" : "w-6 bg-white/40 hover:bg-white/60"
+                                    }`}
+                                aria-label={`Go to slide ${index + 1}`}
+                            />
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
         </section>
     )
 }
