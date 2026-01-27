@@ -2,40 +2,41 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'edge'
 
-// Health check endpoint that doesn't require DB
-// This helps diagnose if the issue is with the deployment or the DB binding
+// Ultra-simple health check that won't crash
 export async function GET(req: NextRequest) {
-    const diagnostics: Record<string, any> = {
+    const result: Record<string, any> = {
         status: 'ok',
-        timestamp: new Date().toISOString(),
-        runtime: 'edge',
-        environment: process.env.NODE_ENV,
+        time: new Date().toISOString(),
     }
 
-    // Try to access the Cloudflare context
     try {
+        // Try to import and get context
         const { getRequestContext } = await import('@cloudflare/next-on-pages')
         const ctx = getRequestContext()
 
-        diagnostics.hasEnv = !!ctx?.env
-        diagnostics.hasDB = !!ctx?.env?.DB
-        diagnostics.hasBucket = !!ctx?.env?.BUCKET
-        diagnostics.envKeys = ctx?.env ? Object.keys(ctx.env) : []
+        result.hasCtx = !!ctx
+        result.hasEnv = !!ctx?.env
 
-        // If DB exists, try a simple query
-        if (ctx?.env?.DB) {
-            try {
-                const result = await ctx.env.DB.prepare('SELECT 1 as test').first()
-                diagnostics.dbConnection = 'success'
-                diagnostics.dbTestResult = result
-            } catch (dbError: any) {
-                diagnostics.dbConnection = 'failed'
-                diagnostics.dbError = dbError.message
+        if (ctx?.env) {
+            result.envKeys = Object.keys(ctx.env)
+            result.hasDB = !!ctx.env.DB
+            result.hasBucket = !!ctx.env.BUCKET
+
+            // Try DB query only if DB exists
+            if (ctx.env.DB) {
+                try {
+                    const res = await ctx.env.DB.prepare('SELECT 1 as x').first()
+                    result.dbTest = res ? 'success' : 'empty'
+                } catch (dbErr: any) {
+                    result.dbTest = 'error'
+                    result.dbError = dbErr.message
+                }
             }
         }
-    } catch (error: any) {
-        diagnostics.contextError = error.message
+    } catch (err: any) {
+        result.error = err.message
+        result.stack = err.stack?.split('\n').slice(0, 3)
     }
 
-    return NextResponse.json(diagnostics, { status: 200 })
+    return NextResponse.json(result)
 }
