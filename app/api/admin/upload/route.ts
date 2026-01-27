@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyJWT } from '@/lib/auth'
 
-// We need to access the Binding from the Request Context
-import { getRequestContext } from '@cloudflare/next-on-pages'
-
 export const runtime = 'edge'
 
 export async function POST(req: NextRequest) {
@@ -27,8 +24,11 @@ export async function POST(req: NextRequest) {
         const buffer = await file.arrayBuffer()
         const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`
 
-        // Put to R2
-        const bucket = getRequestContext().env.BUCKET
+        // Get bucket via OpenNext
+        const { getCloudflareContext } = await import('@opennextjs/cloudflare')
+        const { env } = await getCloudflareContext()
+        const bucket = env.BUCKET
+
         await bucket.put(filename, buffer, {
             httpMetadata: {
                 contentType: file.type,

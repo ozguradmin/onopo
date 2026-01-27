@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRequestContext } from '@cloudflare/next-on-pages'
 
 export const runtime = 'edge'
 
@@ -7,7 +6,11 @@ export async function GET(req: NextRequest, props: { params: Promise<{ key: stri
     try {
         const params = await props.params
         const key = params.key
-        const bucket = getRequestContext().env.BUCKET
+
+        // Get bucket via OpenNext
+        const { getCloudflareContext } = await import('@opennextjs/cloudflare')
+        const { env } = await getCloudflareContext()
+        const bucket = env.BUCKET
 
         const object = await bucket.get(key)
 

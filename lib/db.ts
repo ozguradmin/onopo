@@ -1,20 +1,27 @@
-import { NextRequest } from 'next/server';
-
-// Helper to get D1 database from request context or creating a dummy for build time if needed
-// In Next.js on Pages, we might need to rely on 'getRequestContext' from @cloudflare/next-on-pages
-import { getRequestContext } from '@cloudflare/next-on-pages'
+// OpenNext uses getCloudflareContext from @opennextjs/cloudflare
+// This provides access to Cloudflare bindings like D1, R2, KV etc.
 
 export const runtime = 'edge'
 
-export function getDB() {
-    try {
-        const db = getRequestContext().env.DB;
-        if (!db) {
-            throw new Error('Database binding not found');
-        }
-        return db;
-    } catch (e) {
-        console.error("Failed to get DB binding", e);
-        throw e;
+export async function getDB() {
+    // Import dynamically to avoid build-time issues
+    const { getCloudflareContext } = await import('@opennextjs/cloudflare')
+    const { env } = await getCloudflareContext()
+
+    if (!env?.DB) {
+        throw new Error('Database binding not found')
     }
+
+    return env.DB
+}
+
+export async function getBucket() {
+    const { getCloudflareContext } = await import('@opennextjs/cloudflare')
+    const { env } = await getCloudflareContext()
+
+    if (!env?.BUCKET) {
+        throw new Error('R2 bucket binding not found')
+    }
+
+    return env.BUCKET
 }
