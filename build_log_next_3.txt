@@ -1,0 +1,18 @@
+▲ Next.js 16.1.5 (Turbopack)
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 3.9s
+  Running TypeScript ...
+Failed to compile.
+
+./app/page.tsx:3:10
+Type error: Module '"@/components/home/ProductShowcase"' has no exported member 'ProductShowcase'. Did you mean to use 'import ProductShowcase from "@/components/home/ProductShowcase"' instead?
+
+[0m [90m 1 |[39m [36mimport[39m { [33mHeroSection[39m } [36mfrom[39m [32m"@/components/home/HeroSection"[39m[33m;[39m
+ [90m 2 |[39m [36mimport[39m { [33mFeaturesSection[39m } [36mfrom[39m [32m"@/components/home/FeaturesSection"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { [33mProductShowcase[39m } [36mfrom[39m [32m"@/components/home/ProductShowcase"[39m[33m;[39m
+ [90m   |[39m          [31m[1m^[22m[39m
+ [90m 4 |[39m
+ [90m 5 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mHome[39m() {
+ [90m 6 |[39m   [36mreturn[39m ([0m
+Next.js build worker exited with code: 1 and signal: null

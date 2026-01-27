@@ -1,0 +1,12 @@
+
+ ⛅️ wrangler 4.61.0
+───────────────────
+✅ Successfully created DB 'onopo-db' in region EEUR
+Created your new D1 database.
+
+To access your new D1 Database in your Worker, add the following snippet to your configuration file:
+[[d1_databases]]
+binding = "onopo_db"
+database_name = "onopo-db"
+database_id = "750bb90b-a48c-4e9f-9c21-88e8a5e2e313"
+

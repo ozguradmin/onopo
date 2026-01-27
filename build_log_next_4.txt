@@ -1,0 +1,16 @@
+▲ Next.js 16.1.5 (Turbopack)
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 3.8s
+  Running TypeScript ...
+Failed to compile.
+
+./next.config.ts:1:19
+Type error: Cannot find name 'NextConfig'.
+
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mconst[39m nextConfig[33m:[39m [33mNextConfig[39m [33m=[39m {
+ [90m   |[39m                   [31m[1m^[22m[39m
+ [90m 2 |[39m   [90m/* config options here */[39m
+ [90m 3 |[39m }[33m;[39m
+ [90m 4 |[39m[0m
+Next.js build worker exited with code: 1 and signal: null
