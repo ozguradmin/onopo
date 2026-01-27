@@ -34,6 +34,18 @@ jobs:
       - name: Create Project (if missing)
         run: npx wrangler pages project create onopo --production-branch main || true
 
+      # Configure D1 Database Binding
+      - name: Configure D1 Binding
+        run: |
+          npx wrangler pages project binding add onopo --d1=DB --database-id=750bb90b-a48c-4e9f-9c21-88e8a5e2e313 --production || true
+          npx wrangler pages project binding add onopo --d1=DB --database-id=750bb90b-a48c-4e9f-9c21-88e8a5e2e313 --preview || true
+
+      # Configure R2 Bucket Binding
+      - name: Configure R2 Binding
+        run: |
+          npx wrangler pages project binding add onopo --r2=BUCKET --bucket-name=onopo-storage --production || true
+          npx wrangler pages project binding add onopo --r2=BUCKET --bucket-name=onopo-storage --preview || true
+
       - name: Apply Database Migrations
         run: npx wrangler d1 execute onopo-db --remote --file=./schema.sql
         
