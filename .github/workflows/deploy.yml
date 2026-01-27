@@ -32,7 +32,7 @@ jobs:
         run: npx @cloudflare/next-on-pages
 
       - name: Create Project (if missing)
-        run: npx wrangler pages project create onopo --production || true
+        run: npx wrangler pages project create onopo --production-branch main || true
 
       - name: Deploy to Cloudflare Pages
         run: npx wrangler pages deploy .vercel/output/static --project-name onopo
