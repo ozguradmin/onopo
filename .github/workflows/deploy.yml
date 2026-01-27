@@ -13,7 +13,7 @@ jobs:
     name: Deploy to Cloudflare Pages
     env:
       # Using secrets is recommended, but hardcoding here for immediate resolution.
-      CLOUDFLARE_ACCOUNT_ID: 3c3c225b3a27de7822833feb24b65b1
+      CLOUDFLARE_ACCOUNT_ID: 3c39c225b3a27de7822833feb24b65b1
       CLOUDFLARE_API_TOKEN: vB11rgPbhrBq27RbJIdolggGRXZfzya6GVOd64pp
     
     steps:
