@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyJWT } from '@/lib/auth'
 
-export const runtime = 'edge'
+
 
 export async function POST(req: NextRequest) {
     try {

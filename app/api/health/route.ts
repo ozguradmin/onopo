@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-export const runtime = 'edge'
+
 
 // Health check using OpenNext
 export async function GET(req: NextRequest) {

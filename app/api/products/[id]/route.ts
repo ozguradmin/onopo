@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 
-export const runtime = 'edge'
+
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
     try {

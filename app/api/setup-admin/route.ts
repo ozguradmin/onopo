@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { hashPassword } from '@/lib/auth'
 
-export const runtime = 'edge'
+
 
 // Security: Check for a setup secret in headers or query params to prevent abuse
 // For this recovery phase, we'll use a hardcoded query param that the user can use once

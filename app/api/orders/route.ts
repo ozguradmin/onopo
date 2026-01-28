@@ -3,7 +3,7 @@ import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { sendEmail } from '@/lib/email'
 
-export const runtime = 'edge'
+
 
 // Create Order (Public/User)
 export async function POST(req: NextRequest) {
