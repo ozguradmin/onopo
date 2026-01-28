@@ -6,7 +6,7 @@ export default function PageContent({ params }: { params: any }) {
     const [page, setPage] = React.useState<{ title: string, content: string } | null>(null)
     const [loading, setLoading] = React.useState(true)
 
-    const slug = React.use(params).slug as string
+    const slug = (React.use(params) as { slug: string }).slug
 
     React.useEffect(() => {
         fetch(`/api/pages/${slug}`)
