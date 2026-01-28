@@ -97,9 +97,9 @@ export default function AddProductPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...formData,
-                    price: parseFloat(formData.price),
+                    price: parseFloat(formData.price) || 0,
                     original_price: formData.original_price ? parseFloat(formData.original_price) : null,
-                    stock: parseInt(formData.stock)
+                    stock: parseInt(formData.stock) || 0
                 })
             })
 

@@ -258,3 +258,45 @@ export function Header() {
         </>
     )
 }
+
+function CategoriesDropdown() {
+    const [categories, setCategories] = React.useState<any[]>([])
+    const [loading, setLoading] = React.useState(true)
+
+    React.useEffect(() => {
+        // Find distinct categories with product count
+        fetch('/api/products')
+            .then(res => res.json())
+            .then(products => {
+                if (Array.isArray(products)) {
+                    const cats = products.reduce((acc: any, product: any) => {
+                        if (!product.category) return acc
+                        if (!acc[product.category]) acc[product.category] = 0
+                        acc[product.category]++
+                        return acc
+                    }, {})
+                    setCategories(Object.entries(cats).map(([name, count]) => ({ name, count })))
+                }
+                setLoading(false)
+            })
+            .catch(() => setLoading(false))
+    }, [])
+
+    if (loading) return <div className="px-4 py-2 text-xs text-slate-400">Yükleniyor...</div>
+    if (categories.length === 0) return <div className="px-4 py-2 text-xs text-slate-400">Kategori bulunamadı</div>
+
+    return (
+        <div className="max-h-[300px] overflow-y-auto">
+            {categories.map((cat: any) => (
+                <a
+                    key={cat.name}
+                    href={`/products?category=${encodeURIComponent(cat.name)}`}
+                    className="flex items-center justify-between px-4 py-2 rounded-lg hover:bg-slate-50 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                >
+                    <span className="capitalize">{cat.name}</span>
+                    <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">{cat.count}</span>
+                </a>
+            ))}
+        </div>
+    )
+}

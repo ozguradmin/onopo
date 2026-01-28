@@ -12,6 +12,29 @@ export default function AdminLoginPage() {
     const [password, setPassword] = React.useState('')
     const [loading, setLoading] = React.useState(false)
     const [error, setError] = React.useState('')
+    const [showForgot, setShowForgot] = React.useState(false)
+    const [forgotLoading, setForgotLoading] = React.useState(false)
+
+    const handleForgotPassword = async () => {
+        setForgotLoading(true)
+        try {
+            const res = await fetch('/api/admin/forgot-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: 'ozgurglr256@gmail.com' })
+            })
+            if (res.ok) {
+                alert('Şifre yenileme maili ozgurglr256@gmail.com adresine başarıyla gönderildi (Simüle edildi).')
+                setShowForgot(false)
+            } else {
+                alert('Mail gönderme hatası oluştu.')
+            }
+        } catch {
+            alert('Hata oluştu.')
+        } finally {
+            setForgotLoading(false)
+        }
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -95,6 +118,15 @@ export default function AdminLoginPage() {
                                     className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
                                     placeholder="••••••••"
                                 />
+                                <div className="flex justify-end mt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowForgot(true)}
+                                        className="text-xs text-slate-500 hover:text-slate-900"
+                                    >
+                                        Şifremi Unuttum?
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -115,6 +147,33 @@ export default function AdminLoginPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Forgot Password Modal/Overlay */}
+            {showForgot && (
+                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl">
+                        <h2 className="text-xl font-bold mb-2">Şifremi Unuttum</h2>
+                        <p className="text-sm text-slate-500 mb-6">Şifre yenileme bağlantısı **ozgurglr256@gmail.com** adresine gönderilecektir.</p>
+
+                        <div className="space-y-4">
+                            <Button
+                                onClick={handleForgotPassword}
+                                disabled={forgotLoading}
+                                className="w-full bg-slate-900 text-white"
+                            >
+                                {forgotLoading ? 'Gönderiliyor...' : 'Yenileme Maili Gönder'}
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                onClick={() => setShowForgot(false)}
+                                className="w-full"
+                            >
+                                Kapat
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
