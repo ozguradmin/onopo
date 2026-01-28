@@ -93,10 +93,6 @@ export function Footer() {
 
                 <div className="border-t border-slate-900 mt-16 pt-8 flex flex-col md:flex-row justify-between items-center text-xs text-slate-500">
                     <p>{settings.footer_text}</p>
-                    <div className="flex space-x-4 mt-4 md:mt-0">
-                        <Link href="/privacy" className="hover:text-slate-300 transition-colors">Gizlilik</Link>
-                        <Link href="/terms" className="hover:text-slate-300 transition-colors">Kullanım Şartları</Link>
-                    </div>
                 </div>
             </div>
         </footer>
