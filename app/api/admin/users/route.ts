@@ -15,7 +15,7 @@ export async function GET() {
 
         const db = await getDB()
         const { results } = await db.prepare(`
-            SELECT id, email, full_name, phone, role, created_at
+            SELECT id, email, full_name, role, created_at
             FROM users 
             ORDER BY created_at DESC
         `).all()

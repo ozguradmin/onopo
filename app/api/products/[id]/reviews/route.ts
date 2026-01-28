@@ -55,18 +55,34 @@ export async function POST(
             return NextResponse.json({ error: 'Rating must be between 1 and 5' }, { status: 400 })
         }
 
+        // Validate userId from JWT
+        const userId = payload.userId || payload.sub || payload.id
+        if (!userId) {
+            return NextResponse.json({ error: 'User ID not found in token' }, { status: 401 })
+        }
+
+        // Ensure id is a number
+        const productId = parseInt(id, 10)
+        if (isNaN(productId)) {
+            return NextResponse.json({ error: 'Invalid product ID' }, { status: 400 })
+        }
+
         // Check if user already reviewed this product
         const { results: existing } = await db.prepare(
             'SELECT id FROM reviews WHERE product_id = ? AND user_id = ?'
-        ).bind(id, payload.userId).all()
+        ).bind(productId, userId).all()
 
         if (existing && existing.length > 0) {
             return NextResponse.json({ error: 'Bu ürüne zaten yorum yaptınız' }, { status: 409 })
         }
 
+        // Ensure comment is a string, never undefined
+        const safeComment = comment != null ? String(comment) : ''
+        const safeRating = parseInt(String(rating), 10)
+
         await db.prepare(
             'INSERT INTO reviews (product_id, user_id, rating, comment) VALUES (?, ?, ?, ?)'
-        ).bind(id, payload.userId, rating, comment !== undefined ? String(comment) : '').run()
+        ).bind(productId, userId, safeRating, safeComment).run()
 
         return NextResponse.json({ success: true })
     } catch (error: any) {
