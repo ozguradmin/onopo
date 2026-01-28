@@ -10,11 +10,11 @@ export function ImageCardSection({ title, image_url, link_url }: ImageCardSectio
     if (!image_url) return null
 
     const Content = () => (
-        <div className="relative w-full h-[400px] md:h-[500px] rounded-3xl overflow-hidden group">
+        <div className="relative w-full max-h-[500px] rounded-3xl overflow-hidden group">
             <img
                 src={image_url}
                 alt={title || 'Image'}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                className="w-full h-auto max-h-[500px] object-cover transition-transform duration-700 group-hover:scale-105"
             />
             {title && (
                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center p-6 text-center">
@@ -26,7 +26,7 @@ export function ImageCardSection({ title, image_url, link_url }: ImageCardSectio
 
     if (link_url) {
         return (
-            <section className="container mx-auto px-4 py-8">
+            <section className="container mx-auto px-4 py-8 max-w-6xl">
                 <Link href={link_url}>
                     <Content />
                 </Link>
@@ -35,7 +35,7 @@ export function ImageCardSection({ title, image_url, link_url }: ImageCardSectio
     }
 
     return (
-        <section className="container mx-auto px-4 py-8">
+        <section className="container mx-auto px-4 py-8 max-w-6xl">
             <Content />
         </section>
     )

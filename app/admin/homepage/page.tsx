@@ -386,13 +386,41 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
                     {section.type === 'image_card' && (
                         <>
                             <div>
-                                <label className="block text-sm font-medium mb-2">Görsel URL</label>
+                                <label className="block text-sm font-medium mb-2">Görsel (Cihazdan Seç)</label>
                                 <input
-                                    value={config.image_url || ''}
-                                    onChange={e => setConfig({ ...config, image_url: e.target.value })}
-                                    className="w-full p-3 border border-slate-200 rounded-lg"
-                                    placeholder="https://..."
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={async (e) => {
+                                        const file = e.target.files?.[0]
+                                        if (!file) return
+
+                                        const formData = new FormData()
+                                        formData.append('file', file)
+
+                                        try {
+                                            const res = await fetch('/api/upload', {
+                                                method: 'POST',
+                                                body: formData
+                                            })
+                                            const data = await res.json()
+                                            if (data.url) {
+                                                setConfig({ ...config, image_url: data.url })
+                                            }
+                                        } catch (err) {
+                                            console.error('Upload error:', err)
+                                        }
+                                    }}
+                                    className="w-full p-3 border border-slate-200 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
                                 />
+                                {config.image_url && (
+                                    <div className="mt-3 rounded-lg overflow-hidden border border-slate-200">
+                                        <img
+                                            src={config.image_url}
+                                            alt="Preview"
+                                            className="w-full h-48 object-cover"
+                                        />
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-2">Link (opsiyonel)</label>

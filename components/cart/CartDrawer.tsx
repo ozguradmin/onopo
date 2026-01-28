@@ -132,9 +132,11 @@ export function CartDrawer() {
                                 <p className="text-sm text-slate-500 mb-6">
                                     Kargo ve vergiler ödeme adımında hesaplanır.
                                 </p>
-                                <Button className="w-full h-14 text-lg rounded-2xl bg-slate-900 text-white hover:bg-slate-800 shadow-lg font-bold flex items-center justify-center gap-2">
-                                    Ödemeye Geç <ArrowRight className="w-5 h-5" />
-                                </Button>
+                                <a href="/checkout" onClick={closeCart}>
+                                    <Button className="w-full h-14 text-lg rounded-2xl bg-slate-900 text-white hover:bg-slate-800 shadow-lg font-bold flex items-center justify-center gap-2">
+                                        Ödemeye Geç <ArrowRight className="w-5 h-5" />
+                                    </Button>
+                                </a>
                             </div>
                         )}
                     </motion.div>

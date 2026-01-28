@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
         // Verify the email matches admin email
         if (email !== ADMIN_EMAIL) {
             // Don't reveal if email exists or not for security
-            return NextResponse.json({ success: true, message: 'Eğer bu e-posta kayıtlıysa, şifre sıfırlandı.' })
+            return NextResponse.json({ success: true, message: 'Eğer bu e-posta kayıtlıysa, şifre sıfırlama maili gönderildi.' })
         }
 
         // Generate a new random password
@@ -26,7 +26,6 @@ export async function POST(req: NextRequest) {
         ).bind(passwordHash, ADMIN_EMAIL).run()
 
         // Try to send email with MailChannels
-        let emailSent = false
         try {
             const emailResponse = await fetch('https://api.mailchannels.net/tx/v1/send', {
                 method: 'POST',
@@ -63,7 +62,7 @@ Bu e-posta Onopo Admin paneli tarafından gönderilmiştir.`
             })
 
             if (emailResponse.ok) {
-                emailSent = true
+                console.log('Password reset email sent successfully')
             } else {
                 console.error('MailChannels error:', await emailResponse.text())
             }
@@ -71,27 +70,18 @@ Bu e-posta Onopo Admin paneli tarafından gönderilmiştir.`
             console.error('Email sending error:', emailError)
         }
 
-        // Log password to console for backup
+        // Log password to console for backup (server logs only)
         console.log('========================================')
         console.log('PASSWORD RESET COMPLETED')
         console.log(`Email: ${ADMIN_EMAIL}`)
         console.log(`New Password: ${newPassword}`)
         console.log('========================================')
 
-        if (emailSent) {
-            return NextResponse.json({
-                success: true,
-                message: `Şifre yenileme maili ${ADMIN_EMAIL} adresine gönderildi.`
-            })
-        } else {
-            // Return the new password directly since email couldn't be sent
-            return NextResponse.json({
-                success: true,
-                message: `Şifreniz sıfırlandı. E-posta gönderilemedi.`,
-                newPassword: newPassword,
-                email: ADMIN_EMAIL
-            })
-        }
+        // Always return success message - never expose password in response
+        return NextResponse.json({
+            success: true,
+            message: `Şifre sıfırlama maili ${ADMIN_EMAIL} adresine gönderildi. Mail gelmezse sunucu loglarını kontrol edin.`
+        })
 
     } catch (error: any) {
         console.error('Forgot password error:', error)

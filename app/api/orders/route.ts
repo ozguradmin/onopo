@@ -1,104 +1,93 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
-import { sendEmail } from '@/lib/email'
+import { cookies } from 'next/headers'
 
-
-
-// Create Order (Public/User)
+// Create Order (Guest or User)
 export async function POST(req: NextRequest) {
     try {
         const db = await getDB()
         const body = await req.json()
-        const { items, shippingAddress, guestEmail } = body
+        const { items, customerInfo } = body
 
-        // Auth check (Optional)
-        const token = req.cookies.get('token')?.value
+        // Auth check (Optional - guest checkout allowed)
+        const cookieStore = await cookies()
+        const token = cookieStore.get('auth_token')?.value
         let userId = null
-        let userEmail = guestEmail
 
         if (token) {
             const payload = await verifyJWT(token)
             if (payload) {
-                userId = payload.id
-                userEmail = payload.email
+                userId = payload.userId || payload.sub || payload.id
             }
         }
 
+        // Validate required fields
         if (!items || items.length === 0) {
-            return NextResponse.json({ error: 'Cart is empty' }, { status: 400 })
+            return NextResponse.json({ error: 'Sepet boş' }, { status: 400 })
         }
-        if (!userEmail) {
-            return NextResponse.json({ error: 'Email required' }, { status: 400 })
+        if (!customerInfo?.email) {
+            return NextResponse.json({ error: 'E-posta adresi zorunlu' }, { status: 400 })
+        }
+        if (!customerInfo?.phone) {
+            return NextResponse.json({ error: 'Telefon numarası zorunlu' }, { status: 400 })
+        }
+        if (!customerInfo?.fullName) {
+            return NextResponse.json({ error: 'Ad soyad zorunlu' }, { status: 400 })
         }
 
-        // Calculate Total & Verify Stock (Simplified)
+        // Calculate total
         let totalAmount = 0
         const orderItems = []
 
-        // In a real app, verify prices from DB. Trusting client for simulation speed.
         for (const item of items) {
-            // Check stock?
-            // const product = await db.prepare('SELECT price, stock FROM products WHERE id=?').bind(item.id).first()
             totalAmount += item.price * item.quantity
             orderItems.push({
                 product_id: item.id,
                 quantity: item.quantity,
                 price: item.price,
-                name: item.name // just for email context if needed
+                name: item.name
             })
         }
 
-        // Create Order
+        // Create order
+        const shippingAddress = JSON.stringify({
+            fullName: customerInfo.fullName,
+            phone: customerInfo.phone,
+            address: customerInfo.address || '',
+            city: customerInfo.city || '',
+            district: customerInfo.district || '',
+            postalCode: customerInfo.postalCode || '',
+            note: customerInfo.note || ''
+        })
+
         const orderResult = await db.prepare(
             `INSERT INTO orders (user_id, guest_email, status, total_amount, shipping_address) 
              VALUES (?, ?, ?, ?, ?) RETURNING id`
         ).bind(
             userId,
-            userEmail,
+            customerInfo.email,
             'pending',
             totalAmount,
-            JSON.stringify(shippingAddress)
+            shippingAddress
         ).first()
 
-        // If RETURNING not supported (older D1), use last_insert_rowid()
-        // But D1 supports it now mostly. If fails, handle it.
-        // Let's assume valid ID.
-
-        if (!orderResult) throw new Error("Order creation failed")
+        if (!orderResult) throw new Error("Sipariş oluşturulamadı")
 
         const orderId = orderResult.id
 
-        // Create Order Items
+        // Create order items
         const stmt = db.prepare(
             `INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase) VALUES (?, ?, ?, ?)`
         )
         const batch = orderItems.map(item => stmt.bind(orderId, item.product_id, item.quantity, item.price))
         await db.batch(batch)
 
-        // Send Email
-        const emailHtml = `
-            <h1>Siparişiniz Alındı! 🎉</h1>
-            <p>Merhaba,</p>
-            <p>Siparişiniz başarıyla oluşturuldu. Sipariş numaranız: <strong>#${orderId}</strong></p>
-            <p>Toplam Tutar: <strong>${totalAmount.toFixed(2)} ₺</strong></p>
-            <hr />
-            <h3>Ürünler:</h3>
-            <ul>
-                ${orderItems.map(i => `<li>${i.name} x ${i.quantity}</li>`).join('')}
-            </ul>
-            <p>Teşekkürler!</p>
-        `
-
-        // Fire and forget email? Cloudflare Workers handles async well but let's await to be safe or waitUntil
-        // In Next.js Edge, we can await.
-        await sendEmail({
-            to: userEmail,
-            subject: `Sipariş Onayı #${orderId}`,
-            html: emailHtml
+        return NextResponse.json({
+            success: true,
+            orderId,
+            message: 'Siparişiniz başarıyla oluşturuldu!'
         })
-
-        return NextResponse.json({ success: true, orderId })
 
     } catch (error: any) {
         console.error("Order error", error)
@@ -106,29 +95,43 @@ export async function POST(req: NextRequest) {
     }
 }
 
-// Get Orders (Admin lists all, User lists theirs)
+// Get Orders - For admin panel 
 export async function GET(req: NextRequest) {
     try {
         const db = await getDB()
-        const token = req.cookies.get('token')?.value
-        if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        const cookieStore = await cookies()
+        const token = cookieStore.get('auth_token')?.value
+
+        // Return empty array if not authenticated
+        if (!token) {
+            return NextResponse.json([])
+        }
 
         const payload = await verifyJWT(token)
-        if (!payload) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        if (!payload) {
+            return NextResponse.json([])
+        }
+
+        const userId = payload.userId || payload.sub || payload.id
+        const userRole = payload.role
 
         let query = 'SELECT * FROM orders ORDER BY created_at DESC'
         let bindArgs: any[] = []
 
-        if (payload.role !== 'admin') {
+        // Non-admin users can only see their own orders
+        if (userRole !== 'admin') {
             query = 'SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC'
-            bindArgs = [payload.id]
+            bindArgs = [userId]
         }
 
-        const { results } = await db.prepare(query).bind(...bindArgs).all()
+        const { results } = bindArgs.length > 0
+            ? await db.prepare(query).bind(...bindArgs).all()
+            : await db.prepare(query).all()
 
-        return NextResponse.json(results)
+        return NextResponse.json(results || [])
 
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error('Orders fetch error:', error)
+        return NextResponse.json([])
     }
 }

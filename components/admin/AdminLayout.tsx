@@ -15,7 +15,8 @@ import {
     X,
     MessageSquare,
     Users,
-    FolderOpen
+    FolderOpen,
+    ShoppingCart
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -24,6 +25,7 @@ const navItems = [
     { href: '/admin/homepage', label: 'Ana Sayfa', icon: Home },
     { href: '/admin/products', label: 'Ürünler', icon: Package },
     { href: '/admin/categories', label: 'Kategoriler', icon: FolderOpen },
+    { href: '/admin/orders', label: 'Siparişler', icon: ShoppingCart },
     { href: '/admin/pages', label: 'Sayfalar', icon: FileText },
     { href: '/admin/header', label: 'Menü Yönetimi', icon: Menu },
     { href: '/admin/reviews', label: 'Yorumlar', icon: MessageSquare },
