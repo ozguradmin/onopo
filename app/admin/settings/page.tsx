@@ -1,192 +1,132 @@
 'use client'
 
 import * as React from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Upload, Save, Loader2 } from 'lucide-react'
+import { ArrowLeft, User, Lock, Save } from 'lucide-react'
 
 export default function AdminSettingsPage() {
+    const router = useRouter()
+    const [user, setUser] = React.useState<any>(null)
     const [loading, setLoading] = React.useState(true)
     const [saving, setSaving] = React.useState(false)
-    const [uploading, setUploading] = React.useState(false)
 
-    const [settings, setSettings] = React.useState({
-        site_name: 'Onopo',
-        site_description: 'Yaşam tarzı ve teknolojinin geleceğini tanımlıyoruz. Modern yaratıcılar için premium temeller.',
-        logo_url: '',
-        footer_text: '© 2024 Onopo. Tüm hakları saklıdır.',
-        footer_email: 'info@onopo.com',
-        footer_phone: '+90 555 123 4567',
-        footer_address: 'İstanbul, Türkiye'
-    })
+    // Form states
+    const [email, setEmail] = React.useState('')
+    const [password, setPassword] = React.useState('')
+    const [confirmPassword, setConfirmPassword] = React.useState('')
 
     React.useEffect(() => {
-        fetch('/api/site-settings')
-            .then(r => r.json())
+        fetch('/api/auth/me')
+            .then(res => res.json())
             .then(data => {
-                setSettings(prev => ({ ...prev, ...data }))
+                if (data.user) {
+                    setUser(data.user)
+                    setEmail(data.user.email)
+                }
                 setLoading(false)
             })
             .catch(() => setLoading(false))
     }, [])
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const { name, value } = e.target
-        setSettings(prev => ({ ...prev, [name]: value }))
-    }
-
-    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file) return
-
-        setUploading(true)
-        try {
-            const data = new FormData()
-            data.append('file', file)
-            const res = await fetch('/api/admin/upload', { method: 'POST', body: data })
-            if (!res.ok) throw new Error()
-            const result = await res.json()
-            setSettings(prev => ({ ...prev, logo_url: result.url }))
-        } catch {
-            alert('Logo yüklenemedi')
-        } finally {
-            setUploading(false)
+    const handleUpdate = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (password && password !== confirmPassword) {
+            alert('Şifreler uyuşmuyor')
+            return
         }
-    }
 
-    const handleSave = async () => {
         setSaving(true)
         try {
-            const res = await fetch('/api/site-settings', {
-                method: 'POST',
+            const res = await fetch('/api/admin/profile', {
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(settings)
+                body: JSON.stringify({ email, password: password || undefined })
             })
+
             if (res.ok) {
-                alert('Ayarlar kaydedildi!')
+                alert('Profil güncellendi')
+                setPassword('')
+                setConfirmPassword('')
+            } else {
+                throw new Error('Güncelleme başarısız')
             }
-        } catch {
-            alert('Kaydetme hatası')
+        } catch (error) {
+            alert('Hata oluştu')
         } finally {
             setSaving(false)
         }
     }
 
-    if (loading) return <div className="text-center py-8">Yükleniyor...</div>
+    if (loading) return <div>Yükleniyor...</div>
 
     return (
-        <div className="max-w-2xl">
-            <h1 className="text-2xl font-bold text-slate-900 mb-6">Site Ayarları</h1>
+        <div className="max-w-2xl mx-auto">
+            <div className="mb-6 flex items-center gap-4">
+                <Button variant="ghost" onClick={() => router.back()}>
+                    <ArrowLeft className="w-4 h-4 mr-2" /> Geri
+                </Button>
+                <h1 className="text-2xl font-bold">Admin Profil Ayarları</h1>
+            </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-6">
-                {/* Logo Upload */}
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Site Logosu</label>
-                    <div className="flex items-center gap-4">
-                        {settings.logo_url ? (
-                            <img src={settings.logo_url} alt="Logo" className="h-12 object-contain" />
-                        ) : (
-                            <div className="h-12 px-4 bg-slate-100 rounded-lg flex items-center text-slate-500">
-                                Logo yok
-                            </div>
-                        )}
-                        <label className="cursor-pointer">
-                            <span className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 text-sm flex items-center gap-2">
-                                <Upload className="w-4 h-4" />
-                                {uploading ? 'Yükleniyor...' : 'Logo Yükle'}
+            <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm">
+                <form onSubmit={handleUpdate} className="space-y-6">
+                    <div>
+                        <label className="block text-sm font-medium mb-1">E-posta Adresi</label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-slate-400">
+                                <User className="w-5 h-5" />
                             </span>
-                            <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} disabled={uploading} />
-                        </label>
-                        {settings.logo_url && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setSettings(prev => ({ ...prev, logo_url: '' }))}
-                                className="text-red-500 hover:text-red-600"
-                            >
-                                Kaldır
-                            </Button>
-                        )}
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={e => setEmail(e.target.value)}
+                                className="w-full pl-10 p-2 border rounded-lg"
+                                required
+                            />
+                        </div>
                     </div>
-                    <p className="text-xs text-slate-500 mt-2">Logo, header'daki "Onopo" yazısının yerine gösterilir.</p>
-                </div>
 
-                {/* Site Name */}
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Site Adı</label>
-                    <input
-                        name="site_name"
-                        value={settings.site_name}
-                        onChange={handleChange}
-                        className="w-full p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    />
-                </div>
-
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Site Açıklaması (Footer)</label>
-                    <textarea
-                        name="site_description"
-                        value={settings.site_description}
-                        onChange={handleChange}
-                        rows={2}
-                        className="w-full p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    />
-                </div>
-
-                {/* Footer Text */}
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Footer Metin</label>
-                    <input
-                        name="footer_text"
-                        value={settings.footer_text}
-                        onChange={handleChange}
-                        className="w-full p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    />
-                </div>
-
-                {/* Contact Info */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">E-posta</label>
-                        <input
-                            name="footer_email"
-                            value={settings.footer_email}
-                            onChange={handleChange}
-                            className="w-full p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                        />
+                    <div className="border-t pt-6">
+                        <h3 className="font-semibold mb-4">Şifre Değiştir</h3>
+                        <div className="grid gap-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Yeni Şifre</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-2.5 text-slate-400">
+                                        <Lock className="w-5 h-5" />
+                                    </span>
+                                    <input
+                                        type="password"
+                                        value={password}
+                                        onChange={e => setPassword(e.target.value)}
+                                        className="w-full pl-10 p-2 border rounded-lg"
+                                        placeholder="Değiştirmek istemiyorsanız boş bırakın"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Yeni Şifre (Tekrar)</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-2.5 text-slate-400">
+                                        <Lock className="w-5 h-5" />
+                                    </span>
+                                    <input
+                                        type="password"
+                                        value={confirmPassword}
+                                        onChange={e => setConfirmPassword(e.target.value)}
+                                        className="w-full pl-10 p-2 border rounded-lg"
+                                        placeholder="Tekrar girin"
+                                    />
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Telefon</label>
-                        <input
-                            name="footer_phone"
-                            value={settings.footer_phone}
-                            onChange={handleChange}
-                            className="w-full p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                        />
-                    </div>
-                </div>
 
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Adres</label>
-                    <textarea
-                        name="footer_address"
-                        value={settings.footer_address}
-                        onChange={handleChange}
-                        rows={2}
-                        className="w-full p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    />
-                </div>
-
-                {/* Save Button */}
-                <div className="pt-4 border-t">
-                    <Button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="w-full bg-slate-900 text-white hover:bg-slate-800 h-12 text-lg gap-2"
-                    >
-                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                        Kaydet
+                    <Button type="submit" disabled={saving} className="w-full bg-slate-900 text-white hover:bg-slate-800 h-11">
+                        {saving ? 'Kaydediliyor...' : 'Admin Profilini Güncelle'}
                     </Button>
-                </div>
+                </form>
             </div>
         </div>
     )

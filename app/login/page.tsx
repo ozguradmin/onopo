@@ -101,13 +101,24 @@ function LoginForm() {
                             </div>
                         </div>
 
-                        <Button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full h-12 bg-slate-900 text-white hover:bg-slate-800 rounded-xl font-semibold text-base"
-                        >
-                            {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
-                        </Button>
+                        <div className="space-y-4">
+                            <Button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full h-12 bg-slate-900 text-white hover:bg-slate-800 rounded-xl font-semibold text-base"
+                            >
+                                {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
+                            </Button>
+                            <a href="/register" className="block">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full h-12 border-slate-200 text-slate-900 hover:bg-slate-50 rounded-xl font-semibold text-base"
+                                >
+                                    Kayıt Ol
+                                </Button>
+                            </a>
+                        </div>
                     </form>
                 </div>
             </div>

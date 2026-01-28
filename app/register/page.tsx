@@ -56,7 +56,6 @@ export default function RegisterPage() {
     }
 
     const features = [
-        { icon: Gift, title: "Hoşgeldin Hediyesi", desc: "İlk siparişinize %10 indirim" },
         { icon: Truck, title: "Ücretsiz Kargo", desc: "150₺ üzeri siparişlerde" },
         { icon: Shield, title: "Güvenli Alışveriş", desc: "256-bit SSL şifreleme" },
         { icon: Star, title: "Özel Fırsatlar", desc: "Üyelere özel kampanyalar" },

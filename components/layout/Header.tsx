@@ -106,7 +106,16 @@ export function Header() {
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             className="bg-transparent border-none outline-none text-sm w-full text-slate-900 placeholder-slate-400"
                                         />
-                                        <button type="button" onClick={() => { setSearchOpen(false); setSearchQuery(""); }} className="ml-2">
+                                        <button type="button" onClick={() => {
+                                            setSearchOpen(false);
+                                            setSearchQuery("");
+                                            // Clear URL param if exists
+                                            const url = new URL(window.location.href);
+                                            if (url.searchParams.has('q')) {
+                                                url.searchParams.delete('q');
+                                                window.location.href = url.toString();
+                                            }
+                                        }} className="ml-2">
                                             <X className="w-4 h-4 text-slate-500 hover:text-slate-900" />
                                         </button>
                                     </form>

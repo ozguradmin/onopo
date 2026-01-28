@@ -64,10 +64,6 @@ export default function ProfilePage() {
                                     <h1 className="text-xl font-bold text-slate-900">
                                         {user?.full_name || 'Kullanıcı'}
                                     </h1>
-                                    {/* Placeholder for Edit */}
-                                    <button className="text-xs text-blue-600 hover:text-blue-800 font-medium">
-                                        Düzenle
-                                    </button>
                                 </div>
                                 <p className="text-slate-500">{user?.email}</p>
                                 {user?.role === 'admin' && (
