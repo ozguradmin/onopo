@@ -25,10 +25,15 @@ export default function AdminLoginPage() {
             })
             const data = await res.json()
             if (res.ok) {
-                alert(data.message || 'Şifre yenileme maili gönderildi.')
+                if (data.newPassword) {
+                    // Email couldn't be sent, show password directly
+                    alert(`Şifreniz sıfırlandı!\n\nE-posta: ${data.email}\nYeni Şifre: ${data.newPassword}\n\nBu şifreyi güvenli bir yere kaydedin!`)
+                } else {
+                    alert(data.message || 'Şifre yenileme maili gönderildi.')
+                }
                 setShowForgot(false)
             } else {
-                alert(data.error || 'Mail gönderme hatası oluştu.')
+                alert(data.error || 'Şifre sıfırlama hatası oluştu.')
             }
         } catch {
             alert('Hata oluştu.')
