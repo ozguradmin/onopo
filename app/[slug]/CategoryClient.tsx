@@ -5,8 +5,9 @@ import * as React from "react"
 // Actually simpler to just use the prop.
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ShoppingBag, ArrowRight, Filter, ChevronDown } from "lucide-react"
+import { ShoppingBag, ArrowRight, Filter, ChevronDown, Search } from "lucide-react"
 import { useCartStore } from "@/store/cart-store"
+import { formatPrice } from "@/lib/formatPrice"
 
 // Constants needed (restored from previous context)
 const CATEGORY_INFO: Record<string, { title: string; desc: string }> = {
@@ -140,9 +141,20 @@ export default function CategoryClient({ slug }: { slug: string }) {
                     <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold font-heading text-slate-900 tracking-tight mb-6">
                         {info.title}
                     </h1>
-                    <p className="text-xl text-slate-500 max-w-2xl mx-auto">
+                    <p className="text-xl text-slate-500 max-w-2xl mx-auto mb-6">
                         {info.desc}
                     </p>
+                    {/* Search Box */}
+                    <div className="relative max-w-md mx-auto">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="Ürün ara..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-12 pr-4 py-3 rounded-full border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300 shadow-sm"
+                        />
+                    </div>
                 </div>
 
                 {/* Filters Bar */}
@@ -218,7 +230,7 @@ export default function CategoryClient({ slug }: { slug: string }) {
                                     </a>
                                     <div className="mt-auto flex items-center justify-between pt-2 gap-2">
                                         <span className="text-base md:text-lg font-bold text-slate-900">
-                                            {product.price.toFixed(2)} ₺
+                                            {formatPrice(product.price)}
                                         </span>
                                         {/* ALWAYS VISIBLE Add to Cart Button */}
                                         <Button

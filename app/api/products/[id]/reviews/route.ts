@@ -66,7 +66,7 @@ export async function POST(
 
         await db.prepare(
             'INSERT INTO reviews (product_id, user_id, rating, comment) VALUES (?, ?, ?, ?)'
-        ).bind(id, payload.userId, rating, comment || '').run()
+        ).bind(id, payload.userId, rating, comment !== undefined ? String(comment) : '').run()
 
         return NextResponse.json({ success: true })
     } catch (error: any) {

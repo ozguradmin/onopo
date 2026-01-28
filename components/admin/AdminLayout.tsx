@@ -12,7 +12,9 @@ import {
     Package,
     LogOut,
     Menu,
-    X
+    X,
+    MessageSquare,
+    Users
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -22,6 +24,8 @@ const navItems = [
     { href: '/admin/products', label: 'Ürünler', icon: Package },
     { href: '/admin/pages', label: 'Sayfalar', icon: FileText },
     { href: '/admin/header', label: 'Menü Yönetimi', icon: Menu },
+    { href: '/admin/reviews', label: 'Yorumlar', icon: MessageSquare },
+    { href: '/admin/users', label: 'Kullanıcılar', icon: Users },
     { href: '/admin/settings', label: 'Site Ayarları', icon: Settings },
     { href: '/admin/analytics', label: 'İstatistikler', icon: BarChart3 },
 ]

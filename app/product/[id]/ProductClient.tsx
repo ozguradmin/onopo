@@ -6,6 +6,7 @@ import { ShoppingBag, Star, Truck, ShieldCheck, ArrowLeft, Minus, Plus, Check, C
 import { Button } from "@/components/ui/button"
 import { useCartStore } from "@/store/cart-store"
 import { Badge } from "@/components/ui/badge"
+import { formatPrice } from "@/lib/formatPrice"
 
 const HeartIcon = ({ filled = false }: { filled?: boolean }) => (
     <div className="w-6 h-6 flex items-center justify-center">
@@ -230,11 +231,11 @@ export default function ProductClient({ id }: { id: string }) {
                                 {/* Price */}
                                 <div className="flex items-baseline gap-3 mb-6">
                                     <span className="text-3xl font-bold text-slate-900">
-                                        {product.price?.toFixed(2)} ₺
+                                        {formatPrice(product.price)}
                                     </span>
                                     {product.original_price && (
                                         <span className="text-xl text-slate-400 line-through">
-                                            {product.original_price.toFixed(2)} ₺
+                                            {formatPrice(product.original_price)}
                                         </span>
                                     )}
                                 </div>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useCartStore } from "@/store/cart-store"
 import { cn } from "@/lib/utils"
+import { formatPrice } from "@/lib/formatPrice"
 
 interface ProductShowcaseProps {
     title?: string
@@ -87,7 +88,7 @@ export default function ProductShowcase({ title = "Trend Ürünler", products: i
 
                                     <div className="mt-auto flex items-center justify-between pt-2 gap-2">
                                         <span className="text-base md:text-lg lg:text-xl font-bold text-slate-900">
-                                            {product.price.toFixed(2)} ₺
+                                            {formatPrice(product.price)}
                                         </span>
                                         {/* ALWAYS VISIBLE ADD BUTTON - Adds to cart AND opens drawer */}
                                         <Button

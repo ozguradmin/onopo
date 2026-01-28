@@ -4,6 +4,7 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Edit, Trash2, Plus } from 'lucide-react'
+import { formatPrice } from '@/lib/formatPrice'
 
 export default function AdminProductsPage() {
     const router = useRouter()
@@ -63,7 +64,7 @@ export default function AdminProductsPage() {
                                     </td>
                                     <td className="p-4 font-medium text-slate-900">{product.name}</td>
                                     <td className="p-4 text-slate-600">{product.category || '-'}</td>
-                                    <td className="p-4 text-slate-600">{product.price?.toFixed(2)} ₺</td>
+                                    <td className="p-4 text-slate-600">{formatPrice(product.price)}</td>
                                     <td className="p-4 text-slate-600">{product.stock}</td>
                                     <td className="p-4 text-right space-x-2">
                                         <Button
