@@ -8,7 +8,7 @@ export const runtime = 'edge'
 // Create Order (Public/User)
 export async function POST(req: NextRequest) {
     try {
-        const db = getDB()
+        const db = await getDB()
         const body = await req.json()
         const { items, shippingAddress, guestEmail } = body
 
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
 // Get Orders (Admin lists all, User lists theirs)
 export async function GET(req: NextRequest) {
     try {
-        const db = getDB()
+        const db = await getDB()
         const token = req.cookies.get('token')?.value
         if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

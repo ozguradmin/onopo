@@ -5,7 +5,7 @@ export const runtime = 'edge'
 
 export async function GET(req: NextRequest) {
     try {
-        const db = getDB()
+        const db = await getDB()
         const { results } = await db.prepare(
             'SELECT * FROM hero_slides WHERE is_active = 1 ORDER BY display_order ASC'
         ).all()

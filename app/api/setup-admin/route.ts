@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const db = getDB()
+        const db = await getDB()
 
         // 1. Create Tables if they don't exist (Quick recovery measure)
         // Note: Ideally this is done via 'wrangler d1 migrations apply'

@@ -6,7 +6,7 @@ export const runtime = 'edge'
 
 export async function POST(req: NextRequest) {
     try {
-        const db = getDB()
+        const db = await getDB()
         const { email, password, fullName } = await req.json()
 
         if (!email || !password) {

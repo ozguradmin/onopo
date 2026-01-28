@@ -6,7 +6,7 @@ export const runtime = 'edge'
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
     try {
-        const db = getDB()
+        const db = await getDB()
         const params = await props.params
         const id = params.id
 
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 
 export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
     try {
-        const db = getDB()
+        const db = await getDB()
         const params = await props.params
         const id = params.id
 
@@ -73,7 +73,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 
 export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
     try {
-        const db = getDB()
+        const db = await getDB()
         const params = await props.params
         const id = params.id
 

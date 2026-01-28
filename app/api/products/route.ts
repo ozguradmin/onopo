@@ -6,7 +6,7 @@ export const runtime = 'edge'
 
 export async function GET(req: NextRequest) {
     try {
-        const db = getDB()
+        const db = await getDB()
         // Simple select for now, maybe pagination later
         const { results } = await db.prepare('SELECT * FROM products ORDER BY created_at DESC').all()
 
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     try {
-        const db = getDB()
+        const db = await getDB()
 
         // Auth check
         const token = req.cookies.get('token')?.value
