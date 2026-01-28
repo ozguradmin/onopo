@@ -24,34 +24,32 @@ export function Header() {
     const { totalItems, toggleCart } = useCartStore()
     const [mounted, setMounted] = React.useState(false)
 
+    const [navLinks, setNavLinks] = React.useState([
+        { href: "/", label: "Anasayfa" },
+        { href: "/tech", label: "Teknoloji" },
+        { href: "/beauty", label: "Kozmetik" },
+        { href: "/gaming", label: "Oyun" },
+    ])
+
     React.useEffect(() => {
         setMounted(true)
-        // Fetch site settings for logo
+        // Fetch site settings for logo and links
         fetch('/api/site-settings')
             .then(r => r.json())
             .then(data => {
                 if (data.logo_url) setLogoUrl(data.logo_url)
                 if (data.site_name) setSiteName(data.site_name)
+                if (data.header_links) {
+                    try {
+                        const parsed = JSON.parse(data.header_links)
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            setNavLinks(parsed)
+                        }
+                    } catch { }
+                }
             })
             .catch(() => { })
     }, [])
-
-    const cartItemCount = mounted ? totalItems() : 0
-
-    React.useEffect(() => {
-        const handleScroll = () => {
-            setIsScrolled(window.scrollY > 20)
-        }
-        window.addEventListener("scroll", handleScroll)
-        return () => window.removeEventListener("scroll", handleScroll)
-    }, [])
-
-    const navLinks = [
-        { href: "/", label: "Anasayfa" },
-        { href: "/tech", label: "Teknoloji" },
-        { href: "/beauty", label: "Kozmetik" },
-        { href: "/gaming", label: "Oyun" },
-    ]
 
     return (
         <>

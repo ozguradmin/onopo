@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, User, Lock, Save } from 'lucide-react'
+import { ArrowLeft, User, Lock, Save, Upload, X } from 'lucide-react'
 
 export default function AdminSettingsPage() {
     const router = useRouter()
@@ -20,6 +20,7 @@ export default function AdminSettingsPage() {
     const [siteName, setSiteName] = React.useState('Onopo')
     const [logoUrl, setLogoUrl] = React.useState('')
     const [footerText, setFooterText] = React.useState('')
+    const [siteDescription, setSiteDescription] = React.useState('')
 
     React.useEffect(() => {
         Promise.all([
@@ -34,6 +35,7 @@ export default function AdminSettingsPage() {
                 setSiteName(settingsData.site_name || 'Onopo')
                 setLogoUrl(settingsData.logo_url || '')
                 setFooterText(settingsData.footer_text || '')
+                setSiteDescription(settingsData.site_description || '')
             }
             setLoading(false)
         }).catch(() => setLoading(false))
@@ -62,7 +64,8 @@ export default function AdminSettingsPage() {
                 body: JSON.stringify({
                     site_name: siteName,
                     logo_url: logoUrl,
-                    footer_text: footerText
+                    footer_text: footerText,
+                    site_description: siteDescription
                 })
             })
 
@@ -111,17 +114,60 @@ export default function AdminSettingsPage() {
                                 className="w-full p-2 border rounded-lg"
                             />
                         </div>
+
+                        {/* Logo Upload */}
                         <div>
-                            <label className="block text-sm font-medium mb-1">Logo URL</label>
-                            <input
-                                type="text"
-                                value={logoUrl}
-                                onChange={e => setLogoUrl(e.target.value)}
-                                className="w-full p-2 border rounded-lg"
-                                placeholder="https://..."
-                            />
-                            {logoUrl && <img src={logoUrl} className="mt-2 h-10 object-contain border p-1 rounded" />}
+                            <label className="block text-sm font-medium mb-1">Logo</label>
+                            <div className="flex items-center gap-4">
+                                {logoUrl && (
+                                    <div className="relative group">
+                                        <img src={logoUrl} className="h-12 w-auto object-contain border p-1 rounded bg-slate-50" />
+                                        <button
+                                            type="button"
+                                            onClick={() => setLogoUrl('')}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                )}
+                                <label className="cursor-pointer">
+                                    <span className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 text-sm flex items-center gap-2">
+                                        <Upload className="w-4 h-4" />
+                                        {logoUrl ? 'Logoyu Değiştir' : 'Logo Yükle'}
+                                    </span>
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept="image/*"
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0]
+                                            if (!file) return
+                                            const data = new FormData()
+                                            data.append('file', file)
+                                            try {
+                                                const res = await fetch('/api/admin/upload', { method: 'POST', body: data })
+                                                if (res.ok) {
+                                                    const json = await res.json()
+                                                    setLogoUrl(json.url)
+                                                }
+                                            } catch { }
+                                        }}
+                                    />
+                                </label>
+                            </div>
                         </div>
+
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Site Slogan / Açıklama (Hero Altı)</label>
+                            <textarea
+                                value={siteDescription}
+                                onChange={e => setSiteDescription(e.target.value)}
+                                className="w-full p-2 border rounded-lg h-20"
+                                placeholder="Yaşam tarzı ve teknolojinin geleceğini tanımlıyoruz..."
+                            />
+                        </div>
+
                         <div>
                             <label className="block text-sm font-medium mb-1">Footer Metni</label>
                             <input

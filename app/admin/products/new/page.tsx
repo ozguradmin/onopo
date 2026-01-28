@@ -3,7 +3,8 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Upload, Loader2, X, Plus } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Upload, Loader2, X, Plus } from 'lucide-react'
+import { AutoDotInput } from '@/components/ui/auto-dot-input'
 
 export default function AddProductPage() {
     const router = useRouter()
@@ -151,12 +152,10 @@ export default function AddProductPage() {
                         <label className="block text-sm font-medium mb-1">Fiyat</label>
                         <div className="relative">
                             <span className="absolute left-3 top-2.5 text-slate-500">₺</span>
-                            <input
+                            <AutoDotInput
                                 name="price"
-                                type="number"
-                                step="0.01"
                                 value={formData.price}
-                                onChange={handleInputChange}
+                                onChange={(val) => setFormData(prev => ({ ...prev, price: val }))}
                                 className="w-full pl-8 p-2 border rounded-lg"
                                 placeholder="0.00"
                                 required

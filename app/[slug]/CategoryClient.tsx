@@ -53,7 +53,17 @@ export default function CategoryClient({ slug }: { slug: string }) {
     const [products, setProducts] = React.useState<any[]>([])
     const [loading, setLoading] = React.useState(true)
 
+    // Search Query State
+    const [searchQuery, setSearchQuery] = React.useState('')
+
     React.useEffect(() => {
+        // Parse search query from URL
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search)
+            const q = params.get('q')
+            if (q) setSearchQuery(q)
+        }
+
         setLoading(true)
         fetch('/api/products')
             .then(res => res.json())
@@ -67,6 +77,12 @@ export default function CategoryClient({ slug }: { slug: string }) {
     // Filter and sort products
     const filteredProducts = React.useMemo(() => {
         let result = [...products]
+
+        // Search Filter
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase()
+            result = result.filter(p => p.name.toLowerCase().includes(q))
+        }
 
         // Category filter
         if (selectedCategory !== 'all') {
@@ -93,7 +109,15 @@ export default function CategoryClient({ slug }: { slug: string }) {
         }
 
         return result
-    }, [products, selectedCategory, selectedPriceRange, selectedSort, slug])
+    }, [products, selectedCategory, selectedPriceRange, selectedSort, slug, searchQuery])
+
+    const handleClearFilters = () => {
+        setSelectedCategory('all')
+        setSelectedPriceRange('all')
+        setSearchQuery('')
+        // Clear URL
+        window.history.pushState({}, '', '/products')
+    }
 
     const handleAddToCart = (e: React.MouseEvent, product: any) => {
         e.preventDefault()
@@ -216,7 +240,7 @@ export default function CategoryClient({ slug }: { slug: string }) {
                     )) : (
                         <div className="col-span-full text-center py-20 bg-slate-50 rounded-3xl">
                             <p className="text-slate-400 text-lg">Bu filtrelere uygun ürün bulunamadı.</p>
-                            <Button variant="link" className="mt-4" onClick={() => { setSelectedCategory('all'); setSelectedPriceRange('all'); }}>
+                            <Button variant="link" className="mt-4" onClick={handleClearFilters}>
                                 Filtreleri Temizle <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </div>
