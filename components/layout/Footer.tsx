@@ -7,6 +7,7 @@ import { Facebook, Instagram, Twitter, Linkedin, Heart } from "lucide-react"
 export function Footer() {
     const [settings, setSettings] = React.useState({
         site_name: 'ONOPO',
+        site_description: 'Yaşam tarzı ve teknolojinin geleceğini tanımlıyoruz. Modern yaratıcılar için premium temeller.',
         logo_url: '',
         footer_text: '© 2026 Onopo Store. Tüm hakları saklıdır.',
         footer_email: '',
@@ -15,6 +16,12 @@ export function Footer() {
     })
 
     React.useEffect(() => {
+        // Track page view
+        fetch('/api/analytics/track', {
+            method: 'POST',
+            body: JSON.stringify({ page: window.location.pathname })
+        }).catch(() => { })
+
         fetch('/api/site-settings')
             .then(r => r.json())
             .then(data => setSettings(prev => ({ ...prev, ...data })))
@@ -33,7 +40,7 @@ export function Footer() {
                             <h3 className="font-heading text-2xl font-bold text-white tracking-tighter">{settings.site_name}</h3>
                         )}
                         <p className="text-sm text-slate-400 max-w-xs">
-                            Yaşam tarzı ve teknolojinin geleceğini tanımlıyoruz. Modern yaratıcılar için premium temeller.
+                            {settings.site_description}
                         </p>
                         <div className="flex space-x-4 pt-2">
                             <SocialLink icon={<Facebook className="w-5 h-5" />} href="#" />

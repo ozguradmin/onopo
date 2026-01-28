@@ -11,6 +11,7 @@ export default function AdminSettingsPage() {
 
     const [settings, setSettings] = React.useState({
         site_name: 'Onopo',
+        site_description: 'Yaşam tarzı ve teknolojinin geleceğini tanımlıyoruz. Modern yaratıcılar için premium temeller.',
         logo_url: '',
         footer_text: '© 2024 Onopo. Tüm hakları saklıdır.',
         footer_email: 'info@onopo.com',
@@ -116,6 +117,17 @@ export default function AdminSettingsPage() {
                         name="site_name"
                         value={settings.site_name}
                         onChange={handleChange}
+                        className="w-full p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Site Açıklaması (Footer)</label>
+                    <textarea
+                        name="site_description"
+                        value={settings.site_description}
+                        onChange={handleChange}
+                        rows={2}
                         className="w-full p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
                     />
                 </div>

@@ -31,12 +31,18 @@ const features = [
     },
 ]
 
-export function FeaturesSection() {
+interface FeaturesSectionProps {
+    title?: string
+    features?: any[]
+}
+
+export function FeaturesSection({ title = "Neden Onopo'yu Seçmelisiniz?", features: custFeatures }: FeaturesSectionProps) {
+    const displayFeatures = custFeatures || features
     return (
         <section className="py-24 container mx-auto px-4">
             <div className="mb-16 text-center">
                 <h2 className="text-3xl lg:text-4xl font-bold font-heading tracking-tight mb-4 text-slate-900">
-                    Neden Onopo'yu Seçmelisiniz?
+                    {title}
                 </h2>
                 <p className="text-slate-600 max-w-2xl mx-auto text-lg">
                     Size kalite ve hizmet taahhüdü ile en iyi teknoloji aksesuarlarını sunuyoruz.
@@ -44,7 +50,7 @@ export function FeaturesSection() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {features.map((feature, index) => (
+                {displayFeatures.map((feature: any, index: number) => (
                     <motion.div
                         key={feature.title}
                         initial={{ opacity: 0, y: 20 }}

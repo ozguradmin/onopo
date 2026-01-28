@@ -7,12 +7,18 @@ import { Badge } from "@/components/ui/badge"
 import { useCartStore } from "@/store/cart-store"
 import { cn } from "@/lib/utils"
 
-export default function ProductShowcase() {
+interface ProductShowcaseProps {
+    title?: string
+    products?: any[]
+}
+
+export default function ProductShowcase({ title = "Trend Ürünler", products: initialProducts }: ProductShowcaseProps) {
     const { addItem, openCart } = useCartStore()
-    const [products, setProducts] = React.useState<any[]>([])
-    const [loading, setLoading] = React.useState(true)
+    const [products, setProducts] = React.useState<any[]>(initialProducts || [])
+    const [loading, setLoading] = React.useState(!initialProducts)
 
     React.useEffect(() => {
+        if (initialProducts) return
         setLoading(true)
         fetch('/api/products')
             .then(res => res.json())
@@ -32,7 +38,7 @@ export default function ProductShowcase() {
             <div className="container mx-auto px-4 mb-12 flex flex-col md:flex-row items-end justify-between gap-4">
                 <div>
                     <h2 className="text-3xl md:text-4xl font-bold font-heading text-slate-900 tracking-tight mb-3">
-                        Trend Ürünler
+                        {title}
                     </h2>
                     <p className="text-slate-500 text-lg">
                         Bu sezonun en popüler teknoloji ve aksesuar ürünlerini keşfedin.

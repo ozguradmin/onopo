@@ -17,7 +17,12 @@ export default function AdminAnalyticsPage() {
         fetch(`/api/analytics?range=${range}`)
             .then(r => r.json())
             .then(d => {
-                setData(d)
+                setData({
+                    totalViews: d.totalViews || 0,
+                    pageViews: d.pageViews || [],
+                    productViews: d.productViews || [],
+                    dailyViews: d.dailyViews || []
+                })
                 setLoading(false)
             })
             .catch(() => setLoading(false))
@@ -35,8 +40,8 @@ export default function AdminAnalyticsPage() {
                             key={r}
                             onClick={() => setRange(r)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${range === r
-                                    ? 'bg-slate-900 text-white'
-                                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                ? 'bg-slate-900 text-white'
+                                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                                 }`}
                         >
                             {r === 'day' ? 'Bugün' : r === 'week' ? 'Bu Hafta' : 'Bu Ay'}

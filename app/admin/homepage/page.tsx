@@ -324,6 +324,33 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
                                 </div>
                             )}
 
+                            {config.selection_type === 'manual' && (
+                                <div className="space-y-2">
+                                    <label className="block text-sm font-medium mb-2">Ürünleri Seçin</label>
+                                    <div className="h-48 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1">
+                                        {products.map((p: any) => (
+                                            <div key={p.id} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={(config.product_ids || []).includes(p.id)}
+                                                    onChange={(e) => {
+                                                        const current = config.product_ids || []
+                                                        if (e.target.checked) setConfig({ ...config, product_ids: [...current, p.id] })
+                                                        else setConfig({ ...config, product_ids: current.filter((id: number) => id !== p.id) })
+                                                    }}
+                                                    className="w-4 h-4 rounded border-slate-300"
+                                                />
+                                                <div className="flex-1 text-sm">
+                                                    <div className="font-medium">{p.name}</div>
+                                                    <div className="text-xs text-slate-500">{p.category} - {p.price} ₺</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-slate-500">Seçilen ürünler sırasıyla listelenecektir.</p>
+                                </div>
+                            )}
+
                             <div>
                                 <label className="block text-sm font-medium mb-2">Gösterilecek Ürün Sayısı</label>
                                 <input
