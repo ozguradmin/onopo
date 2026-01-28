@@ -29,6 +29,8 @@ export default function ProfilePage() {
     }, [router])
 
     const handleLogout = async () => {
+        if (!confirm('Çıkış yapılsın mı?')) return
+        setLoading(true)
         await fetch('/api/auth/logout', { method: 'POST' })
         router.push('/')
         router.refresh()
@@ -58,9 +60,15 @@ export default function ProfilePage() {
                                 {user?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
                             </div>
                             <div>
-                                <h1 className="text-xl font-bold text-slate-900">
-                                    {user?.full_name || 'Kullanıcı'}
-                                </h1>
+                                <div className="flex items-center gap-2">
+                                    <h1 className="text-xl font-bold text-slate-900">
+                                        {user?.full_name || 'Kullanıcı'}
+                                    </h1>
+                                    {/* Placeholder for Edit */}
+                                    <button className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                        Düzenle
+                                    </button>
+                                </div>
                                 <p className="text-slate-500">{user?.email}</p>
                                 {user?.role === 'admin' && (
                                     <span className="inline-block mt-1 px-2 py-0.5 bg-slate-900 text-white text-xs rounded-full">

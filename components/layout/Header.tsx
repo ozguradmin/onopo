@@ -123,7 +123,7 @@ export function Header() {
                             </div>
 
                             {/* User */}
-                            <a href="/login">
+                            <a href="/profile">
                                 <Button
                                     variant="ghost"
                                     size="icon"
