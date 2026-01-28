@@ -1,14 +1,37 @@
+"use client"
+
+import * as React from "react"
 import Link from "next/link"
 import { Facebook, Instagram, Twitter, Linkedin, Heart } from "lucide-react"
 
 export function Footer() {
+    const [settings, setSettings] = React.useState({
+        site_name: 'ONOPO',
+        logo_url: '',
+        footer_text: '© 2026 Onopo Store. Tüm hakları saklıdır.',
+        footer_email: '',
+        footer_phone: '',
+        footer_address: ''
+    })
+
+    React.useEffect(() => {
+        fetch('/api/site-settings')
+            .then(r => r.json())
+            .then(data => setSettings(prev => ({ ...prev, ...data })))
+            .catch(() => { })
+    }, [])
+
     return (
         <footer className="bg-slate-950 text-slate-300 py-16 mt-20">
             <div className="container mx-auto px-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
                     {/* Brand */}
                     <div className="space-y-4">
-                        <h3 className="font-heading text-2xl font-bold text-white tracking-tighter">ONOPO</h3>
+                        {settings.logo_url ? (
+                            <img src={settings.logo_url} alt={settings.site_name} className="h-8 object-contain brightness-0 invert" />
+                        ) : (
+                            <h3 className="font-heading text-2xl font-bold text-white tracking-tighter">{settings.site_name}</h3>
+                        )}
                         <p className="text-sm text-slate-400 max-w-xs">
                             Yaşam tarzı ve teknolojinin geleceğini tanımlıyoruz. Modern yaratıcılar için premium temeller.
                         </p>
@@ -35,10 +58,10 @@ export function Footer() {
                     <div>
                         <h4 className="font-heading text-white font-semibold mb-6">Destek</h4>
                         <ul className="space-y-3 text-sm">
-                            <FooterLink href="/help">Yardım Merkezi</FooterLink>
-                            <FooterLink href="/shipping">Kargo & İade</FooterLink>
-                            <FooterLink href="/policy">Gizlilik Politikası</FooterLink>
-                            <FooterLink href="/terms">Kullanım Koşulları</FooterLink>
+                            <FooterLink href="/page/help">Yardım Merkezi</FooterLink>
+                            <FooterLink href="/page/shipping">Kargo & İade</FooterLink>
+                            <FooterLink href="/page/policy">Gizlilik Politikası</FooterLink>
+                            <FooterLink href="/page/terms">Kullanım Koşulları</FooterLink>
                         </ul>
                     </div>
 
@@ -62,7 +85,7 @@ export function Footer() {
                 </div>
 
                 <div className="border-t border-slate-900 mt-16 pt-8 flex flex-col md:flex-row justify-between items-center text-xs text-slate-500">
-                    <p>&copy; 2026 Onopo Store. Tüm hakları saklıdır.</p>
+                    <p>{settings.footer_text}</p>
                     <p className="flex items-center mt-2 md:mt-0">
                         AI ile <Heart className="w-3 h-3 text-accent mx-1 fill-accent" /> tasarlandı
                     </p>

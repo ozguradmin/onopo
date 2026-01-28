@@ -241,30 +241,30 @@ export default function ProductClient({ id }: { id: string }) {
 
                                 {/* Info Tabs */}
                                 <div className="mb-6">
-                                    <div className="flex gap-2 border-b border-slate-200 mb-4">
+                                    <div className="flex gap-2 border-b border-slate-200 mb-4 overflow-x-auto">
                                         {[
-                                            { key: 'desc', label: 'Açıklama' },
-                                            { key: 'warranty', label: 'Garanti' },
-                                            { key: 'delivery', label: 'Teslimat' },
-                                            { key: 'installment', label: 'Taksit' },
-                                        ].map(tab => (
+                                            { key: 'desc', label: 'Açıklama', show: true },
+                                            { key: 'warranty', label: 'Garanti', show: !!product.warranty_info },
+                                            { key: 'delivery', label: 'Teslimat', show: !!product.delivery_info },
+                                            { key: 'installment', label: 'Taksit', show: !!product.installment_info },
+                                        ].filter(tab => tab.show).map(tab => (
                                             <button
                                                 key={tab.key}
                                                 onClick={() => setActiveTab(tab.key as any)}
-                                                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-[2px] transition-colors ${activeTab === tab.key
-                                                        ? 'border-slate-900 text-slate-900'
-                                                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                                                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-[2px] transition-colors whitespace-nowrap ${activeTab === tab.key
+                                                    ? 'border-slate-900 text-slate-900'
+                                                    : 'border-transparent text-slate-500 hover:text-slate-700'
                                                     }`}
                                             >
                                                 {tab.label}
                                             </button>
                                         ))}
                                     </div>
-                                    <div className="text-slate-600 leading-relaxed min-h-[80px]">
+                                    <div className="text-slate-600 leading-relaxed min-h-[60px]">
                                         {activeTab === 'desc' && (product.description || 'Ürün açıklaması bulunmuyor.')}
-                                        {activeTab === 'warranty' && (product.warranty_info || '2 yıl resmi distribütör garantisi.')}
-                                        {activeTab === 'delivery' && (product.delivery_info || 'Siparişiniz 1-3 iş günü içinde kargoya verilir.')}
-                                        {activeTab === 'installment' && (product.installment_info || 'Kredi kartına 9 taksit imkanı.')}
+                                        {activeTab === 'warranty' && product.warranty_info}
+                                        {activeTab === 'delivery' && product.delivery_info}
+                                        {activeTab === 'installment' && product.installment_info}
                                     </div>
                                 </div>
 

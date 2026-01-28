@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ShoppingBag, TrendingUp, Package, DollarSign, Plus, Edit, Trash2 } from 'lucide-react'
+import { ShoppingBag, Edit, Trash2, Plus, TrendingUp, Users, Package, DollarSign } from 'lucide-react'
 
 export default function AdminDashboard() {
     const router = useRouter()
@@ -13,8 +13,8 @@ export default function AdminDashboard() {
 
     React.useEffect(() => {
         Promise.all([
-            fetch('/api/products').then(r => r.json()).catch(() => []),
-            fetch('/api/orders').then(r => r.json()).catch(() => []),
+            fetch('/api/products').then(r => r.json()),
+            fetch('/api/orders').then(r => r.json()),
             fetch('/api/analytics?range=day').then(r => r.json()).catch(() => ({ totalViews: 0 }))
         ]).then(([prods, ords, analytics]) => {
             setProducts(prods || [])
@@ -84,44 +84,6 @@ export default function AdminDashboard() {
                     </div>
                 </div>
             </div>
-
-            {/* Quick Actions */}
-            <section>
-                <h2 className="text-xl font-bold text-slate-900 mb-4">Hızlı İşlemler</h2>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Button
-                        onClick={() => router.push('/admin/products/new')}
-                        className="h-auto py-4 flex-col gap-2 bg-slate-900 text-white hover:bg-slate-800"
-                    >
-                        <Plus className="w-6 h-6" />
-                        <span>Yeni Ürün Ekle</span>
-                    </Button>
-                    <Button
-                        onClick={() => router.push('/admin/homepage')}
-                        variant="outline"
-                        className="h-auto py-4 flex-col gap-2"
-                    >
-                        <Edit className="w-6 h-6" />
-                        <span>Ana Sayfayı Düzenle</span>
-                    </Button>
-                    <Button
-                        onClick={() => router.push('/admin/homepage/hero')}
-                        variant="outline"
-                        className="h-auto py-4 flex-col gap-2"
-                    >
-                        <Edit className="w-6 h-6" />
-                        <span>Hero Slider</span>
-                    </Button>
-                    <Button
-                        onClick={() => router.push('/admin/settings')}
-                        variant="outline"
-                        className="h-auto py-4 flex-col gap-2"
-                    >
-                        <Edit className="w-6 h-6" />
-                        <span>Site Ayarları</span>
-                    </Button>
-                </div>
-            </section>
 
             {/* Recent Orders */}
             <section>

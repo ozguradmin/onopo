@@ -11,6 +11,8 @@ export function Header() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
     const [searchOpen, setSearchOpen] = React.useState(false)
     const [searchQuery, setSearchQuery] = React.useState("")
+    const [logoUrl, setLogoUrl] = React.useState("")
+    const [siteName, setSiteName] = React.useState("ONOPO")
 
     const handleSearch = (e?: React.FormEvent) => {
         e?.preventDefault()
@@ -24,6 +26,14 @@ export function Header() {
 
     React.useEffect(() => {
         setMounted(true)
+        // Fetch site settings for logo
+        fetch('/api/site-settings')
+            .then(r => r.json())
+            .then(data => {
+                if (data.logo_url) setLogoUrl(data.logo_url)
+                if (data.site_name) setSiteName(data.site_name)
+            })
+            .catch(() => { })
     }, [])
 
     const cartItemCount = mounted ? totalItems() : 0
@@ -54,12 +64,18 @@ export function Header() {
             >
                 <div className="container mx-auto px-4">
                     <div className="flex items-center justify-between h-16 md:h-20">
-                        {/* Logo - Always black */}
+                        {/* Logo - Dynamic from settings */}
                         <a
                             href="/"
-                            className="font-heading font-black text-2xl md:text-3xl tracking-tight text-slate-900 hover:text-primary transition-colors"
+                            className="flex items-center"
                         >
-                            ONOPO
+                            {logoUrl ? (
+                                <img src={logoUrl} alt={siteName} className="h-8 md:h-10 object-contain" />
+                            ) : (
+                                <span className="font-heading font-black text-2xl md:text-3xl tracking-tight text-slate-900 hover:text-primary transition-colors">
+                                    {siteName}
+                                </span>
+                            )}
                         </a>
 
                         {/* Desktop Navigation - Center */}
