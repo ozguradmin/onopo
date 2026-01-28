@@ -109,6 +109,8 @@ export default function AdminHeaderPage() {
                             <HelperBtn label="Kozmetik" href="/beauty" set={setLinks} current={links} />
                             <HelperBtn label="Oyun" href="/gaming" set={setLinks} current={links} />
                             <HelperBtn label="Yeni Gelenler" href="/new" set={setLinks} current={links} />
+                            <hr className="border-slate-100 my-2" />
+                            <HelperBtn label="Kategoriler" href="#categories" set={setLinks} current={links} isSpecial />
                         </div>
                     </div>
                     <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 text-sm text-blue-800">
@@ -169,13 +171,13 @@ export default function AdminHeaderPage() {
     )
 }
 
-function HelperBtn({ label, href, set, current }: any) {
+function HelperBtn({ label, href, set, current, isSpecial }: any) {
     return (
         <button
             onClick={() => set([...current, { label, href }])}
-            className="block w-full text-left px-3 py-2 rounded hover:bg-slate-50 text-sm text-slate-600 transition-colors"
+            className={`block w-full text-left px-3 py-2 rounded hover:bg-slate-50 text-sm transition-colors ${isSpecial ? 'text-blue-600 font-medium bg-blue-50 hover:bg-blue-100' : 'text-slate-600'}`}
         >
-            + {label}
+            + {label} {isSpecial && <span className="text-xs opacity-70 ml-1">(Açılır Menü)</span>}
         </button>
     )
 }

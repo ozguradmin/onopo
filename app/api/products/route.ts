@@ -40,6 +40,8 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json()
+        console.log('PRODUCT POST RECEIVED:', JSON.stringify(body, null, 2))
+
         const {
             name,
             description,
@@ -54,30 +56,42 @@ export async function POST(req: NextRequest) {
         } = body
 
         if (!name || !price) {
+            console.error('MISSING REQUIRED FIELDS:', { name, price })
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
         }
 
         // FORCE ENSURE COLUMNS EXIST (Runtime Fix)
-        // This is inefficient but necessary if D1 schema state is desynced
         try { await db.prepare("ALTER TABLE products ADD COLUMN warranty_info TEXT").run(); } catch { }
         try { await db.prepare("ALTER TABLE products ADD COLUMN delivery_info TEXT").run(); } catch { }
         try { await db.prepare("ALTER TABLE products ADD COLUMN installment_info TEXT").run(); } catch { }
 
-        await db.prepare(
-            `INSERT INTO products (name, description, price, original_price, stock, images, category, warranty_info, delivery_info, installment_info) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(
-            name,
-            description || '',
-            price,
-            original_price || null,
-            stock || 0,
-            JSON.stringify(images || []),
-            category || '',
-            warranty_info || '',
-            delivery_info || '',
-            installment_info || ''
-        ).run()
+        console.log('PREPARING INSERT STATEMENT...')
+
+        try {
+            await db.prepare(
+                `INSERT INTO products (name, description, price, original_price, stock, images, category, warranty_info, delivery_info, installment_info) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            ).bind(
+                name,
+                description || '',
+                price,
+                original_price || null,
+                stock || 0,
+                JSON.stringify(images || []),
+                category || '',
+                warranty_info || '',
+                delivery_info || '',
+                installment_info || ''
+            ).run()
+            console.log('INSERT SUCCESSFUL')
+        } catch (insertError: any) {
+            console.error('FATAL INSERT ERROR:', insertError)
+            return NextResponse.json({
+                error: 'Database Insert Failed',
+                message: insertError.message,
+                detail: JSON.stringify(insertError)
+            }, { status: 500 })
+        }
 
         return NextResponse.json({ success: true })
 

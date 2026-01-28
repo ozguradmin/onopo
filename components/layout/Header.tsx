@@ -88,15 +88,36 @@ export function Header() {
 
                         {/* Desktop Navigation - Center */}
                         <nav className="hidden lg:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
-                            {navLinks.map((link) => (
-                                <a
-                                    key={link.href}
-                                    href={link.href}
-                                    className="px-4 py-2 rounded-full text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all"
-                                >
-                                    {link.label}
-                                </a>
-                            ))}
+                            {navLinks.map((link) => {
+                                if (link.label === 'Kategoriler') {
+                                    return (
+                                        <div key={link.href} className="relative group">
+                                            <button className="flex items-center gap-1 px-4 py-2 rounded-full text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all">
+                                                {link.label}
+                                                <svg className="w-4 h-4 transition-transform group-hover:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                                                </svg>
+                                            </button>
+                                            <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform translate-y-2 group-hover:translate-y-0 z-50">
+                                                <a href="/products" className="block px-4 py-2 rounded-lg hover:bg-slate-50 text-sm font-medium text-slate-700">
+                                                    Tüm Ürünler
+                                                </a>
+                                                <div className="h-px bg-slate-100 my-1" />
+                                                <CategoriesDropdown />
+                                            </div>
+                                        </div>
+                                    )
+                                }
+                                return (
+                                    <a
+                                        key={link.href}
+                                        href={link.href}
+                                        className="px-4 py-2 rounded-full text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all"
+                                    >
+                                        {link.label}
+                                    </a>
+                                )
+                            })}
                         </nav>
 
                         {/* Desktop Actions - Right */}
