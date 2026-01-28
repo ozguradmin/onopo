@@ -57,11 +57,13 @@ export default function CategoryClient({ slug }: { slug: string }) {
     const [searchQuery, setSearchQuery] = React.useState('')
 
     React.useEffect(() => {
-        // Parse search query from URL
+        // Parse search query and category from URL
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search)
             const q = params.get('q')
+            const cat = params.get('category')
             if (q) setSearchQuery(q)
+            if (cat) setSelectedCategory(cat.toLowerCase())
         }
 
         setLoading(true)
@@ -84,9 +86,12 @@ export default function CategoryClient({ slug }: { slug: string }) {
             result = result.filter(p => p.name.toLowerCase().includes(q))
         }
 
-        // Category filter
+        // Category filter (case-insensitive)
         if (selectedCategory !== 'all') {
-            result = result.filter(p => p.category === selectedCategory || (slug !== 'products' && p.category === slug))
+            result = result.filter(p =>
+                p.category?.toLowerCase() === selectedCategory.toLowerCase() ||
+                (slug !== 'products' && p.category?.toLowerCase() === slug.toLowerCase())
+            )
         }
 
         // Price filter

@@ -34,14 +34,18 @@ export default async function Home() {
       params.push(config.limit || 8)
 
       const { results } = await db.prepare(query).bind(...params).all()
-      // Retrieve images for products
-      const productsWithImages = await Promise.all(results.map(async (p: any) => {
-        const { results: images } = await db.prepare('SELECT url FROM product_images WHERE product_id = ?').bind(p.id).all()
-        return {
-          ...p,
-          images: images.map((i: any) => i.url)
+
+      // Parse images from JSON column (not a separate table!)
+      const productsWithImages = results.map((p: any) => {
+        let images: string[] = []
+        try {
+          images = p.images ? JSON.parse(p.images) : []
+        } catch {
+          images = []
         }
-      }))
+        return { ...p, images }
+      })
+
       return productsWithImages
     } catch (e) {
       console.error('Product fetch error:', e)
