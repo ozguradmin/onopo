@@ -10,7 +10,13 @@ export async function GET(req: NextRequest) {
 
         const products = results.map((p: any) => ({
             ...p,
-            images: p.images ? JSON.parse(p.images) : []
+            images: (() => {
+                try {
+                    return p.images ? JSON.parse(p.images) : []
+                } catch {
+                    return []
+                }
+            })()
         }))
 
         return NextResponse.json(products)

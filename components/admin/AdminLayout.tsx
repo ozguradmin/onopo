@@ -33,6 +33,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const [loading, setLoading] = React.useState(true)
 
     React.useEffect(() => {
+        if (pathname === '/admin/login') {
+            setLoading(false)
+            return
+        }
         fetch('/api/auth/me')
             .then(res => {
                 if (!res.ok) throw new Error('Not logged in')
@@ -57,12 +61,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.push('/')
     }
 
-    if (loading) {
+    if (loading && pathname !== '/admin/login') {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="text-slate-500">Yükleniyor...</div>
             </div>
         )
+    }
+
+    // Don't show sidebar on login page
+    if (pathname === '/admin/login') {
+        return <>{children}</>
     }
 
     return (

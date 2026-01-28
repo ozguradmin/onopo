@@ -5,6 +5,26 @@ export async function GET() {
     try {
         const db = await getDB()
 
+        // Ensure tables exist
+        await db.prepare(`
+            CREATE TABLE IF NOT EXISTS pages (
+                slug TEXT PRIMARY KEY,
+                title TEXT,
+                content TEXT,
+                updated_at DATETIME
+            );
+        `).run()
+
+        await db.prepare(`
+            CREATE TABLE IF NOT EXISTS analytics (
+                id INTEGER PRIMARY KEY,
+                page TEXT,
+                product_id INTEGER,
+                user_agent TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        `).run()
+
         const helpContent = `# Yardım Merkezi
 Sıkça Sorulan Sorular
 
