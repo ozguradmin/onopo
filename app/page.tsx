@@ -24,8 +24,11 @@ export default async function Home() {
       if (config.selection_type === 'category' && config.category) {
         query += ' WHERE category = ?'
         params.push(config.category)
+      } else if (config.selection_type === 'manual' && config.product_ids && config.product_ids.length > 0) {
+        const placeholders = config.product_ids.map(() => '?').join(',')
+        query += ` WHERE id IN (${placeholders})`
+        params.push(...config.product_ids)
       }
-      // TODO: Handle 'manual' selection
 
       query += ' LIMIT ?'
       params.push(config.limit || 8)
