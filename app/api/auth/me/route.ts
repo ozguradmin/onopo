@@ -6,7 +6,7 @@ import { cookies } from 'next/headers'
 
 export async function GET(req: NextRequest) {
     try {
-        const token = req.cookies.get('token')
+        const token = req.cookies.get('auth_token')
 
         if (!token) {
             return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
