@@ -1,9 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { ShoppingBag, Star, Truck, ShieldCheck, ArrowLeft, Minus, Plus, Check } from "lucide-react"
+import { ShoppingBag, Star, Truck, ShieldCheck, ArrowLeft, Minus, Plus, Check, CreditCard, MessageSquare, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCartStore } from "@/store/cart-store"
 import { Badge } from "@/components/ui/badge"
@@ -27,8 +26,15 @@ const HeartIcon = ({ filled = false }: { filled?: boolean }) => (
     </div>
 )
 
+interface Review {
+    id: number
+    user_name: string
+    rating: number
+    comment: string
+    created_at: string
+}
+
 export default function ProductClient({ id }: { id: string }) {
-    const params = { id }
     const { addItem, openCart } = useCartStore()
     const [product, setProduct] = React.useState<any>(null)
     const [loading, setLoading] = React.useState(true)
@@ -36,21 +42,41 @@ export default function ProductClient({ id }: { id: string }) {
     const [quantity, setQuantity] = React.useState(1)
     const [isFavorite, setIsFavorite] = React.useState(false)
     const [addedToCart, setAddedToCart] = React.useState(false)
+    const [activeTab, setActiveTab] = React.useState<'desc' | 'warranty' | 'delivery' | 'installment'>('desc')
+
+    // Reviews state
+    const [reviews, setReviews] = React.useState<Review[]>([])
+    const [reviewRating, setReviewRating] = React.useState(5)
+    const [reviewComment, setReviewComment] = React.useState('')
+    const [submittingReview, setSubmittingReview] = React.useState(false)
+    const [reviewError, setReviewError] = React.useState('')
+    const [user, setUser] = React.useState<any>(null)
 
     React.useEffect(() => {
-        if (params.id) {
-            fetch(`/api/products/${params.id}`)
-                .then(res => {
-                    if (!res.ok) throw new Error("Not found");
-                    return res.json();
-                })
-                .then(data => {
-                    setProduct({ ...data, features: [], rating: 5, reviews: 0 }) // Defaults
-                    setLoading(false)
-                })
-                .catch(() => setLoading(false))
-        }
-    }, [params.id])
+        // Fetch product
+        fetch(`/api/products/${id}`)
+            .then(res => {
+                if (!res.ok) throw new Error("Not found")
+                return res.json()
+            })
+            .then(data => {
+                setProduct(data)
+                setLoading(false)
+            })
+            .catch(() => setLoading(false))
+
+        // Fetch reviews
+        fetch(`/api/products/${id}/reviews`)
+            .then(res => res.json())
+            .then(data => setReviews(data || []))
+            .catch(() => { })
+
+        // Check if user is logged in
+        fetch('/api/auth/me')
+            .then(res => res.ok ? res.json() : null)
+            .then(data => setUser(data?.user || null))
+            .catch(() => { })
+    }, [id])
 
     const handleAddToCart = () => {
         if (!product) return
@@ -68,12 +94,53 @@ export default function ProductClient({ id }: { id: string }) {
         setTimeout(() => setAddedToCart(false), 2000)
     }
 
+    const handleSubmitReview = async () => {
+        if (!user) {
+            window.location.href = '/login?redirect=/product/' + id
+            return
+        }
+
+        setSubmittingReview(true)
+        setReviewError('')
+
+        try {
+            const res = await fetch(`/api/products/${id}/reviews`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rating: reviewRating, comment: reviewComment })
+            })
+
+            if (!res.ok) {
+                const data = await res.json()
+                throw new Error(data.error || 'Yorum gönderilemedi')
+            }
+
+            // Refresh reviews
+            const reviewsRes = await fetch(`/api/products/${id}/reviews`)
+            const reviewsData = await reviewsRes.json()
+            setReviews(reviewsData || [])
+            setReviewComment('')
+            setReviewRating(5)
+        } catch (err: any) {
+            setReviewError(err.message)
+        } finally {
+            setSubmittingReview(false)
+        }
+    }
+
+    const avgRating = reviews.length > 0
+        ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+        : 5
+
     if (loading) return <div className="min-h-screen pt-24 text-center">Yükleniyor...</div>
     if (!product) return <div className="min-h-screen pt-24 text-center">Ürün bulunamadı</div>
 
+    const allImages = product.images && product.images.length > 0
+        ? product.images
+        : (product.image ? [product.image] : [])
+
     return (
         <div className="min-h-screen bg-slate-50">
-            {/* Reduced padding: pt-6 instead of pt-24 */}
             <main className="pt-6 pb-20">
                 <div className="container mx-auto px-4">
                     {/* Breadcrumb */}
@@ -92,17 +159,17 @@ export default function ProductClient({ id }: { id: string }) {
                             {/* Image Gallery */}
                             <div className="p-6 lg:p-10 bg-slate-50">
                                 <div className="sticky top-24">
-                                    {/* Main Image */}
+                                    {/* Main Image - FIXED: object-contain for proper fit */}
                                     <motion.div
                                         key={selectedImage}
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        className="aspect-square relative overflow-hidden rounded-2xl bg-white mb-4"
+                                        className="aspect-square relative overflow-hidden rounded-2xl bg-white mb-4 flex items-center justify-center"
                                     >
                                         <img
-                                            src={product.images && product.images.length > 0 ? product.images[selectedImage] : product.image}
+                                            src={allImages[selectedImage] || '/placeholder.png'}
                                             alt={product.name}
-                                            className="object-cover w-full h-full"
+                                            className="object-contain w-full h-full p-4"
                                         />
                                         {product.original_price && (
                                             <Badge className="absolute top-4 left-4 bg-red-500 text-white text-sm px-3 py-1">
@@ -112,18 +179,18 @@ export default function ProductClient({ id }: { id: string }) {
                                     </motion.div>
 
                                     {/* Thumbnails */}
-                                    {product.images && product.images.length > 1 && (
-                                        <div className="flex gap-3">
-                                            {product.images.map((img: string, idx: number) => (
+                                    {allImages.length > 1 && (
+                                        <div className="flex gap-3 overflow-x-auto pb-2">
+                                            {allImages.map((img: string, idx: number) => (
                                                 <button
                                                     key={idx}
                                                     onClick={() => setSelectedImage(idx)}
-                                                    className={`aspect-square w-20 rounded-xl overflow-hidden border-2 transition-all ${selectedImage === idx
+                                                    className={`aspect-square w-20 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all bg-white ${selectedImage === idx
                                                         ? 'border-slate-900 ring-2 ring-slate-900/20'
                                                         : 'border-slate-200 hover:border-slate-300'
                                                         }`}
                                                 >
-                                                    <img src={img} alt="" className="object-cover w-full h-full" />
+                                                    <img src={img} alt="" className="object-contain w-full h-full p-1" />
                                                 </button>
                                             ))}
                                         </div>
@@ -135,20 +202,22 @@ export default function ProductClient({ id }: { id: string }) {
                             <div className="p-6 lg:p-10 flex flex-col">
                                 {/* Category & Rating */}
                                 <div className="flex flex-wrap items-center gap-3 mb-4">
-                                    <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-100">
-                                        {product.category}
-                                    </Badge>
+                                    <a href={`/${product.category?.toLowerCase() || 'products'}`}>
+                                        <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
+                                            {product.category || 'Ürün'}
+                                        </Badge>
+                                    </a>
                                     <div className="flex items-center gap-1">
                                         <div className="flex">
                                             {[1, 2, 3, 4, 5].map((star) => (
                                                 <Star
                                                     key={star}
-                                                    className={`w-4 h-4 ${star <= Math.floor(product.rating || 5) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-200'}`}
+                                                    className={`w-4 h-4 ${star <= Math.floor(avgRating) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-200'}`}
                                                 />
                                             ))}
                                         </div>
                                         <span className="text-sm text-slate-500 ml-2">
-                                            {product.rating} ({product.reviews} değerlendirme)
+                                            {avgRating.toFixed(1)} ({reviews.length} değerlendirme)
                                         </span>
                                     </div>
                                 </div>
@@ -161,7 +230,7 @@ export default function ProductClient({ id }: { id: string }) {
                                 {/* Price */}
                                 <div className="flex items-baseline gap-3 mb-6">
                                     <span className="text-3xl font-bold text-slate-900">
-                                        {product.price.toFixed(2)} ₺
+                                        {product.price?.toFixed(2)} ₺
                                     </span>
                                     {product.original_price && (
                                         <span className="text-xl text-slate-400 line-through">
@@ -170,21 +239,32 @@ export default function ProductClient({ id }: { id: string }) {
                                     )}
                                 </div>
 
-                                {/* Description */}
-                                <p className="text-slate-600 text-lg leading-relaxed mb-8">
-                                    {product.description}
-                                </p>
-
-                                {/* Features (MOCK for now, schema doesn't have features) */}
-                                <div className="mb-8">
-                                    <h3 className="font-bold text-slate-900 mb-4">Öne Çıkan Özellikler</h3>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {["Premium Kalite", "Hızlı Kargo", "Garantili"].map((feature) => (
-                                            <div key={feature} className="flex items-center gap-2 text-slate-600">
-                                                <Check className="w-4 h-4 text-green-500" />
-                                                <span className="text-sm">{feature}</span>
-                                            </div>
+                                {/* Info Tabs */}
+                                <div className="mb-6">
+                                    <div className="flex gap-2 border-b border-slate-200 mb-4">
+                                        {[
+                                            { key: 'desc', label: 'Açıklama' },
+                                            { key: 'warranty', label: 'Garanti' },
+                                            { key: 'delivery', label: 'Teslimat' },
+                                            { key: 'installment', label: 'Taksit' },
+                                        ].map(tab => (
+                                            <button
+                                                key={tab.key}
+                                                onClick={() => setActiveTab(tab.key as any)}
+                                                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-[2px] transition-colors ${activeTab === tab.key
+                                                        ? 'border-slate-900 text-slate-900'
+                                                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                                                    }`}
+                                            >
+                                                {tab.label}
+                                            </button>
                                         ))}
+                                    </div>
+                                    <div className="text-slate-600 leading-relaxed min-h-[80px]">
+                                        {activeTab === 'desc' && (product.description || 'Ürün açıklaması bulunmuyor.')}
+                                        {activeTab === 'warranty' && (product.warranty_info || '2 yıl resmi distribütör garantisi.')}
+                                        {activeTab === 'delivery' && (product.delivery_info || 'Siparişiniz 1-3 iş günü içinde kargoya verilir.')}
+                                        {activeTab === 'installment' && (product.installment_info || 'Kredi kartına 9 taksit imkanı.')}
                                     </div>
                                 </div>
 
@@ -233,7 +313,6 @@ export default function ProductClient({ id }: { id: string }) {
                                         )}
                                     </Button>
 
-                                    {/* Favorite Button - Using SVG with hardcoded colors */}
                                     <Button
                                         size="lg"
                                         variant="outline"
@@ -248,24 +327,18 @@ export default function ProductClient({ id }: { id: string }) {
                                 </div>
 
                                 {/* Shipping & Guarantee */}
-                                <div className="grid grid-cols-2 gap-4 pt-6 border-t border-slate-100">
-                                    <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50">
-                                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                            <Truck className="w-5 h-5 text-blue-600" />
-                                        </div>
-                                        <div>
-                                            <p className="font-semibold text-sm text-slate-900">Ücretsiz Kargo</p>
-                                            <p className="text-xs text-slate-500">2-3 iş günü</p>
-                                        </div>
+                                <div className="grid grid-cols-3 gap-3 pt-6 border-t border-slate-100">
+                                    <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-slate-50 text-center">
+                                        <Truck className="w-5 h-5 text-blue-600" />
+                                        <span className="text-xs font-medium text-slate-700">Ücretsiz Kargo</span>
                                     </div>
-                                    <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50">
-                                        <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                                            <ShieldCheck className="w-5 h-5 text-green-600" />
-                                        </div>
-                                        <div>
-                                            <p className="font-semibold text-sm text-slate-900">2 Yıl Garanti</p>
-                                            <p className="text-xs text-slate-500">Resmi distribütör</p>
-                                        </div>
+                                    <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-slate-50 text-center">
+                                        <ShieldCheck className="w-5 h-5 text-green-600" />
+                                        <span className="text-xs font-medium text-slate-700">Garanti</span>
+                                    </div>
+                                    <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-slate-50 text-center">
+                                        <CreditCard className="w-5 h-5 text-purple-600" />
+                                        <span className="text-xs font-medium text-slate-700">Taksit</span>
                                     </div>
                                 </div>
 
@@ -278,6 +351,95 @@ export default function ProductClient({ id }: { id: string }) {
                                 )}
                             </div>
                         </div>
+                    </div>
+
+                    {/* Reviews Section */}
+                    <div className="mt-8 bg-white rounded-3xl shadow-sm border border-slate-100 p-6 lg:p-10">
+                        <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                            <MessageSquare className="w-6 h-6" />
+                            Müşteri Yorumları ({reviews.length})
+                        </h2>
+
+                        {/* Add Review Form */}
+                        <div className="mb-8 p-6 bg-slate-50 rounded-2xl">
+                            <h3 className="font-semibold text-slate-900 mb-4">Yorum Yap</h3>
+                            {!user ? (
+                                <p className="text-slate-500">
+                                    Yorum yapmak için <a href={`/login?redirect=/product/${id}`} className="text-slate-900 font-semibold underline">giriş yapın</a>.
+                                </p>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">Puanınız</label>
+                                        <div className="flex gap-1">
+                                            {[1, 2, 3, 4, 5].map(star => (
+                                                <button
+                                                    key={star}
+                                                    onClick={() => setReviewRating(star)}
+                                                    className="p-1"
+                                                >
+                                                    <Star className={`w-6 h-6 ${star <= reviewRating ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'}`} />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">Yorumunuz</label>
+                                        <textarea
+                                            value={reviewComment}
+                                            onChange={e => setReviewComment(e.target.value)}
+                                            placeholder="Ürün hakkında düşüncelerinizi yazın..."
+                                            className="w-full p-3 border border-slate-200 rounded-xl resize-none h-24 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                        />
+                                    </div>
+                                    {reviewError && (
+                                        <p className="text-red-500 text-sm">{reviewError}</p>
+                                    )}
+                                    <Button
+                                        onClick={handleSubmitReview}
+                                        disabled={submittingReview}
+                                        className="bg-slate-900 text-white hover:bg-slate-800 gap-2"
+                                    >
+                                        <Send className="w-4 h-4" />
+                                        {submittingReview ? 'Gönderiliyor...' : 'Yorumu Gönder'}
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Reviews List */}
+                        {reviews.length === 0 ? (
+                            <p className="text-slate-500 text-center py-8">Henüz yorum yapılmamış. İlk yorumu siz yapın!</p>
+                        ) : (
+                            <div className="space-y-4">
+                                {reviews.map(review => (
+                                    <div key={review.id} className="p-4 border border-slate-100 rounded-xl">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-sm font-bold">
+                                                    {review.user_name?.[0]?.toUpperCase() || 'U'}
+                                                </div>
+                                                <span className="font-medium text-slate-900">{review.user_name || 'Anonim'}</span>
+                                            </div>
+                                            <div className="flex">
+                                                {[1, 2, 3, 4, 5].map(star => (
+                                                    <Star
+                                                        key={star}
+                                                        className={`w-4 h-4 ${star <= review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-slate-200'}`}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {review.comment && (
+                                            <p className="text-slate-600">{review.comment}</p>
+                                        )}
+                                        <p className="text-xs text-slate-400 mt-2">
+                                            {new Date(review.created_at).toLocaleDateString('tr-TR')}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </main>

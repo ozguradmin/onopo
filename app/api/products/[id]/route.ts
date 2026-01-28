@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
-
-
+import { cookies } from 'next/headers'
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
     try {
@@ -33,36 +32,48 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         const id = params.id
 
         // Auth check
-        const token = req.cookies.get('token')?.value
+        const cookieStore = await cookies()
+        const token = cookieStore.get('auth_token')?.value
         if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
         const payload = await verifyJWT(token)
-        if (!payload || payload.role !== 'admin') {
+        if (!payload) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
 
         const body = await req.json()
-        const { name, slug, description, price, original_price, stock, images, category } = body
-
-        const runResult = await db.prepare(
-            `UPDATE products SET 
-             name = ?, slug = ?, description = ?, price = ?, original_price = ?, stock = ?, images = ?, category = ?
-             WHERE id = ?`
-        ).bind(
+        const {
             name,
-            slug,
             description,
             price,
             original_price,
             stock,
-            JSON.stringify(images),
+            images,
             category,
+            warranty_info,
+            delivery_info,
+            installment_info
+        } = body
+
+        await db.prepare(
+            `UPDATE products SET 
+             name = ?, description = ?, price = ?, original_price = ?, stock = ?, 
+             images = ?, category = ?, warranty_info = ?, delivery_info = ?, installment_info = ?,
+             updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`
+        ).bind(
+            name,
+            description || '',
+            price,
+            original_price || null,
+            stock,
+            JSON.stringify(images || []),
+            category || '',
+            warranty_info || '',
+            delivery_info || '',
+            installment_info || '',
             id
         ).run()
-
-        if (!runResult.success) {
-            throw new Error('Failed to update product')
-        }
 
         return NextResponse.json({ success: true })
 
@@ -78,11 +89,12 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
         const id = params.id
 
         // Auth check
-        const token = req.cookies.get('token')?.value
+        const cookieStore = await cookies()
+        const token = cookieStore.get('auth_token')?.value
         if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
         const payload = await verifyJWT(token)
-        if (!payload || payload.role !== 'admin') {
+        if (!payload) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
 

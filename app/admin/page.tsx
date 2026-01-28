@@ -21,8 +21,9 @@ export default function AdminDashboard() {
                     return
                 }
                 const me = await meRes.json()
-                if (me.user.role !== 'admin') {
-                    router.push('/')
+                if (me.user?.role !== 'admin') {
+                    // Not admin - redirect to admin login (not home)
+                    router.push('/admin/login')
                     return
                 }
 
@@ -87,7 +88,12 @@ export default function AdminDashboard() {
                                     <td className="p-4 text-slate-600">{product.price.toFixed(2)} ₺</td>
                                     <td className="p-4 text-slate-600">{product.stock}</td>
                                     <td className="p-4 text-right space-x-2">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-blue-600">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-slate-500 hover:text-blue-600"
+                                            onClick={() => router.push(`/admin/products/${product.id}/edit`)}
+                                        >
                                             <Edit className="w-4 h-4" />
                                         </Button>
                                         <Button
