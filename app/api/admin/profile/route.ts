@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
-import { verifyJWT } from '@/lib/auth'
+import { verifyJWT, hashPassword } from '@/lib/auth'
 import { cookies } from 'next/headers'
 
 export async function PUT(req: NextRequest) {
@@ -15,12 +15,17 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
 
+
+
+        // ...
+
         const { email, password } = await req.json()
 
         if (password) {
-            // Update both email and password
-            await db.prepare('UPDATE users SET email = ?, password = ? WHERE id = ?')
-                .bind(email, password, payload.userId)
+            const hashedPassword = await hashPassword(password)
+            // Update both email and password (using correct column password_hash)
+            await db.prepare('UPDATE users SET email = ?, password_hash = ? WHERE id = ?')
+                .bind(email, hashedPassword, payload.userId)
                 .run()
         } else {
             // Update only email

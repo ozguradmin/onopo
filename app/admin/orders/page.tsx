@@ -6,6 +6,7 @@ import {
     Package, Eye, Trash2, Truck, Check, X, Clock,
     Mail, Phone, MapPin, AlertCircle, ChevronDown, ChevronUp
 } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
 
 interface Order {
     id: number
@@ -26,9 +27,15 @@ const statusLabels: Record<string, { label: string; color: string; icon: any }> 
     cancelled: { label: 'İptal', color: 'bg-red-100 text-red-700', icon: X }
 }
 
-import { useSearchParams } from 'next/navigation'
-
 export default function AdminOrdersPage() {
+    return (
+        <React.Suspense fallback={<div>Yükleniyor...</div>}>
+            <OrdersContent />
+        </React.Suspense>
+    )
+}
+
+function OrdersContent() {
     const searchParams = useSearchParams()
     const highlightId = searchParams.get('id')
 

@@ -59,7 +59,13 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         const safePrice = parseFloat(price) || 0
         const safeOriginalPrice = original_price ? parseFloat(original_price) : null
         const safeStock = parseInt(stock) || 0
-        const safeImages = JSON.stringify(Array.isArray(images) ? images : [])
+
+        let safeImages = '[]'
+        if (typeof images === 'string') {
+            safeImages = images // Already stringified or raw string
+        } else if (Array.isArray(images)) {
+            safeImages = JSON.stringify(images)
+        }
 
         await db.prepare(
             `UPDATE products SET 
