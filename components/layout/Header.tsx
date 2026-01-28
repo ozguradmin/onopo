@@ -51,6 +51,16 @@ export function Header() {
             .catch(() => { })
     }, [])
 
+    const cartItemCount = mounted ? totalItems() : 0
+
+    React.useEffect(() => {
+        const handleScroll = () => {
+            setIsScrolled(window.scrollY > 20)
+        }
+        window.addEventListener("scroll", handleScroll)
+        return () => window.removeEventListener("scroll", handleScroll)
+    }, [])
+
     return (
         <>
             {/* ALWAYS WHITE HEADER - Works on every page */}
