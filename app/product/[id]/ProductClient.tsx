@@ -70,7 +70,7 @@ export default function ProductClient({ id }: { id: string }) {
         // Fetch reviews
         fetch(`/api/products/${id}/reviews`)
             .then(res => res.json())
-            .then(data => setReviews(data || []))
+            .then(data => setReviews(Array.isArray(data) ? data : []))
             .catch(() => { })
 
         // Check if user is logged in and fetch favorites

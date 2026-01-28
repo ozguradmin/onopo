@@ -3,6 +3,7 @@ import { HeroSection } from '@/components/home/HeroSection'
 import ProductShowcase from '@/components/home/ProductShowcase'
 import { FeaturesSection } from '@/components/home/FeaturesSection'
 import { ImageCardSection } from '@/components/home/ImageCardSection'
+import { CategoriesSection } from '@/components/home/CategoriesSection'
 
 export const dynamic = 'force-dynamic'
 
@@ -95,6 +96,15 @@ export default async function Home() {
               title={section.title}
               image_url={config.image_url}
               link_url={config.link_url}
+            />
+          )
+        }
+
+        if (section.type === 'categories') {
+          return (
+            <CategoriesSection
+              key={section.id}
+              title={section.title || 'Kategoriler'}
             />
           )
         }

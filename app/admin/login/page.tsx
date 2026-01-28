@@ -23,11 +23,12 @@ export default function AdminLoginPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: 'ozgurglr256@gmail.com' })
             })
+            const data = await res.json()
             if (res.ok) {
-                alert('Şifre yenileme maili ozgurglr256@gmail.com adresine başarıyla gönderildi (Simüle edildi).')
+                alert(data.message || 'Şifre yenileme maili gönderildi.')
                 setShowForgot(false)
             } else {
-                alert('Mail gönderme hatası oluştu.')
+                alert(data.error || 'Mail gönderme hatası oluştu.')
             }
         } catch {
             alert('Hata oluştu.')

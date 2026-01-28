@@ -32,6 +32,7 @@ interface Section {
 const sectionTypes = [
     { type: 'hero', label: 'Hero Slider', icon: ImageIcon },
     { type: 'products', label: 'Ürün Bölümü', icon: Package },
+    { type: 'categories', label: 'Kategoriler', icon: Package },
     { type: 'features', label: 'Özellikler', icon: Star },
     { type: 'image_card', label: 'Görsel Kart', icon: ImageIcon },
 ]

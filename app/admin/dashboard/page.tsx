@@ -14,15 +14,17 @@ export default function AdminDashboard() {
     React.useEffect(() => {
         Promise.all([
             fetch('/api/products').then(r => r.json()),
-            fetch('/api/orders').then(r => r.json()),
+            fetch('/api/orders').then(r => r.json()).catch(() => []),
             fetch('/api/analytics?range=day').then(r => r.json()).catch(() => ({ totalViews: 0 }))
         ]).then(([prods, ords, analytics]) => {
-            setProducts(prods || [])
-            setOrders(ords || [])
-            const revenue = (ords || []).reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0)
+            const productList = Array.isArray(prods) ? prods : []
+            const orderList = Array.isArray(ords) ? ords : []
+            setProducts(productList)
+            setOrders(orderList)
+            const revenue = orderList.reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0)
             setStats({
-                totalProducts: prods?.length || 0,
-                totalOrders: ords?.length || 0,
+                totalProducts: productList.length,
+                totalOrders: orderList.length,
                 totalRevenue: revenue,
                 todayViews: analytics?.totalViews || 0
             })

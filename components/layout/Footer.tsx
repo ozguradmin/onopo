@@ -2,7 +2,14 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Facebook, Instagram, Twitter, Linkedin, Heart } from "lucide-react"
+import { Facebook, Instagram, Twitter, Linkedin } from "lucide-react"
+
+interface Category {
+    id: number
+    name: string
+    slug: string
+    product_count?: number
+}
 
 export function Footer() {
     const [settings, setSettings] = React.useState({
@@ -14,6 +21,7 @@ export function Footer() {
         footer_phone: '',
         footer_address: ''
     })
+    const [categories, setCategories] = React.useState<Category[]>([])
 
     React.useEffect(() => {
         // Track page view
@@ -26,12 +34,24 @@ export function Footer() {
             .then(r => r.json())
             .then(data => setSettings(prev => ({ ...prev, ...data })))
             .catch(() => { })
+
+        // Fetch categories with products
+        fetch('/api/categories')
+            .then(r => r.json())
+            .then(data => {
+                // Filter categories that have products and take up to 4
+                const catsWithProducts = (data || [])
+                    .filter((c: Category) => c.product_count && c.product_count > 0)
+                    .slice(0, 4)
+                setCategories(catsWithProducts)
+            })
+            .catch(() => { })
     }, [])
 
     return (
         <footer className="bg-slate-950 text-slate-300 py-16 mt-20">
             <div className="container mx-auto px-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
                     {/* Brand */}
                     <div className="space-y-4">
                         {settings.logo_url ? (
@@ -50,14 +70,14 @@ export function Footer() {
                         </div>
                     </div>
 
-                    {/* Shop */}
+                    {/* Shop - Dynamic Categories */}
                     <div>
                         <h4 className="font-heading text-white font-semibold mb-6">Alışveriş</h4>
                         <ul className="space-y-3 text-sm">
-                            <FooterLink href="/tech">Teknoloji</FooterLink>
-                            <FooterLink href="/beauty">Kozmetik</FooterLink>
-                            <FooterLink href="/gaming">Oyun</FooterLink>
-                            <FooterLink href="/new">Yeni Gelenler</FooterLink>
+                            <FooterLink href="/products">Tüm Ürünler</FooterLink>
+                            {categories.map(cat => (
+                                <FooterLink key={cat.id} href={`/${cat.slug}`}>{cat.name}</FooterLink>
+                            ))}
                         </ul>
                     </div>
 
@@ -66,28 +86,10 @@ export function Footer() {
                         <h4 className="font-heading text-white font-semibold mb-6">Destek</h4>
                         <ul className="space-y-3 text-sm">
                             <FooterLink href="/page/help">Yardım Merkezi</FooterLink>
-                            <FooterLink href="/page/shipping">Kargo & İade</FooterLink>
+                            <FooterLink href="/page/shipping">Kargo &amp; İade</FooterLink>
                             <FooterLink href="/page/policy">Gizlilik Politikası</FooterLink>
                             <FooterLink href="/page/terms">Kullanım Koşulları</FooterLink>
                         </ul>
-                    </div>
-
-                    {/* Newsletter */}
-                    <div>
-                        <h4 className="font-heading text-white font-semibold mb-6">Bağlantıda Kal</h4>
-                        <p className="text-sm text-slate-400 mb-4">
-                            Özel teklifler ve yeni ürünlerden haberdar olmak için abone olun.
-                        </p>
-                        <div className="flex flex-col space-y-2">
-                            <input
-                                type="email"
-                                placeholder="E-posta adresiniz"
-                                className="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            />
-                            <button className="bg-primary text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-primary/90 transition-colors">
-                                Abone Ol
-                            </button>
-                        </div>
                     </div>
                 </div>
 
