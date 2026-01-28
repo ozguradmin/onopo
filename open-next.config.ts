@@ -2,10 +2,19 @@ import type { OpenNextConfig } from "@opennextjs/cloudflare";
 
 const config: OpenNextConfig = {
     default: {
-        // Enable incremental static regeneration
-        incrementalCache: "cache",
-        // Enable tag cache for on-demand revalidation  
-        tagCache: "cache",
+        override: {
+            wrapper: "cloudflare-node",
+            converter: "edge",
+            proxyExternalRequest: "fetch",
+        },
+    },
+    middleware: {
+        external: true,
+        override: {
+            wrapper: "cloudflare-edge",
+            converter: "edge",
+            proxyExternalRequest: "fetch",
+        },
     },
 };
 
