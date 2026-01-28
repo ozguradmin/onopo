@@ -28,7 +28,8 @@ export default function EditProductPage() {
         images: [] as string[],
         warranty_info: '',
         delivery_info: '',
-        installment_info: ''
+        installment_info: '',
+        is_active: true
     })
 
     // Fetch product and categories
@@ -48,7 +49,8 @@ export default function EditProductPage() {
                     images: product.images || (product.image ? [product.image] : []),
                     warranty_info: product.warranty_info || '',
                     delivery_info: product.delivery_info || '',
-                    installment_info: product.installment_info || ''
+                    installment_info: product.installment_info || '',
+                    is_active: product.is_active !== undefined ? !!product.is_active : true
                 })
             }
             setCategories(cats || [])
@@ -121,7 +123,8 @@ export default function EditProductPage() {
                     ...formData,
                     price: parseFloat(formData.price),
                     original_price: formData.original_price ? parseFloat(formData.original_price) : null,
-                    stock: parseInt(formData.stock)
+                    stock: parseInt(formData.stock),
+                    is_active: formData.is_active ? 1 : 0
                 })
             })
 
@@ -258,6 +261,23 @@ export default function EditProductPage() {
                     </div>
                 </div>
 
+                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <div>
+                        <label className="text-sm font-medium text-slate-900 block">Ürün Görünürlüğü</label>
+                        <p className="text-xs text-slate-500">Bu ürünü mağazada yayınla veya gizle</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={formData.is_active}
+                            onChange={(e) => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                        />
+                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-slate-900"></div>
+                        <span className="ml-3 text-sm font-medium text-slate-700">{formData.is_active ? 'Yayında' : 'Gizli'}</span>
+                    </label>
+                </div>
+
                 {/* Images */}
                 <div>
                     <label className="block text-sm font-medium mb-1">Görseller</label>
@@ -288,7 +308,7 @@ export default function EditProductPage() {
                                             [newImages[idx], newImages[idx + 1]] = [newImages[idx + 1], newImages[idx]];
                                             setFormData(prev => ({ ...prev, images: newImages }));
                                         }} className="p-1 bg-white rounded-full text-slate-700 hover:bg-slate-100">
-                                            <ArrowRight className="w-3 h-3 transform rotate-180" /> {/* ArrowRight actually points right, ArrowLeft points left. Lucide default. using ArrowRight for Right */}
+                                            <ArrowRight className="w-3 h-3" />
                                         </button>
                                     )}
                                 </div>

@@ -52,13 +52,15 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             category,
             warranty_info,
             delivery_info,
-            installment_info
+            installment_info,
+            is_active
         } = body
 
         // Prepare values with safe defaults and type conversions
         const safePrice = parseFloat(price) || 0
         const safeOriginalPrice = original_price ? parseFloat(original_price) : null
         const safeStock = parseInt(stock) || 0
+        const safeIsActive = is_active !== undefined ? (is_active ? 1 : 0) : 1
 
         let safeImages = '[]'
         if (typeof images === 'string') {
@@ -67,29 +69,57 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             safeImages = JSON.stringify(images)
         }
 
-        // ... (PUT logic continued)
-        // Add detailed logging
-        console.log('Updating product:', id, body)
+        const intId = parseInt(id)
+        console.log('Updating product:', intId, body)
 
-        await db.prepare(
-            `UPDATE products SET 
-             name = ?, description = ?, price = ?, original_price = ?, stock = ?, 
-             images = ?, category = ?, warranty_info = ?, delivery_info = ?, installment_info = ?,
-             updated_at = CURRENT_TIMESTAMP
-             WHERE id = ?`
-        ).bind(
-            name,
-            description || '',
-            safePrice,
-            safeOriginalPrice,
-            safeStock,
-            safeImages,
-            category || '',
-            warranty_info || '',
-            delivery_info || '',
-            installment_info || '',
-            id
-        ).run()
+        try {
+            await db.prepare(
+                `UPDATE products SET 
+                 name = ?, description = ?, price = ?, original_price = ?, stock = ?, 
+                 images = ?, category = ?, warranty_info = ?, delivery_info = ?, installment_info = ?, is_active = ?,
+                 updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`
+            ).bind(
+                name,
+                description || '',
+                safePrice,
+                safeOriginalPrice,
+                safeStock,
+                safeImages,
+                category || '',
+                warranty_info || '',
+                delivery_info || '',
+                installment_info || '',
+                safeIsActive,
+                intId
+            ).run()
+        } catch (err: any) {
+            // Fallback if is_active column missing
+            if (String(err).includes('no such column')) {
+                console.warn('is_active column missing, falling back')
+                await db.prepare(
+                    `UPDATE products SET 
+                     name = ?, description = ?, price = ?, original_price = ?, stock = ?, 
+                     images = ?, category = ?, warranty_info = ?, delivery_info = ?, installment_info = ?,
+                     updated_at = CURRENT_TIMESTAMP
+                     WHERE id = ?`
+                ).bind(
+                    name,
+                    description || '',
+                    safePrice,
+                    safeOriginalPrice,
+                    safeStock,
+                    safeImages,
+                    category || '',
+                    warranty_info || '',
+                    delivery_info || '',
+                    installment_info || '',
+                    intId
+                ).run()
+            } else {
+                throw err
+            }
+        }
 
         return NextResponse.json({ success: true })
 
@@ -108,6 +138,7 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
         const db = await getDB()
         const params = await props.params
         const id = params.id
+        const intId = parseInt(id) // Ensure integer
 
         // Auth check
         const cookieStore = await cookies()
@@ -119,32 +150,24 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
 
-        // Manual Cascade Delete to handle missing ON DELETE CASCADE in DB
-        // 1. Remove from order_items (orphaning orders? strictly speaking yes, but necessary for deletion)
-        //    Ideally we should check if orders exist, but user wants to DELETE.
-        //    Better approach: Set product_id to NULL if nullable, or delete item line.
-        //    Assuming we just delete the line from the order history.
-        try {
-            await db.prepare('DELETE FROM order_items WHERE product_id = ?').bind(id).run()
-        } catch (e) { console.error('Failed to cleanup order_items', e) }
+        // Manual Cascade Delete
+        const cleanupQueries = [
+            'DELETE FROM order_items WHERE product_id = ?',
+            'DELETE FROM favorites WHERE product_id = ?',
+            'DELETE FROM featured_products WHERE product_id = ?',
+            'DELETE FROM reviews WHERE product_id = ?'
+        ]
 
-        // 2. Remove from favorites
-        try {
-            await db.prepare('DELETE FROM favorites WHERE product_id = ?').bind(id).run()
-        } catch (e) { console.error('Failed to cleanup favorites', e) }
-
-        // 3. Remove from featured_products
-        try {
-            await db.prepare('DELETE FROM featured_products WHERE product_id = ?').bind(id).run()
-        } catch (e) { console.error('Failed to cleanup featured_products', e) }
-
-        // 4. Remove from reviews
-        try {
-            await db.prepare('DELETE FROM reviews WHERE product_id = ?').bind(id).run()
-        } catch (e) { console.error('Failed to cleanup reviews', e) }
+        for (const query of cleanupQueries) {
+            try {
+                await db.prepare(query).bind(intId).run()
+            } catch (e) {
+                console.warn(`Cleanup failed for query: ${query}`, e)
+            }
+        }
 
         // Finally delete product
-        await db.prepare('DELETE FROM products WHERE id = ?').bind(id).run()
+        await db.prepare('DELETE FROM products WHERE id = ?').bind(intId).run()
 
         return NextResponse.json({ success: true })
 

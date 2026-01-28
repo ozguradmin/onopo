@@ -20,31 +20,39 @@ export async function PUT(req: NextRequest) {
         // ...
 
         const { email, password } = await req.json()
+        console.log('Profile update attempt for:', email, 'Pass change:', !!password)
 
-        // ...
         if (password) {
+            console.log('Hashing password...')
             const hashedPassword = await hashPassword(password)
+            console.log('Password hashed. Updating DB...')
+
             try {
                 // Try updating 'password_hash' column
                 await db.prepare('UPDATE users SET email = ?, password_hash = ? WHERE id = ?')
                     .bind(email, hashedPassword, payload.userId)
                     .run()
+                console.log('Updated users table (password_hash)')
             } catch (err: any) {
+                console.warn('First update failed:', err.message)
                 // FALLBACK: If column 'password_hash' not found, try 'password'
                 if (String(err).includes('no such column')) {
                     console.warn('Falling back to "password" column')
                     await db.prepare('UPDATE users SET email = ?, password = ? WHERE id = ?')
                         .bind(email, hashedPassword, payload.userId)
                         .run()
+                    console.log('Updated users table (password fallback)')
                 } else {
                     throw err
                 }
             }
         } else {
             // Update only email
+            console.log('Updating email only...')
             await db.prepare('UPDATE users SET email = ? WHERE id = ?')
                 .bind(email, payload.userId)
                 .run()
+            console.log('Email updated')
         }
 
         return NextResponse.json({ success: true })
