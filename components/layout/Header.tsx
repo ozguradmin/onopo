@@ -221,17 +221,22 @@ export function Header() {
                     <div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)} />
                     <div className="absolute top-16 md:top-20 left-0 right-0 bg-white shadow-xl p-6">
                         <nav className="flex flex-col gap-2">
-                            {navLinks.map((link) => (
-                                <a
-                                    key={link.href}
-                                    href={link.href}
-                                    className="flex items-center justify-between px-4 py-4 rounded-xl text-lg font-semibold text-slate-800 hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all"
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                >
-                                    {link.label}
-                                    <span className="text-slate-400">→</span>
-                                </a>
-                            ))}
+                            {navLinks.map((link) => {
+                                if (link.label === 'Kategoriler') {
+                                    return <MobileCategoriesDropdown key={link.href} onClose={() => setIsMobileMenuOpen(false)} />
+                                }
+                                return (
+                                    <a
+                                        key={link.href}
+                                        href={link.href}
+                                        className="flex items-center justify-between px-4 py-4 rounded-xl text-lg font-semibold text-slate-800 hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all"
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                    >
+                                        {link.label}
+                                        <span className="text-slate-400">→</span>
+                                    </a>
+                                )
+                            })}
                         </nav>
                         <div className="mt-6 pt-6 border-t border-slate-100">
                             <form onSubmit={handleSearch} className="flex items-center gap-2 mb-4">
@@ -297,6 +302,75 @@ function CategoriesDropdown() {
                     <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">{cat.count}</span>
                 </a>
             ))}
+        </div>
+    )
+}
+
+function MobileCategoriesDropdown({ onClose }: { onClose: () => void }) {
+    const [isOpen, setIsOpen] = React.useState(false)
+    const [categories, setCategories] = React.useState<any[]>([])
+    const [loading, setLoading] = React.useState(true)
+
+    React.useEffect(() => {
+        fetch('/api/products')
+            .then(res => res.json())
+            .then(products => {
+                if (Array.isArray(products)) {
+                    const cats = products.reduce((acc: any, product: any) => {
+                        if (!product.category) return acc
+                        if (!acc[product.category]) acc[product.category] = 0
+                        acc[product.category]++
+                        return acc
+                    }, {})
+                    setCategories(Object.entries(cats).map(([name, count]) => ({ name, count })))
+                }
+                setLoading(false)
+            })
+            .catch(() => setLoading(false))
+    }, [])
+
+    return (
+        <div className="border border-slate-100 rounded-xl overflow-hidden">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center justify-between px-4 py-4 text-lg font-semibold text-slate-800 bg-slate-50 hover:bg-slate-100 transition-all"
+            >
+                <span>Kategoriler</span>
+                <svg
+                    className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                >
+                    <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            </button>
+            {isOpen && (
+                <div className="bg-white border-t border-slate-100">
+                    <a
+                        href="/products"
+                        onClick={onClose}
+                        className="block px-6 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 border-b border-slate-50"
+                    >
+                        Tüm Ürünler
+                    </a>
+                    {loading ? (
+                        <div className="px-6 py-3 text-sm text-slate-400">Yükleniyor...</div>
+                    ) : categories.length === 0 ? (
+                        <div className="px-6 py-3 text-sm text-slate-400">Kategori bulunamadı</div>
+                    ) : (
+                        categories.map((cat: any) => (
+                            <a
+                                key={cat.name}
+                                href={`/products?category=${encodeURIComponent(cat.name)}`}
+                                onClick={onClose}
+                                className="flex items-center justify-between px-6 py-3 text-base font-medium text-slate-600 hover:bg-slate-50 border-b border-slate-50 last:border-b-0"
+                            >
+                                <span className="capitalize">{cat.name}</span>
+                                <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{cat.count}</span>
+                            </a>
+                        ))
+                    )}
+                </div>
+            )}
         </div>
     )
 }

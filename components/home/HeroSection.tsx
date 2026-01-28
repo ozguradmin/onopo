@@ -71,10 +71,12 @@ export function HeroSection() {
                     {/* Background Image with Overlay */}
                     <div
                         className="absolute inset-0 bg-cover bg-center"
-                        style={{ backgroundImage: `url(${slide.image_url || slide.image})` }}
+                        style={{
+                            backgroundImage: `url(${slide.image_url || slide.image})`,
+                            backgroundPosition: 'center center'
+                        }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 to-transparent mix-blend-overlay" />
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent" />
 
                     {/* Content */}
                     <div className="relative h-full container mx-auto px-4 flex flex-col justify-center items-start z-10">

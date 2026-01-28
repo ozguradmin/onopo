@@ -55,41 +55,60 @@ export async function POST(req: NextRequest) {
             installment_info
         } = body
 
-        if (!name || !price) {
+        if (!name || price === undefined || price === null) {
             console.error('MISSING REQUIRED FIELDS:', { name, price })
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+            return NextResponse.json({ error: 'Missing required fields: name and price are required' }, { status: 400 })
         }
 
-        // FORCE ENSURE COLUMNS EXIST (Runtime Fix)
-        try { await db.prepare("ALTER TABLE products ADD COLUMN warranty_info TEXT").run(); } catch { }
-        try { await db.prepare("ALTER TABLE products ADD COLUMN delivery_info TEXT").run(); } catch { }
-        try { await db.prepare("ALTER TABLE products ADD COLUMN installment_info TEXT").run(); } catch { }
+        // Validate price is a number
+        const numericPrice = typeof price === 'number' ? price : parseFloat(String(price))
+        if (isNaN(numericPrice)) {
+            console.error('INVALID PRICE:', price)
+            return NextResponse.json({ error: 'Invalid price value' }, { status: 400 })
+        }
 
         console.log('PREPARING INSERT STATEMENT...')
 
         try {
-            await db.prepare(
-                `INSERT INTO products (name, description, price, original_price, stock, images, category, warranty_info, delivery_info, installment_info) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            // Use a simpler INSERT with only guaranteed columns
+            const result = await db.prepare(
+                `INSERT INTO products (name, description, price, original_price, stock, images, category) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`
             ).bind(
                 name,
                 description || '',
-                price,
+                numericPrice,
                 original_price || null,
                 stock || 0,
                 JSON.stringify(images || []),
-                category || '',
-                warranty_info || '',
-                delivery_info || '',
-                installment_info || ''
+                category || ''
             ).run()
-            console.log('INSERT SUCCESSFUL')
+
+            console.log('INSERT SUCCESSFUL:', result)
+
+            // Try to update optional columns if they exist (fail silently)
+            const productId = result.meta?.last_row_id
+            if (productId && (warranty_info || delivery_info || installment_info)) {
+                try {
+                    await db.prepare(
+                        `UPDATE products SET warranty_info = ?, delivery_info = ?, installment_info = ? WHERE id = ?`
+                    ).bind(
+                        warranty_info || '',
+                        delivery_info || '',
+                        installment_info || '',
+                        productId
+                    ).run()
+                } catch (updateError) {
+                    console.log('Optional fields update skipped (columns may not exist)')
+                }
+            }
+
         } catch (insertError: any) {
             console.error('FATAL INSERT ERROR:', insertError)
             return NextResponse.json({
                 error: 'Database Insert Failed',
                 message: insertError.message,
-                detail: JSON.stringify(insertError)
+                cause: insertError.cause?.message || 'Unknown'
             }, { status: 500 })
         }
 

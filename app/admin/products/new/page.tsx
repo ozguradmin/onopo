@@ -166,12 +166,10 @@ export default function AddProductPage() {
                         <label className="block text-sm font-medium mb-1">Eski Fiyat</label>
                         <div className="relative">
                             <span className="absolute left-3 top-2.5 text-slate-500">₺</span>
-                            <input
+                            <AutoDotInput
                                 name="original_price"
-                                type="number"
-                                step="0.01"
                                 value={formData.original_price}
-                                onChange={handleInputChange}
+                                onChange={(val) => setFormData(prev => ({ ...prev, original_price: val }))}
                                 className="w-full pl-8 p-2 border rounded-lg"
                                 placeholder="Opsiyonel"
                             />
