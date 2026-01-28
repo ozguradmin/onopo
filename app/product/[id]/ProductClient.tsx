@@ -42,6 +42,7 @@ export default function ProductClient({ id }: { id: string }) {
     const [selectedImage, setSelectedImage] = React.useState(0)
     const [quantity, setQuantity] = React.useState(1)
     const [isFavorite, setIsFavorite] = React.useState(false)
+    const [togglingFavorite, setTogglingFavorite] = React.useState(false)
     const [addedToCart, setAddedToCart] = React.useState(false)
     const [activeTab, setActiveTab] = React.useState<'desc' | 'warranty' | 'delivery' | 'installment'>('desc')
 
@@ -72,10 +73,22 @@ export default function ProductClient({ id }: { id: string }) {
             .then(data => setReviews(data || []))
             .catch(() => { })
 
-        // Check if user is logged in
+        // Check if user is logged in and fetch favorites
         fetch('/api/auth/me')
             .then(res => res.ok ? res.json() : null)
-            .then(data => setUser(data?.user || null))
+            .then(data => {
+                setUser(data?.user || null)
+                // If logged in, check if this product is favorited
+                if (data?.user) {
+                    fetch('/api/favorites')
+                        .then(res => res.json())
+                        .then(favData => {
+                            const isFav = favData.favorites?.some((f: any) => f.product_id === parseInt(id))
+                            setIsFavorite(isFav)
+                        })
+                        .catch(() => { })
+                }
+            })
             .catch(() => { })
     }, [id])
 
@@ -321,7 +334,27 @@ export default function ProductClient({ id }: { id: string }) {
                                             ? 'bg-red-50 border-red-300'
                                             : 'bg-white border-slate-200 hover:bg-red-50 hover:border-red-300'
                                             }`}
-                                        onClick={() => setIsFavorite(!isFavorite)}
+                                        disabled={togglingFavorite}
+                                        onClick={async () => {
+                                            if (!user) {
+                                                window.location.href = '/login?redirect=/product/' + id
+                                                return
+                                            }
+                                            setTogglingFavorite(true)
+                                            try {
+                                                const res = await fetch('/api/favorites', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ productId: parseInt(id) })
+                                                })
+                                                const data = await res.json()
+                                                setIsFavorite(data.favorited)
+                                            } catch (err) {
+                                                console.error('Toggle favorite error:', err)
+                                            } finally {
+                                                setTogglingFavorite(false)
+                                            }
+                                        }}
                                     >
                                         <HeartIcon filled={isFavorite} />
                                     </Button>

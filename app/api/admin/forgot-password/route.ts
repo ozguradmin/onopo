@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
-import { signJWT, hashPassword } from '@/lib/auth'
+import { hashPassword } from '@/lib/auth'
 
 // Admin email for password reset
 const ADMIN_EMAIL = 'ozgurglr256@gmail.com'
@@ -15,31 +15,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: true, message: 'Eğer bu e-posta kayıtlıysa, şifre sıfırlama bağlantısı gönderildi.' })
         }
 
-        // Get Resend API key from environment
-        const RESEND_API_KEY = process.env.RESEND_API_KEY
-
-        if (!RESEND_API_KEY) {
-            console.error('RESEND_API_KEY not configured')
-            // Fallback: Generate new password and log it
-            const newPassword = generateRandomPassword()
-            const db = await getDB()
-            const passwordHash = await hashPassword(newPassword)
-
-            await db.prepare(
-                'UPDATE users SET password_hash = ? WHERE email = ?'
-            ).bind(passwordHash, ADMIN_EMAIL).run()
-
-            console.log('========================================')
-            console.log('ADMIN PASSWORD RESET (No email configured)')
-            console.log(`New Password: ${newPassword}`)
-            console.log('========================================')
-
-            return NextResponse.json({
-                success: true,
-                message: 'Şifre sıfırlandı. Yeni şifre sunucu loglarında görüntülenebilir.'
-            })
-        }
-
         // Generate a new random password
         const newPassword = generateRandomPassword()
         const db = await getDB()
@@ -50,43 +25,78 @@ export async function POST(req: NextRequest) {
             'UPDATE users SET password_hash = ? WHERE email = ?'
         ).bind(passwordHash, ADMIN_EMAIL).run()
 
-        // Send email with Resend
-        const emailResponse = await fetch('https://api.resend.com/emails', {
+        // Send email with MailChannels via Cloudflare Workers
+        // MailChannels is integrated with Cloudflare Workers and allows sending emails
+        const emailResponse = await fetch('https://api.mailchannels.net/tx/v1/send', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${RESEND_API_KEY}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                from: 'Onopo <onboarding@resend.dev>',
-                to: [ADMIN_EMAIL],
+                personalizations: [
+                    {
+                        to: [{ email: ADMIN_EMAIL, name: 'Admin' }]
+                    }
+                ],
+                from: {
+                    email: 'no-reply@onopo.com.tr',
+                    name: 'Onopo Admin'
+                },
                 subject: 'Onopo Admin - Şifre Sıfırlama',
-                html: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                        <h1 style="color: #1e293b; margin-bottom: 24px;">Şifre Sıfırlama</h1>
-                        <p style="color: #475569; font-size: 16px; line-height: 1.6;">
-                            Admin şifreniz sıfırlandı. Yeni giriş bilgileriniz:
-                        </p>
-                        <div style="background: #f1f5f9; padding: 20px; border-radius: 8px; margin: 24px 0;">
-                            <p style="margin: 0 0 12px 0;"><strong>E-posta:</strong> ${ADMIN_EMAIL}</p>
-                            <p style="margin: 0;"><strong>Yeni Şifre:</strong> <code style="background: #e2e8f0; padding: 4px 8px; border-radius: 4px;">${newPassword}</code></p>
-                        </div>
-                        <p style="color: #64748b; font-size: 14px;">
-                            Güvenliğiniz için giriş yaptıktan sonra şifrenizi değiştirmenizi öneririz.
-                        </p>
-                        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
-                        <p style="color: #94a3b8; font-size: 12px;">
-                            Bu e-posta Onopo Admin paneli tarafından gönderilmiştir.
-                        </p>
-                    </div>
-                `
+                content: [
+                    {
+                        type: 'text/plain',
+                        value: `Merhaba,
+
+Admin şifreniz sıfırlandı. Yeni giriş bilgileriniz:
+
+E-posta: ${ADMIN_EMAIL}
+Yeni Şifre: ${newPassword}
+
+Güvenliğiniz için giriş yaptıktan sonra şifrenizi değiştirmenizi öneririz.
+
+Bu e-posta Onopo Admin paneli tarafından gönderilmiştir.`
+                    },
+                    {
+                        type: 'text/html',
+                        value: `
+                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                                <h1 style="color: #1e293b; margin-bottom: 24px;">Şifre Sıfırlama</h1>
+                                <p style="color: #475569; font-size: 16px; line-height: 1.6;">
+                                    Admin şifreniz sıfırlandı. Yeni giriş bilgileriniz:
+                                </p>
+                                <div style="background: #f1f5f9; padding: 20px; border-radius: 8px; margin: 24px 0;">
+                                    <p style="margin: 0 0 12px 0;"><strong>E-posta:</strong> ${ADMIN_EMAIL}</p>
+                                    <p style="margin: 0;"><strong>Yeni Şifre:</strong> <code style="background: #e2e8f0; padding: 4px 8px; border-radius: 4px;">${newPassword}</code></p>
+                                </div>
+                                <p style="color: #64748b; font-size: 14px;">
+                                    Güvenliğiniz için giriş yaptıktan sonra şifrenizi değiştirmenizi öneririz.
+                                </p>
+                                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+                                <p style="color: #94a3b8; font-size: 12px;">
+                                    Bu e-posta Onopo Admin paneli tarafından gönderilmiştir.
+                                </p>
+                            </div>
+                        `
+                    }
+                ]
             })
         })
 
         if (!emailResponse.ok) {
-            const errorData = await emailResponse.json()
-            console.error('Resend API error:', errorData)
-            throw new Error('E-posta gönderilemedi')
+            const errorText = await emailResponse.text()
+            console.error('MailChannels error:', errorText)
+
+            // Still return success since password was updated - just log the email error
+            console.log('========================================')
+            console.log('PASSWORD RESET - Email sending failed')
+            console.log(`New Password for ${ADMIN_EMAIL}: ${newPassword}`)
+            console.log('========================================')
+
+            return NextResponse.json({
+                success: true,
+                message: `Şifre güncellendi. E-posta gönderilemedi, lütfen logları kontrol edin.`
+            })
         }
 
         return NextResponse.json({
