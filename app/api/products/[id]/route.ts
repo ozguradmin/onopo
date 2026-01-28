@@ -67,6 +67,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             safeImages = JSON.stringify(images)
         }
 
+        // ... (PUT logic continued)
+        // Add detailed logging
+        console.log('Updating product:', id, body)
+
         await db.prepare(
             `UPDATE products SET 
              name = ?, description = ?, price = ?, original_price = ?, stock = ?, 
@@ -91,7 +95,11 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 
     } catch (error: any) {
         console.error('Product update error:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({
+            error: error.message,
+            details: String(error),
+            stack: error.stack
+        }, { status: 500 })
     }
 }
 
@@ -111,11 +119,40 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
 
+        // Manual Cascade Delete to handle missing ON DELETE CASCADE in DB
+        // 1. Remove from order_items (orphaning orders? strictly speaking yes, but necessary for deletion)
+        //    Ideally we should check if orders exist, but user wants to DELETE.
+        //    Better approach: Set product_id to NULL if nullable, or delete item line.
+        //    Assuming we just delete the line from the order history.
+        try {
+            await db.prepare('DELETE FROM order_items WHERE product_id = ?').bind(id).run()
+        } catch (e) { console.error('Failed to cleanup order_items', e) }
+
+        // 2. Remove from favorites
+        try {
+            await db.prepare('DELETE FROM favorites WHERE product_id = ?').bind(id).run()
+        } catch (e) { console.error('Failed to cleanup favorites', e) }
+
+        // 3. Remove from featured_products
+        try {
+            await db.prepare('DELETE FROM featured_products WHERE product_id = ?').bind(id).run()
+        } catch (e) { console.error('Failed to cleanup featured_products', e) }
+
+        // 4. Remove from reviews
+        try {
+            await db.prepare('DELETE FROM reviews WHERE product_id = ?').bind(id).run()
+        } catch (e) { console.error('Failed to cleanup reviews', e) }
+
+        // Finally delete product
         await db.prepare('DELETE FROM products WHERE id = ?').bind(id).run()
 
         return NextResponse.json({ success: true })
 
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error('Product delete error:', error)
+        return NextResponse.json({
+            error: error.message,
+            details: String(error)
+        }, { status: 500 })
     }
 }

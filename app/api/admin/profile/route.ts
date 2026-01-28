@@ -21,12 +21,25 @@ export async function PUT(req: NextRequest) {
 
         const { email, password } = await req.json()
 
+        // ...
         if (password) {
             const hashedPassword = await hashPassword(password)
-            // Update both email and password (using correct column password_hash)
-            await db.prepare('UPDATE users SET email = ?, password_hash = ? WHERE id = ?')
-                .bind(email, hashedPassword, payload.userId)
-                .run()
+            try {
+                // Try updating 'password_hash' column
+                await db.prepare('UPDATE users SET email = ?, password_hash = ? WHERE id = ?')
+                    .bind(email, hashedPassword, payload.userId)
+                    .run()
+            } catch (err: any) {
+                // FALLBACK: If column 'password_hash' not found, try 'password'
+                if (String(err).includes('no such column')) {
+                    console.warn('Falling back to "password" column')
+                    await db.prepare('UPDATE users SET email = ?, password = ? WHERE id = ?')
+                        .bind(email, hashedPassword, payload.userId)
+                        .run()
+                } else {
+                    throw err
+                }
+            }
         } else {
             // Update only email
             await db.prepare('UPDATE users SET email = ? WHERE id = ?')
@@ -36,6 +49,11 @@ export async function PUT(req: NextRequest) {
 
         return NextResponse.json({ success: true })
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error('Profile update error:', error)
+        return NextResponse.json({
+            error: error.message,
+            details: String(error),
+            stack: error.stack
+        }, { status: 500 })
     }
 }
