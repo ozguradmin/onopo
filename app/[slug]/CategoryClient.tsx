@@ -120,16 +120,16 @@ export default function CategoryClient({ slug }: { slug: string }) {
                     {/* Category Pills */}
                     <div className="flex flex-wrap gap-2">
                         {CATEGORIES.map(cat => (
-                            <button
+                            <a
                                 key={cat.id}
-                                onClick={() => setSelectedCategory(cat.id)}
+                                href={cat.id === 'all' ? '/products' : `/${cat.id}`}
                                 className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${selectedCategory === cat.id
                                     ? 'bg-slate-900 text-white'
                                     : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                                     }`}
                             >
                                 {cat.label}
-                            </button>
+                            </a>
                         ))}
                     </div>
 
