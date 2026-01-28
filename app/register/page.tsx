@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ShoppingBag, Check } from 'lucide-react'
+import { ShoppingBag, Check, Star, Truck, Shield, Gift } from 'lucide-react'
 
 export default function RegisterPage() {
     const router = useRouter()
@@ -20,20 +20,33 @@ export default function RegisterPage() {
         setError('')
 
         try {
-            const res = await fetch('/api/auth/register', {
+            // Register
+            const registerRes = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, email, password }),
             })
 
-            const data = await res.json()
+            const registerData = await registerRes.json()
 
-            if (!res.ok) {
-                throw new Error(data.error || 'Kayıt başarısız')
+            if (!registerRes.ok) {
+                throw new Error(registerData.error || 'Kayıt başarısız')
             }
 
-            // Success - Redirect to login
-            router.push('/login')
+            // Auto-login after successful registration
+            const loginRes = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            })
+
+            if (loginRes.ok) {
+                router.push('/')
+                router.refresh()
+            } else {
+                // If auto-login fails, redirect to login page
+                router.push('/login')
+            }
 
         } catch (err: any) {
             setError(err.message)
@@ -41,6 +54,13 @@ export default function RegisterPage() {
             setLoading(false)
         }
     }
+
+    const features = [
+        { icon: Gift, title: "Hoşgeldin Hediyesi", desc: "İlk siparişinize %10 indirim" },
+        { icon: Truck, title: "Ücretsiz Kargo", desc: "150₺ üzeri siparişlerde" },
+        { icon: Shield, title: "Güvenli Alışveriş", desc: "256-bit SSL şifreleme" },
+        { icon: Star, title: "Özel Fırsatlar", desc: "Üyelere özel kampanyalar" },
+    ]
 
     return (
         <div className="min-h-screen grid lg:grid-cols-2">
@@ -111,32 +131,56 @@ export default function RegisterPage() {
                             disabled={loading}
                             className="w-full h-12 bg-slate-900 text-white hover:bg-slate-800 rounded-xl font-semibold text-base"
                         >
-                            {loading ? 'Kayıt Olunuyor...' : 'Hesap Oluştur'}
+                            {loading ? 'Hesap Oluşturuluyor...' : 'Hesap Oluştur'}
                         </Button>
                     </form>
                 </div>
             </div>
 
-            {/* Right: Feature/Image */}
-            <div className="hidden lg:block bg-slate-50 relative overflow-hidden">
-                <div className="absolute inset-0 flex items-center justify-center p-12">
-                    <div className="grid grid-cols-2 gap-4 max-w-lg opacity-50">
-                        {/* Abstract decorative grid */}
-                        <div className="aspect-square rounded-2xl bg-slate-200 animate-pulse" />
-                        <div className="aspect-square rounded-2xl bg-slate-300" />
-                        <div className="aspect-square rounded-2xl bg-slate-300" />
-                        <div className="aspect-square rounded-2xl bg-slate-200 animate-pulse" style={{ animationDelay: '500ms' }} />
-                    </div>
+            {/* Right: Premium Feature Showcase */}
+            <div className="hidden lg:flex bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
+                {/* Background Pattern */}
+                <div className="absolute inset-0 opacity-10">
+                    <div className="absolute top-20 left-20 w-72 h-72 bg-white rounded-full blur-3xl" />
+                    <div className="absolute bottom-20 right-20 w-96 h-96 bg-purple-500 rounded-full blur-3xl" />
                 </div>
-                <div className="absolute bottom-12 left-12 right-12">
-                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-                                <Check className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <div className="font-bold text-slate-900">Üyelere Özel Fırsatlar</div>
-                                <div className="text-sm text-slate-500">İlk siparişinize özel indirimler</div>
+
+                <div className="relative z-10 flex flex-col justify-center p-12 w-full">
+                    <div className="max-w-md mx-auto">
+                        <h2 className="text-3xl font-bold text-white mb-4">
+                            Üyelik Avantajları
+                        </h2>
+                        <p className="text-slate-400 mb-10">
+                            ONOPO ailesine katılarak özel fırsatlardan yararlanın.
+                        </p>
+
+                        <div className="space-y-6">
+                            {features.map((feature, i) => (
+                                <div
+                                    key={i}
+                                    className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all"
+                                >
+                                    <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                                        <feature.icon className="w-6 h-6 text-white" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-white">{feature.title}</h3>
+                                        <p className="text-sm text-slate-400">{feature.desc}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="mt-10 pt-8 border-t border-white/10">
+                            <div className="flex items-center gap-3">
+                                <div className="flex -space-x-2">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 border-2 border-slate-900" />
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 border-2 border-slate-900" />
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 border-2 border-slate-900" />
+                                </div>
+                                <p className="text-sm text-slate-400">
+                                    <span className="font-semibold text-white">1,000+</span> mutlu müşteri
+                                </p>
                             </div>
                         </div>
                     </div>

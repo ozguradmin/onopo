@@ -21,7 +21,7 @@ export function MobileNav() {
     return (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-background/80 backdrop-blur-lg border-t border-border h-16 px-6 flex items-center justify-between">
             <NavItem href="/" icon={<Home className="w-6 h-6" />} label="Anasayfa" active={pathname === "/"} />
-            <NavItem href="#" icon={<Search className="w-6 h-6" />} label="Ara" />
+            <NavItem href="/products" icon={<Search className="w-6 h-6" />} label="Ara" />
 
             <button
                 onClick={toggleCart}
@@ -38,7 +38,7 @@ export function MobileNav() {
                 <span className="text-[10px] font-medium">Sepet</span>
             </button>
 
-            <NavItem href="#" icon={<User className="w-6 h-6" />} label="Profil" />
+            <NavItem href="/login" icon={<User className="w-6 h-6" />} label="Profil" />
         </div>
     )
 }

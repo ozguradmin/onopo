@@ -14,6 +14,7 @@ const CATEGORY_INFO: Record<string, { title: string; desc: string }> = {
     gaming: { title: "Oyun & Eğlence", desc: "Pro oyuncular için tasarlanmış yüksek performanslı ekipmanlar." },
     beauty: { title: "Kozmetik & Bakım", desc: "Kendinizi şımartmanız için premium kişisel bakım ürünleri." },
     products: { title: "Tüm Ürünler", desc: "Tüm kategorilerdeki ürünlerimizi keşfedin." },
+    new: { title: "Yeni Gelenler", desc: "En yeni ürünlerimizi ilk siz keşfedin." },
     default: { title: "Tüm Ürünler", desc: "Aradığınız her şey burada." }
 }
 

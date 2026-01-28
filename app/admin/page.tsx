@@ -17,7 +17,7 @@ export default function AdminDashboard() {
                 // Check Auth via /api/auth/me
                 const meRes = await fetch('/api/auth/me')
                 if (!meRes.ok) {
-                    router.push('/login?redirect=/admin')
+                    router.push('/admin/login')
                     return
                 }
                 const me = await meRes.json()

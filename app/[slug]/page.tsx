@@ -2,7 +2,7 @@
 import CategoryClient from "./CategoryClient"
 import { notFound } from "next/navigation"
 
-const VALID_CATEGORIES = ['tech', 'gaming', 'beauty', 'products']
+const VALID_CATEGORIES = ['tech', 'gaming', 'beauty', 'products', 'new']
 
 export default async function Page(props: { params: Promise<{ slug: string }> }) {
     const params = await props.params

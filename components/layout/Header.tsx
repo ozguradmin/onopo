@@ -107,7 +107,7 @@ export function Header() {
                             </div>
 
                             {/* User */}
-                            <a href="/admin/auth/login">
+                            <a href="/login">
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -192,9 +192,11 @@ export function Header() {
                                     <Search className="w-4 h-4" />
                                 </Button>
                             </form>
-                            <Button variant="outline" className="w-full h-12 rounded-xl border-slate-200 text-slate-700">
-                                <User className="w-4 h-4 mr-2" /> Hesabım
-                            </Button>
+                            <a href="/login">
+                                <Button variant="outline" className="w-full h-12 rounded-xl border-slate-200 text-slate-700">
+                                    <User className="w-4 h-4 mr-2" /> Hesabım
+                                </Button>
+                            </a>
                         </div>
                     </div>
                 </div>
