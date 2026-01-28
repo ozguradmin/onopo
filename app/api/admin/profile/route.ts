@@ -15,6 +15,8 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
 
+        const userId = payload.userId || payload.sub || payload.id
+
 
 
         // ...
@@ -30,7 +32,7 @@ export async function PUT(req: NextRequest) {
             try {
                 // Try updating 'password_hash' column
                 await db.prepare('UPDATE users SET email = ?, password_hash = ? WHERE id = ?')
-                    .bind(email, hashedPassword, payload.userId)
+                    .bind(email, hashedPassword, userId)
                     .run()
                 console.log('Updated users table (password_hash)')
             } catch (err: any) {
@@ -39,7 +41,7 @@ export async function PUT(req: NextRequest) {
                 if (String(err).includes('no such column')) {
                     console.warn('Falling back to "password" column')
                     await db.prepare('UPDATE users SET email = ?, password = ? WHERE id = ?')
-                        .bind(email, hashedPassword, payload.userId)
+                        .bind(email, hashedPassword, userId)
                         .run()
                     console.log('Updated users table (password fallback)')
                 } else {
@@ -50,7 +52,7 @@ export async function PUT(req: NextRequest) {
             // Update only email
             console.log('Updating email only...')
             await db.prepare('UPDATE users SET email = ? WHERE id = ?')
-                .bind(email, payload.userId)
+                .bind(email, userId)
                 .run()
             console.log('Email updated')
         }

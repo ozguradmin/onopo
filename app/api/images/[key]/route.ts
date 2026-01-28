@@ -21,6 +21,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ key: stri
         const headers = new Headers()
         object.writeHttpMetadata(headers)
         headers.set('etag', object.httpEtag)
+        headers.set('Cache-Control', 'public, max-age=31536000, immutable') // Cache for 1 year
 
         return new NextResponse(object.body, {
             headers,
