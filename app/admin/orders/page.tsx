@@ -26,7 +26,12 @@ const statusLabels: Record<string, { label: string; color: string; icon: any }> 
     cancelled: { label: 'İptal', color: 'bg-red-100 text-red-700', icon: X }
 }
 
+import { useSearchParams } from 'next/navigation'
+
 export default function AdminOrdersPage() {
+    const searchParams = useSearchParams()
+    const highlightId = searchParams.get('id')
+
     const [orders, setOrders] = React.useState<Order[]>([])
     const [loading, setLoading] = React.useState(true)
     const [expandedOrder, setExpandedOrder] = React.useState<number | null>(null)
@@ -43,6 +48,14 @@ export default function AdminOrdersPage() {
             const codes: Record<number, string> = {}
             data.forEach((o: Order) => { if (o.tracking_code) codes[o.id] = o.tracking_code })
             setTrackingCode(codes)
+
+            // Auto expand if highlighted
+            if (highlightId) {
+                const id = parseInt(highlightId)
+                if (data.find((o: Order) => o.id === id)) {
+                    setExpandedOrder(id)
+                }
+            }
         } catch (err) {
             console.error(err)
         } finally {

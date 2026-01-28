@@ -7,35 +7,20 @@ import { ShoppingBag, Edit, Trash2, Plus, TrendingUp, Users, Package, DollarSign
 
 export default function AdminDashboard() {
     const router = useRouter()
-    const [products, setProducts] = React.useState<any[]>([])
     const [orders, setOrders] = React.useState<any[]>([])
     const [stats, setStats] = React.useState({ totalProducts: 0, totalOrders: 0, totalRevenue: 0, todayViews: 0 })
+    const [loading, setLoading] = React.useState(true)
 
     React.useEffect(() => {
-        Promise.all([
-            fetch('/api/products').then(r => r.json()),
-            fetch('/api/orders').then(r => r.json()).catch(() => []),
-            fetch('/api/analytics?range=day').then(r => r.json()).catch(() => ({ totalViews: 0 }))
-        ]).then(([prods, ords, analytics]) => {
-            const productList = Array.isArray(prods) ? prods : []
-            const orderList = Array.isArray(ords) ? ords : []
-            setProducts(productList)
-            setOrders(orderList)
-            const revenue = orderList.reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0)
-            setStats({
-                totalProducts: productList.length,
-                totalOrders: orderList.length,
-                totalRevenue: revenue,
-                todayViews: analytics?.totalViews || 0
+        fetch('/api/admin/dashboard-stats')
+            .then(res => res.json())
+            .then(data => {
+                if (data.stats) setStats(data.stats)
+                if (Array.isArray(data.recentOrders)) setOrders(data.recentOrders)
             })
-        })
+            .catch(err => console.error(err))
+            .finally(() => setLoading(false))
     }, [])
-
-    const handleDeleteProduct = async (id: number) => {
-        if (!confirm('Emin misiniz?')) return
-        await fetch(`/api/products/${id}`, { method: 'DELETE' })
-        setProducts(products.filter(p => p.id !== id))
-    }
 
     return (
         <div className="space-y-8">
@@ -89,7 +74,10 @@ export default function AdminDashboard() {
 
             {/* Recent Orders */}
             <section>
-                <h2 className="text-xl font-bold text-slate-900 mb-4">Son Siparişler</h2>
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-slate-900">Son Siparişler</h2>
+                    <Button variant="outline" size="sm" onClick={() => router.push('/admin/orders')}>Tümünü Gör</Button>
+                </div>
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <table className="w-full text-left">
                         <thead className="bg-slate-50 border-b border-slate-200">
@@ -101,8 +89,12 @@ export default function AdminDashboard() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {orders.slice(0, 5).map(order => (
-                                <tr key={order.id} className="hover:bg-slate-50">
+                            {orders.map(order => (
+                                <tr
+                                    key={order.id}
+                                    className="hover:bg-slate-50 cursor-pointer"
+                                    onClick={() => router.push(`/admin/orders?id=${order.id}`)}
+                                >
                                     <td className="p-4 font-mono font-medium text-slate-500">#{order.id}</td>
                                     <td className="p-4 text-slate-900">{order.guest_email || 'Kayıtlı Üye'}</td>
                                     <td className="p-4 font-bold text-slate-900">{order.total_amount?.toFixed(2)} ₺</td>
@@ -111,6 +103,7 @@ export default function AdminDashboard() {
                                             ${order.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : ''}
                                             ${order.status === 'completed' ? 'bg-green-100 text-green-700' : ''}
                                             ${order.status === 'cancelled' ? 'bg-red-100 text-red-700' : ''}
+                                            ${order.status === 'shipped' ? 'bg-purple-100 text-purple-700' : ''}
                                         `}>
                                             {order.status}
                                         </span>
@@ -118,7 +111,7 @@ export default function AdminDashboard() {
                                 </tr>
                             ))}
                             {orders.length === 0 && (
-                                <tr><td colSpan={4} className="p-8 text-center text-slate-500">Henüz sipariş yok.</td></tr>
+                                <tr><td colSpan={4} className="p-8 text-center text-slate-500">{loading ? 'Yükleniyor...' : 'Henüz sipariş yok.'}</td></tr>
                             )}
                         </tbody>
                     </table>

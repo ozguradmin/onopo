@@ -43,6 +43,15 @@ const iconOptions = [
     { name: 'music', icon: Music, label: 'Müzik' },
     { name: 'film', icon: Film, label: 'Film' },
     { name: 'palette', icon: Palette, label: 'Sanat' },
+    // New additions
+    { name: 'tools', icon: Zap, label: 'Araçlar' }, // Using Zap as placeholder for Tools if not imported
+    { name: 'baby', icon: Heart, label: 'Bebek' },
+    { name: 'sport', icon: Bike, label: 'Spor' },
+    { name: 'furniture', icon: Home, label: 'Mobilya' },
+    { name: 'pet', icon: Heart, label: 'Evcil Hayvan' },
+    { name: 'garden', icon: Home, label: 'Bahçe' },
+    { name: 'kitchen', icon: Coffee, label: 'Mutfak' },
+    { name: 'office', icon: Printer, label: 'Ofis' },
 ]
 
 interface Category {

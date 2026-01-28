@@ -115,12 +115,12 @@ export async function GET(req: NextRequest) {
         const userId = payload.userId || payload.sub || payload.id
         const userRole = payload.role
 
-        let query = 'SELECT * FROM orders ORDER BY created_at DESC'
+        let query = 'SELECT * FROM orders ORDER BY created_at DESC LIMIT 200'
         let bindArgs: any[] = []
 
         // Non-admin users can only see their own orders
         if (userRole !== 'admin') {
-            query = 'SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC'
+            query = 'SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 50'
             bindArgs = [userId]
         }
 
