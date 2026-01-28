@@ -57,6 +57,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
         }
 
+        // FORCE ENSURE COLUMNS EXIST (Runtime Fix)
+        // This is inefficient but necessary if D1 schema state is desynced
+        try { await db.prepare("ALTER TABLE products ADD COLUMN warranty_info TEXT").run(); } catch { }
+        try { await db.prepare("ALTER TABLE products ADD COLUMN delivery_info TEXT").run(); } catch { }
+        try { await db.prepare("ALTER TABLE products ADD COLUMN installment_info TEXT").run(); } catch { }
+
         await db.prepare(
             `INSERT INTO products (name, description, price, original_price, stock, images, category, warranty_info, delivery_info, installment_info) 
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
