@@ -67,15 +67,24 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid price value' }, { status: 400 })
         }
 
-        console.log('PREPARING INSERT STATEMENT...')
+        // Generate slug from name (CRITICAL - slug column is NOT NULL)
+        const slug = name
+            .toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .trim() + '-' + Date.now()
+
+        console.log('Generated slug:', slug)
 
         try {
-            // Use a simpler INSERT with only guaranteed columns
+            // INSERT with slug included (slug is NOT NULL in the schema!)
             const result = await db.prepare(
-                `INSERT INTO products (name, description, price, original_price, stock, images, category) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`
+                `INSERT INTO products (name, slug, description, price, original_price, stock, images, category) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
             ).bind(
                 name,
+                slug,
                 description || '',
                 numericPrice,
                 original_price || null,
