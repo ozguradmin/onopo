@@ -36,44 +36,24 @@ interface FeaturesSectionProps {
     features?: any[]
 }
 
-export function FeaturesSection({ title = "Neden Onopo'yu Seçmelisiniz?", features: custFeatures }: FeaturesSectionProps) {
+export function FeaturesSection({ title = "Neden Onopo?", features: custFeatures }: FeaturesSectionProps) {
     const displayFeatures = custFeatures || features
     return (
-        <section className="py-24 container mx-auto px-4">
-            <div className="mb-16 text-center">
-                <h2 className="text-3xl lg:text-4xl font-bold font-heading tracking-tight mb-4 text-slate-900">
-                    {title}
-                </h2>
-                <p className="text-slate-600 max-w-2xl mx-auto text-lg">
-                    Size kalite ve hizmet taahhüdü ile en iyi teknoloji aksesuarlarını sunuyoruz.
-                </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {displayFeatures.map((feature: any, index: number) => (
-                    <motion.div
-                        key={feature.title}
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1, duration: 0.5 }}
-                        viewport={{ once: true }}
-                        className={cn(
-                            "rounded-[2rem] p-8 flex flex-col justify-start items-start relative overflow-hidden group hover:shadow-xl transition-all duration-300 border border-slate-100",
-                            feature.className
-                        )}
-                    >
-                        <div className="w-14 h-14 rounded-2xl bg-white/80 dark:bg-white/10 backdrop-blur-sm flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 transition-transform duration-300">
-                            <feature.icon className="w-7 h-7" />
+        <section className="py-20 bg-slate-50 border-y border-slate-200">
+            <div className="container mx-auto px-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                    {displayFeatures.map((feature: any, index: number) => (
+                        <div key={index} className="flex flex-col items-center text-center group">
+                            <div className="w-16 h-16 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 group-hover:shadow-md">
+                                <feature.icon className="w-8 h-8 text-slate-700" strokeWidth={1.5} />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-900 mb-2">{feature.title}</h3>
+                            <p className="text-sm text-slate-500 max-w-[200px] leading-relaxed">
+                                {feature.description}
+                            </p>
                         </div>
-                        <h3 className="text-2xl font-bold font-heading mb-3 tracking-tight">{feature.title}</h3>
-                        <p className="text-base opacity-90 leading-relaxed font-medium">
-                            {feature.description}
-                        </p>
-
-                        {/* Hover Gradient Effect */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/0 to-white/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                    </motion.div>
-                ))}
+                    ))}
+                </div>
             </div>
         </section >
     )

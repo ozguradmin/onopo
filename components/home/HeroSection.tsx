@@ -99,12 +99,6 @@ export function HeroSection() {
                                         {slide.button_text || slide.cta} <ArrowRight className="ml-2 w-5 h-5" />
                                     </Button>
                                 </a>
-                                {/* Refined Secondary Button */}
-                                <a href="/products">
-                                    <Button variant="outline" size="lg" className="w-full sm:w-auto rounded-full text-lg px-10 h-14 border-2 border-white/40 text-white bg-black/20 hover:bg-white/10 hover:border-white transition-all backdrop-blur-sm">
-                                        Koleksiyonu İncele
-                                    </Button>
-                                </a>
                             </div>
                         </motion.div>
                     </div>

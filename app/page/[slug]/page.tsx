@@ -39,21 +39,31 @@ export default function PageContent({ params }: { params: any }) {
         )
     }
 
-    // Simple markdown rendering
     const renderContent = (content: string) => {
         return content
             .split('\n\n')
             .map((paragraph, i) => {
                 if (paragraph.startsWith('# ')) {
-                    return <h1 key={i} className="text-3xl font-bold text-slate-900 mb-4">{paragraph.slice(2)}</h1>
+                    return <h1 key={i} className="text-4xl font-extrabold text-slate-900 mb-6 pb-4 border-b border-slate-200">{paragraph.slice(2)}</h1>
                 }
                 if (paragraph.startsWith('## ')) {
-                    return <h2 key={i} className="text-2xl font-bold text-slate-900 mb-3 mt-6">{paragraph.slice(3)}</h2>
+                    return <h2 key={i} className="text-2xl font-bold text-slate-800 mb-4 mt-10 flex items-center">{paragraph.slice(3)}</h2>
                 }
                 if (paragraph.startsWith('### ')) {
-                    return <h3 key={i} className="text-xl font-bold text-slate-900 mb-2 mt-4">{paragraph.slice(4)}</h3>
+                    return <h3 key={i} className="text-xl font-semibold text-slate-800 mb-3 mt-6">{paragraph.slice(4)}</h3>
                 }
-                return <p key={i} className="text-slate-600 mb-4 leading-relaxed">{paragraph}</p>
+                // List items support
+                if (paragraph.match(/^\d\./)) {
+                    const items = paragraph.split('\n')
+                    return (
+                        <ol key={i} className="list-decimal pl-5 space-y-2 mb-4 text-slate-600">
+                            {items.map((item, idx) => (
+                                <li key={idx} className="pl-1">{item.replace(/^\d\.\s/, '')}</li>
+                            ))}
+                        </ol>
+                    )
+                }
+                return <p key={i} className="text-slate-600 mb-4 leading-7 text-lg">{paragraph}</p>
             })
     }
 

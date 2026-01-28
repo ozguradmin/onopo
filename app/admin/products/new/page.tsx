@@ -215,15 +215,36 @@ export default function AddProductPage() {
                     <label className="block text-sm font-medium mb-1">Görseller (Birden fazla seçilebilir)</label>
                     <div className="flex flex-wrap gap-3 mb-3">
                         {formData.images.map((img, idx) => (
-                            <div key={idx} className="relative">
+                            <div key={idx} className="relative group">
                                 <img src={img} className="w-24 h-24 object-contain rounded-lg border bg-slate-50" />
-                                <button
-                                    type="button"
-                                    onClick={() => removeImage(idx)}
-                                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
-                                >
-                                    <X className="w-3 h-3" />
-                                </button>
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-1">
+                                    {idx > 0 && (
+                                        <button type="button" onClick={() => {
+                                            const newImages = [...formData.images];
+                                            [newImages[idx - 1], newImages[idx]] = [newImages[idx], newImages[idx - 1]];
+                                            setFormData(prev => ({ ...prev, images: newImages }));
+                                        }} className="p-1 bg-white rounded-full text-slate-700 hover:bg-slate-100">
+                                            <ArrowLeft className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => removeImage(idx)}
+                                        className="p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                    {idx < formData.images.length - 1 && (
+                                        <button type="button" onClick={() => {
+                                            const newImages = [...formData.images];
+                                            [newImages[idx], newImages[idx + 1]] = [newImages[idx + 1], newImages[idx]];
+                                            setFormData(prev => ({ ...prev, images: newImages }));
+                                        }} className="p-1 bg-white rounded-full text-slate-700 hover:bg-slate-100">
+                                            <ArrowRight className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                </div>
+                                {idx === 0 && <div className="absolute top-0 left-0 bg-yellow-400 text-black text-[10px] px-1 rounded-br font-bold">Kapak</div>}
                             </div>
                         ))}
                     </div>
