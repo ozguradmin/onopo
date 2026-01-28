@@ -57,7 +57,13 @@ export async function GET(req: NextRequest) {
         })
     } catch (error: any) {
         console.error('Analytics fetch error:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        // Return empty structure instead of crashing
+        return NextResponse.json({
+            totalViews: 0,
+            pageViews: [],
+            productViews: [],
+            dailyViews: []
+        })
     }
 }
 
