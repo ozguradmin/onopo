@@ -76,6 +76,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true })
 
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error('PRODUCT POST ERROR:', error)
+        // Check for specific D1 errors
+        if (error.message?.includes('duplicate column')) {
+            return NextResponse.json({ error: 'Database schema conflict (columns already exist)' }, { status: 500 })
+        }
+        return NextResponse.json({
+            error: error.message || 'Internal Server Error',
+            stack: error.stack,
+            details: JSON.stringify(error)
+        }, { status: 500 })
     }
 }

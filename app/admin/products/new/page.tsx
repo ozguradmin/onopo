@@ -104,8 +104,12 @@ export default function AddProductPage() {
 
             if (!res.ok) throw new Error('Failed to create product')
             router.push('/admin')
-        } catch (error) {
-            alert('Ürün oluşturma hatası')
+        } catch (error: any) {
+            console.error(error)
+            // Try to parse error message if it's a JSON string
+            let msg = 'Ürün oluşturma hatası'
+            if (error.message) msg += ': ' + error.message
+            alert(msg)
         } finally {
             setLoading(false)
         }
@@ -143,29 +147,36 @@ export default function AddProductPage() {
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Fiyat (₺)</label>
-                        <input
-                            name="price"
-                            type="number"
-                            step="0.01"
-                            value={formData.price}
-                            onChange={handleInputChange}
-                            className="w-full p-2 border rounded-lg"
-                            required
-                        />
+                    <div className="relative">
+                        <label className="block text-sm font-medium mb-1">Fiyat</label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-slate-500">₺</span>
+                            <input
+                                name="price"
+                                type="number"
+                                step="0.01"
+                                value={formData.price}
+                                onChange={handleInputChange}
+                                className="w-full pl-8 p-2 border rounded-lg"
+                                placeholder="0.00"
+                                required
+                            />
+                        </div>
                     </div>
-                    <div>
+                    <div className="relative">
                         <label className="block text-sm font-medium mb-1">Eski Fiyat</label>
-                        <input
-                            name="original_price"
-                            type="number"
-                            step="0.01"
-                            value={formData.original_price}
-                            onChange={handleInputChange}
-                            className="w-full p-2 border rounded-lg"
-                            placeholder="Opsiyonel"
-                        />
+                        <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-slate-500">₺</span>
+                            <input
+                                name="original_price"
+                                type="number"
+                                step="0.01"
+                                value={formData.original_price}
+                                onChange={handleInputChange}
+                                className="w-full pl-8 p-2 border rounded-lg"
+                                placeholder="Opsiyonel"
+                            />
+                        </div>
                     </div>
                     <div>
                         <label className="block text-sm font-medium mb-1">Stok</label>
