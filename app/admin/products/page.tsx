@@ -58,7 +58,7 @@ export default function AdminProductsPage() {
                                 <tr key={product.id} className="hover:bg-slate-50">
                                     <td className="p-4">
                                         <img
-                                            src={product.images?.[0] || '/placeholder.png'}
+                                            src={product.images?.[0] || '/placeholder.svg'}
                                             className="w-12 h-12 rounded-lg object-cover bg-slate-100"
                                         />
                                     </td>

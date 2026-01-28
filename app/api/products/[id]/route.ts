@@ -55,6 +55,12 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             installment_info
         } = body
 
+        // Prepare values with safe defaults and type conversions
+        const safePrice = parseFloat(price) || 0
+        const safeOriginalPrice = original_price ? parseFloat(original_price) : null
+        const safeStock = parseInt(stock) || 0
+        const safeImages = JSON.stringify(Array.isArray(images) ? images : [])
+
         await db.prepare(
             `UPDATE products SET 
              name = ?, description = ?, price = ?, original_price = ?, stock = ?, 
@@ -64,10 +70,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         ).bind(
             name,
             description || '',
-            price,
-            original_price || null,
-            stock,
-            JSON.stringify(images || []),
+            safePrice,
+            safeOriginalPrice,
+            safeStock,
+            safeImages,
             category || '',
             warranty_info || '',
             delivery_info || '',
@@ -78,6 +84,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         return NextResponse.json({ success: true })
 
     } catch (error: any) {
+        console.error('Product update error:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 }

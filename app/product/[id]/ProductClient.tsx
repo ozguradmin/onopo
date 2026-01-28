@@ -181,7 +181,7 @@ export default function ProductClient({ id }: { id: string }) {
                                         className="aspect-square relative overflow-hidden rounded-2xl bg-white mb-4 flex items-center justify-center"
                                     >
                                         <img
-                                            src={allImages[selectedImage] || '/placeholder.png'}
+                                            src={allImages[selectedImage] || '/placeholder.svg'}
                                             alt={product.name}
                                             className="object-contain w-full h-full p-4"
                                         />

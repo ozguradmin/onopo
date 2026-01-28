@@ -10,6 +10,7 @@ export default function RegisterPage() {
 
     const [name, setName] = React.useState('')
     const [email, setEmail] = React.useState('')
+    const [phone, setPhone] = React.useState('')
     const [password, setPassword] = React.useState('')
     const [loading, setLoading] = React.useState(false)
     const [error, setError] = React.useState('')
@@ -24,7 +25,7 @@ export default function RegisterPage() {
             const registerRes = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, password }),
+                body: JSON.stringify({ name, email, phone, password }),
             })
 
             const registerData = await registerRes.json()
@@ -109,6 +110,17 @@ export default function RegisterPage() {
                                     onChange={e => setEmail(e.target.value)}
                                     className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
                                     placeholder="ornek@email.com"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Telefon</label>
+                                <input
+                                    type="tel"
+                                    required
+                                    value={phone}
+                                    onChange={e => setPhone(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
+                                    placeholder="05XX XXX XX XX"
                                 />
                             </div>
                             <div>
