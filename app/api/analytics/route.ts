@@ -41,10 +41,10 @@ export async function GET(req: NextRequest) {
 
         // Daily breakdown
         const dailyViews = await db.prepare(
-            `SELECT DATE(created_at) as date, COUNT(*) as count 
+            `SELECT strftime('%Y-%m-%d', created_at) as date, COUNT(*) as count 
              FROM analytics 
              WHERE 1=1 ${dateFilter}
-             GROUP BY DATE(created_at) 
+             GROUP BY strftime('%Y-%m-%d', created_at) 
              ORDER BY date DESC 
              LIMIT 30`
         ).all()
