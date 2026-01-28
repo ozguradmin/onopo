@@ -14,39 +14,35 @@ export default async function Home() {
     'SELECT * FROM homepage_sections WHERE is_active = 1 ORDER BY display_order ASC'
   ).all()
 
-  // Setup helper to fetch products based on config
-  const getProductsForSection = async (configString: string) => {
+  // Pre-fetch ALL products once (cheaper than multiple queries)
+  const { results: allProducts } = await db.prepare(
+    'SELECT id, name, slug, price, original_price, stock, images, category FROM products LIMIT 50'
+  ).all()
+
+  // Parse images once for all products
+  const productsWithImages = allProducts.map((p: any) => {
+    let images: string[] = []
+    try {
+      images = p.images ? JSON.parse(p.images) : []
+    } catch {
+      images = []
+    }
+    return { ...p, images }
+  })
+
+  // Helper to filter products from pre-fetched list (no DB call!)
+  const getProductsForSection = (configString: string) => {
     try {
       const config = JSON.parse(configString || '{}')
-      let query = 'SELECT * FROM products'
-      const params: any[] = []
+      let filtered = [...productsWithImages]
 
       if (config.selection_type === 'category' && config.category) {
-        query += ' WHERE category = ?'
-        params.push(config.category)
+        filtered = filtered.filter(p => p.category === config.category)
       } else if (config.selection_type === 'manual' && config.product_ids && config.product_ids.length > 0) {
-        const placeholders = config.product_ids.map(() => '?').join(',')
-        query += ` WHERE id IN (${placeholders})`
-        params.push(...config.product_ids)
+        filtered = filtered.filter(p => config.product_ids.includes(p.id))
       }
 
-      query += ' LIMIT ?'
-      params.push(config.limit || 8)
-
-      const { results } = await db.prepare(query).bind(...params).all()
-
-      // Parse images from JSON column (not a separate table!)
-      const productsWithImages = results.map((p: any) => {
-        let images: string[] = []
-        try {
-          images = p.images ? JSON.parse(p.images) : []
-        } catch {
-          images = []
-        }
-        return { ...p, images }
-      })
-
-      return productsWithImages
+      return filtered.slice(0, config.limit || 8)
     } catch (e) {
       console.error('Product fetch error:', e)
       return []
@@ -72,7 +68,7 @@ export default async function Home() {
         }
 
         if (section.type === 'products') {
-          const products = await getProductsForSection(section.config)
+          const products = getProductsForSection(section.config)
           return (
             <ProductShowcase
               key={section.id}

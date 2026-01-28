@@ -6,7 +6,13 @@ export async function GET() {
     try {
         const db = await getDB()
         const { results } = await db.prepare('SELECT * FROM categories ORDER BY name').all()
-        return NextResponse.json(results || [])
+
+        // Cache for 5 minutes
+        return NextResponse.json(results || [], {
+            headers: {
+                'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600'
+            }
+        })
     } catch (error: any) {
         console.error('Categories fetch error:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })

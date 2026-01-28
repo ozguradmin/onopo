@@ -6,7 +6,7 @@ import { cookies } from 'next/headers'
 export async function GET(req: NextRequest) {
     try {
         const db = await getDB()
-        const { results } = await db.prepare('SELECT * FROM products ORDER BY created_at DESC').all()
+        const { results } = await db.prepare('SELECT id, name, slug, price, original_price, stock, images, category FROM products ORDER BY created_at DESC LIMIT 100').all()
 
         const products = results.map((p: any) => ({
             ...p,
@@ -19,7 +19,12 @@ export async function GET(req: NextRequest) {
             })()
         }))
 
-        return NextResponse.json(products)
+        // Add cache headers for edge caching (60 seconds)
+        return NextResponse.json(products, {
+            headers: {
+                'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300'
+            }
+        })
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }

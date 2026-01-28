@@ -15,7 +15,12 @@ export async function GET() {
             settings[(row as any).key] = (row as any).value
         }
 
-        return NextResponse.json(settings)
+        // Cache settings for 5 minutes
+        return NextResponse.json(settings, {
+            headers: {
+                'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600'
+            }
+        })
     } catch (error: any) {
         console.error('Settings fetch error:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })
