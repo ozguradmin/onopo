@@ -1,7 +1,7 @@
 // OpenNext uses getCloudflareContext from @opennextjs/cloudflare
 // This provides access to Cloudflare bindings like D1, R2, KV etc.
 
-export const runtime = 'edge'
+
 export async function getDB() {
     try {
         // Import dynamically to avoid build-time issues

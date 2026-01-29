@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
-export const runtime = 'edge'
+
 
 // GET: List all menus (Public/Admin use)
 export async function GET() {
