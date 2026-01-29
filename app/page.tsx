@@ -4,32 +4,44 @@ import ProductShowcase from '@/components/home/ProductShowcase'
 import { FeaturesSection } from '@/components/home/FeaturesSection'
 import { ImageCardSection } from '@/components/home/ImageCardSection'
 import { CategoriesSection } from '@/components/home/CategoriesSection'
+import { unstable_cache } from 'next/cache'
 
 export const dynamic = 'force-dynamic'
 
+// Cached data fetcher
+const getCachedHomepageData = unstable_cache(
+  async () => {
+    const db = await getDB()
+
+    // Fetch active sections
+    const { results: sections } = await db.prepare(
+      'SELECT * FROM homepage_sections WHERE is_active = 1 ORDER BY display_order ASC'
+    ).all()
+
+    // Pre-fetch ALL products once (cheaper than multiple queries)
+    const { results: allProducts } = await db.prepare(
+      'SELECT id, name, slug, price, original_price, stock, images, category FROM products WHERE is_active = 1 LIMIT 50'
+    ).all()
+
+    // Parse images once for all products
+    const productsWithImages = allProducts.map((p: any) => {
+      let images: string[] = []
+      try {
+        images = p.images ? JSON.parse(p.images) : []
+      } catch {
+        images = []
+      }
+      return { ...p, images }
+    })
+
+    return { sections, productsWithImages }
+  },
+  ['homepage-data'],
+  { revalidate: 60 } // Cache for 60 seconds
+)
+
 export default async function Home() {
-  const db = await getDB()
-
-  // Fetch active sections
-  const { results: sections } = await db.prepare(
-    'SELECT * FROM homepage_sections WHERE is_active = 1 ORDER BY display_order ASC'
-  ).all()
-
-  // Pre-fetch ALL products once (cheaper than multiple queries)
-  const { results: allProducts } = await db.prepare(
-    'SELECT id, name, slug, price, original_price, stock, images, category FROM products LIMIT 50'
-  ).all()
-
-  // Parse images once for all products
-  const productsWithImages = allProducts.map((p: any) => {
-    let images: string[] = []
-    try {
-      images = p.images ? JSON.parse(p.images) : []
-    } catch {
-      images = []
-    }
-    return { ...p, images }
-  })
+  const { sections, productsWithImages } = await getCachedHomepageData()
 
   // Helper to filter products from pre-fetched list (no DB call!)
   const getProductsForSection = (configString: string) => {
