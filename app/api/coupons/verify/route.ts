@@ -5,7 +5,7 @@ import { getDB } from '@/lib/db'
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
-        const { code, cartTotal } = body
+        const { code, cartTotal, items } = body
 
         if (!code) {
             return NextResponse.json({ error: 'Kupon kodu giriniz' }, { status: 400 })
@@ -37,6 +37,30 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({
                 error: `Bu kupon min. ${coupon.min_spend} TL alışverişlerde geçerli`
             }, { status: 400 })
+        }
+
+        // Check Type & Target IDs
+        if (coupon.type && coupon.type !== 'global' && items && items.length > 0) {
+            const targetIds = (coupon.target_ids || '').split(',').map((id: string) => id.trim())
+
+            if (coupon.type === 'product') {
+                const hasProduct = items.some((item: any) => targetIds.includes(String(item.id)))
+                if (!hasProduct) {
+                    return NextResponse.json({ error: 'Bu kupon sepetinizdeki ürünlerde geçerli değil' }, { status: 400 })
+                }
+            } else if (coupon.type === 'category') {
+                // Note: We need items to have category info. If item.category is name, we must match name or ID?
+                // Admin usually selects Categories by ID, but Item has formatted Name?
+                // For now, let's assume we match by Name if target_ids contains Names, OR fetch product to check?
+                // But CartItem has `category`. Use loose matching or ID if available. 
+                // Assuming target_ids for category are SLUGS or NAMES for V1 simplicity if IDs are not in CartItem.
+                // Actually `item.category` is text in `CartDrawer`. 
+                // Let's assume target_ids for category matches `item.category` text.
+                const hasCategory = items.some((item: any) => targetIds.includes(String(item.category)))
+                if (!hasCategory) {
+                    return NextResponse.json({ error: 'Bu kupon sepetinizdeki ürün kategorilerinde geçerli değil' }, { status: 400 })
+                }
+            }
         }
 
         return NextResponse.json({

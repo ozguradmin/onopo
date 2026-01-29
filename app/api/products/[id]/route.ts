@@ -62,7 +62,18 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         // Prepare values with safe defaults and type conversions
         const safePrice = parseFloat(price) || 0
         const safeOriginalPrice = original_price ? parseFloat(original_price) : null
-        const safeStock = parseInt(stock) || 0
+
+        const intId = parseInt(id)
+        let safeStock = parseInt(stock) || 0
+
+        // Handle relative stock update if input string starts with + or -
+        if (typeof stock === 'string' && (stock.startsWith('+') || stock.startsWith('-'))) {
+            const currentProduct = await db.prepare('SELECT stock FROM products WHERE id = ?').bind(intId).first()
+            if (currentProduct) {
+                safeStock = (currentProduct.stock || 0) + parseInt(stock)
+            }
+        }
+
         const safeIsActive = is_active !== undefined ? (is_active ? 1 : 0) : 1
         const safeWhatsappEnabled = whatsapp_order_enabled ? 1 : 0
         const safeWhatsappNumber = whatsapp_number || ''
@@ -74,7 +85,6 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             safeImages = JSON.stringify(images)
         }
 
-        const intId = parseInt(id)
         console.log('Updating product:', intId, body)
 
         try {

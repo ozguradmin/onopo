@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
-        const { code, discount_type, discount_value, min_spend, usage_limit, expires_at } = body
+        const { code, discount_type, discount_value, min_spend, usage_limit, expires_at, type, target_ids } = body
 
         if (!code || !discount_value) {
             return NextResponse.json({ error: 'Kod ve indirim değeri zorunludur' }, { status: 400 })
@@ -30,15 +30,17 @@ export async function POST(req: NextRequest) {
         }
 
         const res = await db.prepare(`
-            INSERT INTO coupons (code, discount_type, discount_value, min_spend, usage_limit, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO coupons (code, discount_type, discount_value, min_spend, usage_limit, expires_at, type, target_ids)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
             code.toUpperCase(),
             discount_type || 'fixed',
             discount_value,
             min_spend || 0,
             usage_limit || 0,
-            expires_at || null
+            expires_at || null,
+            type || 'global',
+            target_ids || ''
         ).run()
 
         return NextResponse.json({ success: true, id: res.meta.last_row_id })

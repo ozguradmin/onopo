@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { formatPrice } from "@/lib/formatPrice"
 import Link from "next/link"
 import ProductShowcase from "@/components/home/ProductShowcase"
+import { MarkdownRenderer } from "@/components/ui/MarkdownRenderer"
 
 const HeartIcon = ({ filled = false }: { filled?: boolean }) => (
     <div className="w-6 h-6 flex items-center justify-center">
@@ -184,7 +185,7 @@ export default function ProductClient({ id }: { id: string }) {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <main className="pt-6 pb-20">
+            <main className="pt-24 pb-20">
                 <div className="container mx-auto px-4">
                     {/* Breadcrumb */}
                     <div className="mb-6">
@@ -207,7 +208,7 @@ export default function ProductClient({ id }: { id: string }) {
                                         key={selectedImage}
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        className="aspect-square relative overflow-hidden rounded-2xl bg-white mb-4 flex items-center justify-center max-h-[500px]"
+                                        className="aspect-square relative overflow-hidden rounded-2xl bg-white mb-4 flex items-center justify-center max-h-[350px] lg:max-h-[500px]"
                                     >
                                         <img
                                             src={allImages[selectedImage] || '/placeholder.svg'}
@@ -429,8 +430,12 @@ export default function ProductClient({ id }: { id: string }) {
                                             </button>
                                         ))}
                                     </div>
-                                    <div className="text-slate-600 leading-relaxed min-h-[60px] whitespace-pre-wrap">
-                                        {activeTab === 'desc' && (product.description || 'Ürün açıklaması bulunmuyor.')}
+                                    <div className="text-slate-600 leading-relaxed min-h-[60px]">
+                                        {activeTab === 'desc' && (
+                                            product.description
+                                                ? <MarkdownRenderer content={product.description} />
+                                                : 'Ürün açıklaması bulunmuyor.'
+                                        )}
                                         {activeTab === 'warranty' && product.warranty_info}
                                         {activeTab === 'delivery' && product.delivery_info}
                                         {activeTab === 'installment' && product.installment_info}

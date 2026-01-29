@@ -19,7 +19,11 @@ export function Footer() {
         footer_text: '© 2026 Onopo Store. Tüm hakları saklıdır.',
         footer_email: '',
         footer_phone: '',
-        footer_address: ''
+        footer_address: '',
+        facebook_url: '',
+        instagram_url: '',
+        twitter_url: '',
+        linkedin_url: ''
     })
     const [categories, setCategories] = React.useState<Category[]>([])
 
@@ -63,10 +67,10 @@ export function Footer() {
                             {settings.site_description}
                         </p>
                         <div className="flex space-x-4 pt-2">
-                            <SocialLink icon={<Facebook className="w-5 h-5" />} href="#" />
-                            <SocialLink icon={<Instagram className="w-5 h-5" />} href="#" />
-                            <SocialLink icon={<Twitter className="w-5 h-5" />} href="#" />
-                            <SocialLink icon={<Linkedin className="w-5 h-5" />} href="#" />
+                            {settings.facebook_url && <SocialLink icon={<Facebook className="w-5 h-5" />} href={settings.facebook_url} />}
+                            {settings.instagram_url && <SocialLink icon={<Instagram className="w-5 h-5" />} href={settings.instagram_url} />}
+                            {settings.twitter_url && <SocialLink icon={<Twitter className="w-5 h-5" />} href={settings.twitter_url} />}
+                            {settings.linkedin_url && <SocialLink icon={<Linkedin className="w-5 h-5" />} href={settings.linkedin_url} />}
                         </div>
                     </div>
 

@@ -23,7 +23,7 @@ export function CartDrawer() {
             const res = await fetch('/api/coupons/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: couponCode, cartTotal: subtotal })
+                body: JSON.stringify({ code: couponCode, cartTotal: subtotal, items: items })
             })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error)

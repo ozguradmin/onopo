@@ -17,7 +17,9 @@ export default function CouponsPage() {
         discount_value: '',
         min_spend: '',
         usage_limit: '',
-        expires_at: ''
+        expires_at: '',
+        type: 'global',
+        target_ids: ''
     })
 
     useEffect(() => {
@@ -59,7 +61,9 @@ export default function CouponsPage() {
                     discount_value: '',
                     min_spend: '',
                     usage_limit: '',
-                    expires_at: ''
+                    expires_at: '',
+                    type: 'global',
+                    target_ids: ''
                 })
             } else {
                 alert('Kupon oluşturulurken hata oluştu')
@@ -141,6 +145,35 @@ export default function CouponsPage() {
                                 required
                             />
                         </div>
+                        <div>
+                            <label className="text-sm font-medium mb-1 block">Kapsam</label>
+                            <select
+                                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={formData.type}
+                                onChange={e => setFormData({ ...formData, type: e.target.value })}
+                            >
+                                <option value="global">Tüm Ürünler</option>
+                                <option value="category">Belirli Kategori</option>
+                                <option value="product">Belirli Ürün</option>
+                            </select>
+                        </div>
+                        {formData.type !== 'global' && (
+                            <div className="md:col-span-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                <label className="text-sm font-medium mb-1 block">
+                                    {formData.type === 'category' ? 'Kategori İsimleri (Virgülle ayırın)' : 'Ürün IDleri (Virgülle ayırın)'}
+                                </label>
+                                <Input
+                                    placeholder={formData.type === 'category' ? "Örn: Elektronik, Giyim" : "Örn: 101, 102"}
+                                    value={formData.target_ids}
+                                    onChange={e => setFormData({ ...formData, target_ids: e.target.value })}
+                                />
+                                <p className="text-xs text-slate-500 mt-1">
+                                    {formData.type === 'category'
+                                        ? "Tam kategori ismini yazmalısınız."
+                                        : "Ürünlerin ID numaralarını yazmalısınız."}
+                                </p>
+                            </div>
+                        )}
                         <div>
                             <label className="text-sm font-medium mb-1 block">Min. Sepet Tutarı (Opsiyonel)</label>
                             <Input
