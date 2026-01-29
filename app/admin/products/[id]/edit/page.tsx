@@ -211,7 +211,7 @@ export default function EditProductPage() {
                                 name="price"
                                 value={formData.price}
                                 onChange={(val) => setFormData(prev => ({ ...prev, price: val }))}
-                                className="w-full pl-8 p-2 border rounded-lg"
+                                className="w-full pl-12 p-2 border rounded-lg"
                                 placeholder="0,00"
                                 required
                             />
@@ -225,7 +225,7 @@ export default function EditProductPage() {
                                 name="original_price"
                                 value={formData.original_price}
                                 onChange={(val) => setFormData(prev => ({ ...prev, original_price: val }))}
-                                className="w-full pl-8 p-2 border rounded-lg"
+                                className="w-full pl-12 p-2 border rounded-lg"
                                 placeholder="Opsiyonel"
                             />
                         </div>
