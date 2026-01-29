@@ -1,7 +1,6 @@
 // Google Merchant Center Product Feed - RSS 2.0 / Atom XML Format
 import { getDB } from '@/lib/db'
 
-export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 
 interface Product {

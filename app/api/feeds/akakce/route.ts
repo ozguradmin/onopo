@@ -1,7 +1,6 @@
 // Akakçe Product Feed - XML Format
 import { getDB } from '@/lib/db'
 
-export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 
 interface Product {

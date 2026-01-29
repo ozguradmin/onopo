@@ -1,7 +1,6 @@
 // CSV Product Export
 import { getDB } from '@/lib/db'
 
-export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 
 interface Product {
