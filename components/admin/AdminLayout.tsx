@@ -165,8 +165,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0">
-                {/* Mobile Header */}
-                <header className="lg:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-4">
+                {/* Mobile Header - Sticky & High Z-Index */}
+                <header className="lg:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-4 sticky top-0 z-30">
                     <button
                         onClick={() => setSidebarOpen(true)}
                         className="p-2 hover:bg-slate-100 rounded-lg"
@@ -176,7 +176,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     <span className="font-bold text-slate-900">Onopo Admin</span>
                 </header>
 
-                {/* Page Content */}
+                {/* Page Content - with margin for header */}
                 <main className="flex-1 p-4 lg:p-8 overflow-auto">
                     {children}
                 </main>

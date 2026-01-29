@@ -207,7 +207,7 @@ export default function ProductClient({ id }: { id: string }) {
                                         key={selectedImage}
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        className="aspect-square relative overflow-hidden rounded-2xl bg-white mb-4 flex items-center justify-center"
+                                        className="aspect-square relative overflow-hidden rounded-2xl bg-white mb-4 flex items-center justify-center max-h-[500px]"
                                     >
                                         <img
                                             src={allImages[selectedImage] || '/placeholder.svg'}
@@ -290,36 +290,22 @@ export default function ProductClient({ id }: { id: string }) {
                                     )}
                                 </div>
 
-                                {/* Info Tabs */}
-                                <div className="mb-6">
-                                    <div className="flex gap-2 border-b border-slate-200 mb-4 overflow-x-auto">
-                                        {[
-                                            { key: 'desc', label: 'Açıklama', show: true },
-                                            { key: 'warranty', label: 'Garanti', show: !!product.warranty_info },
-                                            { key: 'delivery', label: 'Teslimat', show: !!product.delivery_info },
-                                            { key: 'installment', label: 'Taksit', show: !!product.installment_info },
-                                        ].filter(tab => tab.show).map(tab => (
-                                            <button
-                                                key={tab.key}
-                                                onClick={() => setActiveTab(tab.key as any)}
-                                                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-[2px] transition-colors whitespace-nowrap ${activeTab === tab.key
-                                                    ? 'border-slate-900 text-slate-900'
-                                                    : 'border-transparent text-slate-500 hover:text-slate-700'
-                                                    }`}
-                                            >
-                                                {tab.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <div className="text-slate-600 leading-relaxed min-h-[60px]">
-                                        {activeTab === 'desc' && (product.description || 'Ürün açıklaması bulunmuyor.')}
-                                        {activeTab === 'warranty' && product.warranty_info}
-                                        {activeTab === 'delivery' && product.delivery_info}
-                                        {activeTab === 'installment' && product.installment_info}
-                                    </div>
+                                {/* Stock Status - MOVED UP */}
+                                <div className="mb-6 flex items-center gap-4">
+                                    {(product.stock > 0) ? (
+                                        <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1.5 rounded-full">
+                                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                            <span className="text-sm font-medium">Stokta: {product.stock} adet</span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-1.5 rounded-full">
+                                            <div className="w-2 h-2 rounded-full bg-red-500" />
+                                            <span className="text-sm font-medium">Stokta Yok</span>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* Quantity Selector */}
+                                {/* Actions & Quantity - MOVED ABOVE TABS */}
                                 <div className="flex items-center gap-4 mb-6">
                                     <span className="text-sm font-medium text-slate-700">Adet:</span>
                                     <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden">
@@ -341,7 +327,6 @@ export default function ProductClient({ id }: { id: string }) {
                                     </div>
                                 </div>
 
-                                {/* Action Buttons - Stacked on Mobile, Row on Desktop */}
                                 <div className="flex flex-col gap-3 mb-8">
                                     <div className="flex gap-3">
                                         <Button
@@ -351,6 +336,7 @@ export default function ProductClient({ id }: { id: string }) {
                                                 : 'bg-slate-900 hover:bg-slate-800'
                                                 }`}
                                             onClick={handleAddToCart}
+                                            disabled={product.stock <= 0}
                                         >
                                             {addedToCart ? (
                                                 <>
@@ -360,13 +346,14 @@ export default function ProductClient({ id }: { id: string }) {
                                             ) : (
                                                 <>
                                                     <ShoppingBag className="w-5 h-5" />
-                                                    Sepete Ekle
+                                                    {product.stock > 0 ? 'Sepete Ekle' : 'Stokta Yok'}
                                                 </>
                                             )}
                                         </Button>
                                         <Button
                                             size="lg"
                                             onClick={handleBuyNow}
+                                            disabled={product.stock <= 0}
                                             className="flex-1 h-14 text-base rounded-xl gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200"
                                         >
                                             <CreditCard className="w-5 h-5" />
@@ -420,7 +407,35 @@ export default function ProductClient({ id }: { id: string }) {
                                         </Button>
                                     </div>
                                 </div>
-                                {/* ... Shipping info etc ... */}
+
+                                {/* Info Tabs - MOVED DOWN */}
+                                <div className="mb-6">
+                                    <div className="flex gap-2 border-b border-slate-200 mb-4 overflow-x-auto">
+                                        {[
+                                            { key: 'desc', label: 'Açıklama', show: true },
+                                            { key: 'warranty', label: 'Garanti', show: !!product.warranty_info },
+                                            { key: 'delivery', label: 'Teslimat', show: !!product.delivery_info },
+                                            { key: 'installment', label: 'Taksit', show: !!product.installment_info },
+                                        ].filter(tab => tab.show).map(tab => (
+                                            <button
+                                                key={tab.key}
+                                                onClick={() => setActiveTab(tab.key as any)}
+                                                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-[2px] transition-colors whitespace-nowrap ${activeTab === tab.key
+                                                    ? 'border-slate-900 text-slate-900'
+                                                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                                                    }`}
+                                            >
+                                                {tab.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="text-slate-600 leading-relaxed min-h-[60px] whitespace-pre-wrap">
+                                        {activeTab === 'desc' && (product.description || 'Ürün açıklaması bulunmuyor.')}
+                                        {activeTab === 'warranty' && product.warranty_info}
+                                        {activeTab === 'delivery' && product.delivery_info}
+                                        {activeTab === 'installment' && product.installment_info}
+                                    </div>
+                                </div>
 
                                 {/* Shipping & Guarantee */}
                                 <div className="grid grid-cols-3 gap-3 pt-6 border-t border-slate-100">
@@ -437,14 +452,6 @@ export default function ProductClient({ id }: { id: string }) {
                                         <span className="text-xs font-medium text-slate-700">Taksit</span>
                                     </div>
                                 </div>
-
-                                {/* Stock Status */}
-                                {(product.stock > 0) && (
-                                    <div className="mt-6 flex items-center gap-2 text-green-600">
-                                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                        <span className="text-sm font-medium">Stokta var - Hemen kargoya verilir</span>
-                                    </div>
-                                )}
                             </div>
                         </div>
                     </div>
