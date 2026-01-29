@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { useCartStore } from "@/store/cart-store"
 import { Badge } from "@/components/ui/badge"
 import { formatPrice } from "@/lib/formatPrice"
+import Link from "next/link"
+import ProductShowcase from "@/components/home/ProductShowcase"
 
 const HeartIcon = ({ filled = false }: { filled?: boolean }) => (
     <div className="w-6 h-6 flex items-center justify-center">
@@ -108,10 +110,7 @@ export default function ProductClient({ id }: { id: string }) {
         setTimeout(() => setAddedToCart(false), 2000)
     }
 
-    import Link from "next/link"
-    import ProductShowcase from "@/components/home/ProductShowcase"
 
-    // ... (keep state logic same)
 
     const handleBuyNow = () => {
         handleAddToCart()
@@ -137,6 +136,44 @@ export default function ProductClient({ id }: { id: string }) {
                 .catch(() => { })
         }
     }, [product])
+
+    const handleSubmitReview = async () => {
+        if (!user) {
+            window.location.href = '/login?redirect=/product/' + id
+            return
+        }
+
+        setSubmittingReview(true)
+        setReviewError('')
+
+        try {
+            const res = await fetch(`/api/products/${id}/reviews`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rating: reviewRating, comment: reviewComment })
+            })
+
+            if (!res.ok) {
+                const data = await res.json()
+                throw new Error(data.error || 'Yorum gönderilemedi')
+            }
+
+            // Refresh reviews
+            const reviewsRes = await fetch(`/api/products/${id}/reviews`)
+            const reviewsData = await reviewsRes.json()
+            setReviews(reviewsData || [])
+            setReviewComment('')
+            setReviewRating(5)
+        } catch (err: any) {
+            setReviewError(err.message)
+        } finally {
+            setSubmittingReview(false)
+        }
+    }
+
+    const avgRating = reviews.length > 0
+        ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+        : 5
 
     if (loading) return <div className="min-h-screen pt-24 text-center">Yükleniyor...</div>
     if (!product) return <div className="min-h-screen pt-24 text-center">Ürün bulunamadı</div>
