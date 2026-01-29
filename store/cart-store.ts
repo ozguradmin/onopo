@@ -16,9 +16,12 @@ export interface CartItem extends Product {
 interface CartState {
     items: CartItem[]
     isOpen: boolean
+    coupon: { code: string, discountType: 'fixed' | 'percent', discountValue: number } | null
     addItem: (product: Product) => void
     removeItem: (productId: number | string) => void
     updateQuantity: (productId: number | string, quantity: number) => void
+    applyCoupon: (code: string, discountType: 'fixed' | 'percent', discountValue: number) => void
+    removeCoupon: () => void
     clearCart: () => void
     toggleCart: () => void
     openCart: () => void
@@ -32,6 +35,12 @@ export const useCartStore = create<CartState>()(
         (set, get) => ({
             items: [],
             isOpen: false,
+
+            coupon: null,
+            applyCoupon: (code, discountType, discountValue) => set({
+                coupon: { code, discountType, discountValue }
+            }),
+            removeCoupon: () => set({ coupon: null }),
 
             addItem: (product) => {
                 const items = get().items
@@ -69,7 +78,7 @@ export const useCartStore = create<CartState>()(
                 })
             },
 
-            clearCart: () => set({ items: [] }),
+            clearCart: () => set({ items: [], coupon: null }),
 
             toggleCart: () => set({ isOpen: !get().isOpen }),
             openCart: () => set({ isOpen: true }),
@@ -77,12 +86,20 @@ export const useCartStore = create<CartState>()(
 
             totalItems: () => get().items.reduce((total, item) => total + item.quantity, 0),
 
-            // Helper to parse price string "$29.99" -> 29.99 (assuming simple format for now)
-            // Ideally product.price comes as number from API
-            totalPrice: () => get().items.reduce((total, item) => {
-                // Mock parsing logic if price is string in mock data, but let's assume number or handle it in UI
-                return total + (typeof item.price === 'number' ? item.price : 0) * item.quantity
-            }, 0)
+            totalPrice: () => {
+                const subtotal = get().items.reduce((total, item) => {
+                    return total + (typeof item.price === 'number' ? item.price : 0) * item.quantity
+                }, 0)
+
+                const coupon = get().coupon
+                if (!coupon) return subtotal
+
+                if (coupon.discountType === 'percent') {
+                    return subtotal * (1 - coupon.discountValue / 100)
+                } else {
+                    return Math.max(0, subtotal - coupon.discountValue)
+                }
+            }
         }),
         {
             name: 'onopo-cart-storage',

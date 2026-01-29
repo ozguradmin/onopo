@@ -6,16 +6,54 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { useCartStore, CartItem } from '@/store/cart-store'
 import { formatPrice } from '@/lib/formatPrice'
-import { ArrowLeft, ShoppingBag, Check, Truck, CreditCard, User, Mail, Phone, MapPin, FileText } from 'lucide-react'
+import { ArrowLeft, ShoppingBag, Check, Truck, CreditCard, User, Mail, Phone, MapPin, FileText, Ticket, X } from 'lucide-react'
 
 export default function CheckoutPage() {
     const router = useRouter()
-    const { items, totalPrice, clearCart } = useCartStore()
+    const { items, totalPrice, clearCart, coupon, applyCoupon, removeCoupon } = useCartStore()
     const [loading, setLoading] = React.useState(false)
     const [error, setError] = React.useState('')
     const [orderComplete, setOrderComplete] = React.useState(false)
     const [orderId, setOrderId] = React.useState<number | null>(null)
     const [user, setUser] = React.useState<any>(null)
+
+    // Coupon State
+    const [couponCode, setCouponCode] = React.useState('')
+    const [verifying, setVerifying] = React.useState(false)
+    const [couponError, setCouponError] = React.useState('')
+
+    // Calculations
+    const calculateSubtotal = () => items.reduce((total, item) => total + (item.price || 0) * item.quantity, 0)
+
+    const calculateDiscount = () => {
+        if (!coupon) return 0
+        const subtotal = calculateSubtotal()
+        if (coupon.discountType === 'percent') {
+            return subtotal * (coupon.discountValue / 100)
+        }
+        return coupon.discountValue
+    }
+
+    const handleApplyCoupon = async () => {
+        if (!couponCode) return
+        setVerifying(true)
+        setCouponError('')
+        try {
+            const res = await fetch('/api/coupons/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: couponCode, cartTotal: calculateSubtotal() })
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error)
+            applyCoupon(data.code, data.discount_type, data.discount_value)
+            setCouponCode('')
+        } catch (err: any) {
+            setCouponError(err.message)
+        } finally {
+            setVerifying(false)
+        }
+    }
 
     // Form state
     const [formData, setFormData] = React.useState({
@@ -357,15 +395,63 @@ export default function CheckoutPage() {
                                 ))}
                             </div>
 
-                            <div className="border-t border-slate-100 pt-4 space-y-2">
+                            {/* Coupon Input */}
+                            <div className="mb-6 border-b border-slate-100 pb-6">
+                                {coupon ? (
+                                    <div className="flex items-center justify-between bg-green-50 p-3 rounded-xl border border-green-100">
+                                        <div className="flex items-center gap-2">
+                                            <Ticket className="w-4 h-4 text-green-600" />
+                                            <div>
+                                                <p className="text-sm font-bold text-green-700">{coupon.code}</p>
+                                                <p className="text-xs text-green-600">
+                                                    {coupon.discountType === 'percent' ? `%${coupon.discountValue} İndirim` : `${coupon.discountValue} TL İndirim`}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={removeCoupon}
+                                            className="text-red-500 hover:text-red-700 p-1"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <input
+                                            placeholder="Kupon Kodu"
+                                            value={couponCode}
+                                            onChange={e => setCouponCode(e.target.value)}
+                                            className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-slate-900"
+                                        />
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={verifying}
+                                            onClick={handleApplyCoupon}
+                                        >
+                                            {verifying ? '...' : 'Uygula'}
+                                        </Button>
+                                    </div>
+                                )}
+                                {couponError && <p className="text-xs text-red-500 mt-2">{couponError}</p>}
+                            </div>
+
+                            <div className="space-y-2">
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-500">Ara Toplam</span>
-                                    <span className="text-slate-900">{formatPrice(totalPrice())}</span>
+                                    <span className="text-slate-900">{formatPrice(calculateSubtotal())}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-500">Kargo</span>
                                     <span className="text-green-600">Ücretsiz</span>
                                 </div>
+                                {coupon && (
+                                    <div className="flex justify-between text-sm text-green-600">
+                                        <span>İndirim ({coupon.code})</span>
+                                        <span>-{formatPrice(calculateDiscount())}</span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-100">
                                     <span className="text-slate-900">Toplam</span>
                                     <span className="text-slate-900">{formatPrice(totalPrice())}</span>

@@ -16,7 +16,8 @@ import {
     MessageSquare,
     Users,
     FolderOpen,
-    ShoppingCart
+    ShoppingCart,
+    Ticket
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -29,6 +30,7 @@ const navItems = [
     { href: '/admin/pages', label: 'Sayfalar', icon: FileText },
     { href: '/admin/header', label: 'Menü Yönetimi', icon: Menu },
     { href: '/admin/reviews', label: 'Yorumlar', icon: MessageSquare },
+    { href: '/admin/coupons', label: 'Kuponlar', icon: Ticket },
     { href: '/admin/users', label: 'Kullanıcılar', icon: Users },
     { href: '/admin/settings', label: 'Site Ayarları', icon: Settings },
     { href: '/admin/analytics', label: 'İstatistikler', icon: BarChart3 },
