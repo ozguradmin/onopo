@@ -14,12 +14,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             return NextResponse.json({ error: 'Sipariş bulunamadı' }, { status: 404 })
         }
 
-        // Get order items
-        const { results: items } = await db.prepare(
-            'SELECT oi.*, p.name, p.images FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?'
-        ).bind(id).all()
-
-        return NextResponse.json({ order, items })
+        return NextResponse.json(order)
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
@@ -43,7 +38,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
         const db = await getDB()
         const body = await req.json()
-        const { status, tracking_code, send_notification } = body
+        const { status, tracking_number, admin_notes, send_notification } = body
 
         // Get order before update
         const order: any = await db.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first()
@@ -59,9 +54,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             updates.push('status = ?')
             values.push(status)
         }
-        if (tracking_code !== undefined) {
-            updates.push('tracking_code = ?')
-            values.push(tracking_code)
+        if (tracking_number !== undefined) {
+            updates.push('tracking_number = ?')
+            values.push(tracking_number)
+        }
+        if (admin_notes !== undefined) {
+            updates.push('admin_notes = ?')
+            values.push(admin_notes)
         }
 
         if (updates.length > 0) {
@@ -69,8 +68,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             await db.prepare(`UPDATE orders SET ${updates.join(', ')} WHERE id = ?`).bind(...values).run()
         }
 
-        // Send email notification for tracking code
-        if (send_notification && tracking_code && order.guest_email) {
+        // Send email notification for tracking number
+        if (send_notification && tracking_number && order.guest_email) {
             // Try to send email notification
             try {
                 let address: any = {}
@@ -92,7 +91,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
                                     <p style="color: #475569;">#${order.id} numaralı siparişiniz kargoya verildi.</p>
                                     <div style="background: #f1f5f9; padding: 20px; border-radius: 8px; margin: 24px 0;">
                                         <p style="margin: 0;"><strong>Kargo Takip Numarası:</strong></p>
-                                        <p style="margin: 8px 0 0 0; font-size: 18px; color: #1e293b;">${tracking_code}</p>
+                                        <p style="margin: 8px 0 0 0; font-size: 18px; color: #1e293b;">${tracking_number}</p>
                                     </div>
                                     <p style="color: #64748b; font-size: 14px;">Takip numarası ile kargo firmasının web sitesinden siparişinizi takip edebilirsiniz.</p>
                                 </div>

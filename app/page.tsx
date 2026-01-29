@@ -109,6 +109,7 @@ export default async function Home() {
               key={section.id}
               title={section.title}
               products={products}
+              category={config.selection_type === 'category' ? config.category : undefined}
             />
           )
         }

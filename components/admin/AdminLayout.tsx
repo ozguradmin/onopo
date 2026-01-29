@@ -30,6 +30,7 @@ const navItems = [
     { href: '/admin/products', label: 'Ürünler', icon: Package },
     { href: '/admin/categories', label: 'Kategoriler', icon: FolderOpen },
     { href: '/admin/orders', label: 'Siparişler', icon: ShoppingCart },
+    { href: '/admin/analytics', label: 'İstatistikler', icon: BarChart3 },
     { href: '/admin/settings/payment', label: 'Ödeme Ayarları', icon: CreditCard },
     { href: '/admin/settings/integrations', label: 'Entegrasyonlar', icon: Share2 },
     { href: '/admin/pages', label: 'Sayfalar', icon: FileText },
@@ -39,7 +40,6 @@ const navItems = [
     { href: '/admin/users', label: 'Kullanıcılar', icon: Users },
     { href: '/admin/settings', label: 'Site Ayarları', icon: Settings },
     { href: '/admin/image-optimization', label: 'Görsel Optimizasyonu', icon: ImageIcon },
-    { href: '/admin/analytics', label: 'İstatistikler', icon: BarChart3 },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

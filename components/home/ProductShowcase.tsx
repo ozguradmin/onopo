@@ -11,9 +11,10 @@ import { formatPrice } from "@/lib/formatPrice"
 interface ProductShowcaseProps {
     title?: string
     products?: any[]
+    category?: string
 }
 
-export default function ProductShowcase({ title = "Trend Ürünler", products: initialProducts }: ProductShowcaseProps) {
+export default function ProductShowcase({ title = "Trend Ürünler", products: initialProducts, category }: ProductShowcaseProps) {
     const { addItem, openCart } = useCartStore()
     const [products, setProducts] = React.useState<any[]>(initialProducts || [])
     const [loading, setLoading] = React.useState(!initialProducts)
@@ -61,7 +62,7 @@ export default function ProductShowcase({ title = "Trend Ürünler", products: i
                         Bu sezonun en popüler teknoloji ve aksesuar ürünlerini keşfedin.
                     </p>
                 </div>
-                <a href="/products">
+                <a href={category ? `/products?category=${encodeURIComponent(category)}` : '/products'}>
                     <Button variant="outline" className="hidden md:flex rounded-full border-slate-300 px-6 hover:bg-white">
                         Tümünü Gör <ArrowRight className="ml-2 w-4 h-4" />
                     </Button>
@@ -157,7 +158,7 @@ export default function ProductShowcase({ title = "Trend Ürünler", products: i
             </div>
 
             <div className="container mx-auto px-4 mt-8 md:hidden">
-                <a href="/products">
+                <a href={category ? `/products?category=${encodeURIComponent(category)}` : '/products'}>
                     <Button variant="outline" className="w-full rounded-full border-slate-300 h-12 hover:bg-white">
                         Tüm Ürünleri Gör
                     </Button>

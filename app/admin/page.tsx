@@ -138,7 +138,11 @@ export default function AdminDashboard() {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {orders.slice(0, 5).map(order => (
-                                <tr key={order.id} className="hover:bg-slate-50">
+                                <tr
+                                    key={order.id}
+                                    className="hover:bg-slate-50 cursor-pointer"
+                                    onClick={() => router.push(`/admin/orders/${order.id}`)}
+                                >
                                     <td className="p-4 font-mono font-medium text-slate-500">#{order.id}</td>
                                     <td className="p-4 text-slate-900">{order.guest_email || 'Kayıtlı Üye'}</td>
                                     <td className="p-4 font-bold text-slate-900">{order.total_amount?.toFixed(2)} ₺</td>

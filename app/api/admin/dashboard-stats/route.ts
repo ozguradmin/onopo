@@ -3,8 +3,6 @@ import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 
-
-
 export async function GET(req: NextRequest) {
     try {
         const cookieStore = await cookies()
@@ -19,21 +17,60 @@ export async function GET(req: NextRequest) {
         const db = await getDB()
 
         // Execute queries in parallel for performance
-        const [productsCount, ordersCount, revenue, dayViews, recentOrders] = await Promise.all([
+        const [
+            productsCount,
+            ordersCount,
+            revenue,
+            pendingCount,
+            completedCount,
+            cancelledCount,
+            avgOrder,
+            topProducts,
+            categoryStats,
+            usersCount,
+            recentOrders
+        ] = await Promise.all([
             db.prepare('SELECT COUNT(*) as count FROM products').first(),
             db.prepare('SELECT COUNT(*) as count FROM orders').first(),
             db.prepare('SELECT SUM(total_amount) as total FROM orders WHERE status != "cancelled"').first(),
-            db.prepare("SELECT value FROM site_settings WHERE key = 'daily_views_" + new Date().toISOString().split('T')[0] + "'").first(),
+            db.prepare('SELECT COUNT(*) as count FROM orders WHERE status = "pending"').first(),
+            db.prepare('SELECT COUNT(*) as count FROM orders WHERE status = "completed"').first(),
+            db.prepare('SELECT COUNT(*) as count FROM orders WHERE status = "cancelled"').first(),
+            db.prepare('SELECT AVG(total_amount) as avg FROM orders WHERE status != "cancelled"').first(),
+            db.prepare(`
+                SELECT p.name, SUM(oi.quantity) as sold_count, SUM(oi.quantity * oi.price) as total_revenue
+                FROM order_items oi
+                JOIN products p ON oi.product_id = p.id
+                JOIN orders o ON oi.order_id = o.id
+                WHERE o.status != 'cancelled'
+                GROUP BY p.id
+                ORDER BY sold_count DESC
+                LIMIT 10
+            `).all(),
+            db.prepare(`
+                SELECT p.category, COUNT(oi.id) as order_count, SUM(oi.quantity * oi.price) as total_sales
+                FROM order_items oi
+                JOIN products p ON oi.product_id = p.id
+                JOIN orders o ON oi.order_id = o.id
+                WHERE o.status != 'cancelled'
+                GROUP BY p.category
+                ORDER BY total_sales DESC
+            `).all(),
+            db.prepare('SELECT COUNT(*) as count FROM users').first(),
             db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT 5').all()
         ])
 
         return NextResponse.json({
-            stats: {
-                totalProducts: productsCount?.count || 0,
-                totalOrders: ordersCount?.count || 0,
-                totalRevenue: revenue?.total || 0,
-                todayViews: parseInt(dayViews?.value as string || '0')
-            },
+            totalProducts: productsCount?.count || 0,
+            totalOrders: ordersCount?.count || 0,
+            totalRevenue: revenue?.total || 0,
+            pendingOrders: pendingCount?.count || 0,
+            completedOrders: completedCount?.count || 0,
+            cancelledOrders: cancelledCount?.count || 0,
+            avgOrderValue: avgOrder?.avg || 0,
+            topProducts: topProducts.results || [],
+            categoryStats: categoryStats.results || [],
+            totalUsers: usersCount?.count || 0,
             recentOrders: recentOrders.results || []
         })
 

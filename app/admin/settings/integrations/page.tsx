@@ -231,7 +231,7 @@ export default function IntegrationsPage() {
                 ))}
             </div>
 
-            {/* CSV Export Section */}
+            {/* Export Section */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                 <div className="flex items-center gap-4">
                     <div className="p-3 rounded-xl bg-slate-100">
@@ -240,17 +240,27 @@ export default function IntegrationsPage() {
                     <div className="flex-1">
                         <h2 className="text-lg font-bold text-slate-900">Ürün Dışa Aktarma</h2>
                         <p className="text-slate-600 mt-1">
-                            Tüm ürünlerinizi CSV formatında indirin. Excel, Google Sheets veya başka platformlarda kullanın.
+                            Tüm ürünlerinizi CSV veya Excel formatında indirin.
                         </p>
                     </div>
-                    <a
-                        href="/api/feeds/csv"
-                        download="urunler.csv"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors"
-                    >
-                        <FileText className="w-4 h-4" />
-                        CSV İndir
-                    </a>
+                    <div className="flex gap-2">
+                        <a
+                            href="/api/feeds/csv"
+                            download="urunler.csv"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                        >
+                            <FileText className="w-4 h-4" />
+                            CSV
+                        </a>
+                        <a
+                            href="/api/feeds/xlsx"
+                            download="urunler.xlsx"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                            <FileText className="w-4 h-4" />
+                            Excel (XLSX)
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
