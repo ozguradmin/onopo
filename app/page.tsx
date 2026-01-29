@@ -80,7 +80,7 @@ export default async function Home() {
           return <HeroSection key={section.id} />
         }
 
-        if (section.type === 'products') {
+        if (section.type === 'products' || section.type === 'new_products') {
           const products = getProductsForSection(section.config)
           return (
             <ProductShowcase
