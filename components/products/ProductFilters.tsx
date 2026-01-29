@@ -5,13 +5,11 @@ import { Search } from 'lucide-react'
 async function getCategories() {
     try {
         const db = await getDB()
-        // Improve query: Count products per category (by slug match) and filter > 0
+        // Get categories with product counts - match by name OR slug
         const { results } = await db.prepare(`
-            SELECT c.name, c.slug, COUNT(p.id) as count
+            SELECT c.name, c.slug, 
+                   (SELECT COUNT(*) FROM products p WHERE p.is_active = 1 AND (p.category = c.name OR p.category = c.slug)) as count
             FROM categories c
-            JOIN products p ON p.category = c.slug
-            WHERE p.is_active = 1
-            GROUP BY c.slug
             HAVING count > 0
             ORDER BY c.name ASC
         `).all()

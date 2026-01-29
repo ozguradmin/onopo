@@ -23,6 +23,15 @@ export function Header() {
         }
     }
 
+    // Debounce search for performance
+    const [debouncedQuery, setDebouncedQuery] = React.useState('')
+    React.useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedQuery(searchQuery)
+        }, 300)
+        return () => clearTimeout(timer)
+    }, [searchQuery])
+
     const { totalItems, toggleCart } = useCartStore()
     const [mounted, setMounted] = React.useState(false)
 

@@ -216,7 +216,7 @@ export default function ProductClient({ id }: { id: string }) {
                                             className="object-contain w-full h-full p-4"
                                             loading="lazy"
                                         />
-                                        {product.original_price && (
+                                        {product.original_price && product.original_price > product.price && Math.round((1 - product.price / product.original_price) * 100) > 0 && (
                                             <Badge className="absolute top-4 left-4 bg-red-500 text-white text-sm px-3 py-1">
                                                 %{Math.round((1 - product.price / product.original_price) * 100)} İndirim
                                             </Badge>
@@ -284,7 +284,7 @@ export default function ProductClient({ id }: { id: string }) {
                                     <span className="text-3xl font-bold text-slate-900">
                                         {formatPrice(product.price)}
                                     </span>
-                                    {product.original_price && (
+                                    {product.original_price && product.original_price > product.price && (
                                         <span className="text-xl text-slate-400 line-through">
                                             {formatPrice(product.original_price)}
                                         </span>
@@ -296,7 +296,7 @@ export default function ProductClient({ id }: { id: string }) {
                                     {(product.stock > 0) ? (
                                         <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1.5 rounded-full">
                                             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                            <span className="text-sm font-medium">Stokta: {product.stock} adet</span>
+                                            <span className="text-sm font-medium">Stokta: {product.stock > 20 ? '+20' : product.stock} adet</span>
                                         </div>
                                     ) : (
                                         <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-1.5 rounded-full">

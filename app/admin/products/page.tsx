@@ -65,45 +65,73 @@ export default function AdminProductsPage() {
 
                 // Transform data
                 const formattedProducts = data.map((item: any) => {
-                    // Build rich description with proper HTML (class not className!)
+                    // Build rich description with proper HTML formatting
                     let descParts: string[] = []
 
-                    // Short description at top
+                    // Product title and short description
+                    const productName = item['Ürün Adı'] || item['Name'] || ''
+
+                    // Short description at top with proper formatting
                     if (item['Kısa Açıklama']) {
-                        descParts.push(`<p class="mb-4 text-slate-700">${item['Kısa Açıklama']}</p>`)
+                        descParts.push(`<h3 class="text-lg font-semibold text-slate-900 mb-3">Ürün Açıklaması</h3>`)
+                        descParts.push(`<p class="mb-4 text-slate-700 leading-relaxed">${item['Kısa Açıklama']}</p>`)
                     }
 
-                    // Long description
+                    // Long description with better formatting
                     if (item['Uzun Detay (Metin)']) {
-                        descParts.push(`<div class="mb-4">${item['Uzun Detay (Metin)']}</div>`)
+                        const longDesc = String(item['Uzun Detay (Metin)'])
+                        // Split by sentences and format as list items if multiple sentences
+                        const sentences = longDesc.split(/[.]\s+/).filter(s => s.trim().length > 10)
+                        if (sentences.length > 2) {
+                            descParts.push(`<h3 class="text-lg font-semibold text-slate-900 mb-3 mt-4">Detaylı Bilgi</h3>`)
+                            descParts.push(`<ul class="list-disc list-inside space-y-2 text-slate-700 mb-4">`)
+                            sentences.forEach(s => {
+                                if (s.trim()) descParts.push(`<li>${s.trim()}.</li>`)
+                            })
+                            descParts.push(`</ul>`)
+                        } else {
+                            descParts.push(`<h3 class="text-lg font-semibold text-slate-900 mb-3 mt-4">Detaylı Bilgi</h3>`)
+                            descParts.push(`<p class="mb-4 text-slate-700 leading-relaxed">${longDesc}</p>`)
+                        }
                     }
 
-                    // Specs table with proper class attributes
+                    // Specs table with proper formatting
                     let tableRows: string[] = []
-                    if (item['Marka']) tableRows.push(`<tr><td class="p-2 border border-gray-200 font-semibold bg-slate-50">Marka</td><td class="p-2 border border-gray-200">${item['Marka']}</td></tr>`)
-                    if (item['Ürün Kodu']) tableRows.push(`<tr><td class="p-2 border border-gray-200 font-semibold bg-slate-50">Ürün Kodu</td><td class="p-2 border border-gray-200">${item['Ürün Kodu']}</td></tr>`)
-                    if (item['Barkod']) tableRows.push(`<tr><td class="p-2 border border-gray-200 font-semibold bg-slate-50">Barkod</td><td class="p-2 border border-gray-200">${item['Barkod']}</td></tr>`)
-                    if (item['Desi']) tableRows.push(`<tr><td class="p-2 border border-gray-200 font-semibold bg-slate-50">Desi</td><td class="p-2 border border-gray-200">${item['Desi']}</td></tr>`)
-                    if (item['Varyant Bilgisi']) tableRows.push(`<tr><td class="p-2 border border-gray-200 font-semibold bg-slate-50">Varyant</td><td class="p-2 border border-gray-200">${item['Varyant Bilgisi']}</td></tr>`)
+                    if (item['Marka']) tableRows.push(`<tr><td class="p-3 border border-gray-200 font-semibold bg-slate-50 w-1/3">Marka</td><td class="p-3 border border-gray-200">${item['Marka']}</td></tr>`)
+                    if (item['Ürün Kodu']) tableRows.push(`<tr><td class="p-3 border border-gray-200 font-semibold bg-slate-50">Ürün Kodu</td><td class="p-3 border border-gray-200">${item['Ürün Kodu']}</td></tr>`)
+                    if (item['Barkod']) tableRows.push(`<tr><td class="p-3 border border-gray-200 font-semibold bg-slate-50">Barkod</td><td class="p-3 border border-gray-200">${item['Barkod']}</td></tr>`)
+                    if (item['Desi']) tableRows.push(`<tr><td class="p-3 border border-gray-200 font-semibold bg-slate-50">Desi</td><td class="p-3 border border-gray-200">${item['Desi']}</td></tr>`)
+                    if (item['Varyant Bilgisi']) tableRows.push(`<tr><td class="p-3 border border-gray-200 font-semibold bg-slate-50">Varyant</td><td class="p-3 border border-gray-200">${item['Varyant Bilgisi']}</td></tr>`)
 
                     if (tableRows.length > 0) {
-                        descParts.push(`<table class="w-full border-collapse border border-gray-200 mt-4"><tbody>${tableRows.join('')}</tbody></table>`)
+                        descParts.push(`<h3 class="text-lg font-semibold text-slate-900 mb-3 mt-6">Teknik Özellikler</h3>`)
+                        descParts.push(`<table class="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden"><tbody>${tableRows.join('')}</tbody></table>`)
                     }
 
-                    const description = descParts.length > 0 ? `<div class="product-specs">${descParts.join('')}</div>` : ''
+                    const description = descParts.length > 0 ? `<div class="product-description space-y-4">${descParts.join('')}</div>` : ''
 
                     // Parse stock - check multiple column names
                     const stockValue = item['Stok Adedi'] ?? item['Stok'] ?? 100
                     const parsedStock = parseInt(String(stockValue)) || 100
 
+                    // Delivery info - standard for all bulk uploaded products
+                    const deliveryInfo = `<div class="space-y-3">
+                        <h4 class="font-semibold text-slate-900">TESLİMAT</h4>
+                        <p class="text-slate-700">Ürünü sipariş verdiğiniz gün saat 18:00 ve öncesi ise siparişiniz aynı gün kargoya verilir ve ertesi gün teslim edilir.</p>
+                        <p class="text-slate-700">Eğer kargoyu saat 18:00'den sonra verdiyseniz ürününüzün stoklarda olması durumunda ertesi gün kargolama yapılmaktadır.</p>
+                    </div>`
+
                     return {
-                        name: item['Ürün Adı'] || item['Name'],
+                        name: productName,
                         product_code: item['Ürün Kodu'] || item['Code'] || '',
                         category: item['Kategori'] || 'Genel',
                         price: parseFloat(String(item['Satış Fiyatı'] || item['Price'] || 0).replace(',', '.')),
                         original_price: parseFloat(String(item['Liste Fiyatı'] || 0).replace(',', '.')),
                         stock: parsedStock,
                         description: description,
+                        delivery_info: deliveryInfo,
+                        whatsapp_order_enabled: true,
+                        whatsapp_number: '905058217547',
                         images: [
                             item['Resim 1'],
                             item['Resim 2'],

@@ -1,27 +1,84 @@
 import { Suspense } from 'react'
-import { ProductGrid } from '@/components/products/ProductGrid'
-import { ProductFilters } from '@/components/products/ProductFilters'
+import { getDB } from '@/lib/db'
+import ProductsClient from '@/components/products/ProductsClient'
 
-export default function ProductsPage({ searchParams }: { searchParams: { category?: string; q?: string } }) {
+export const runtime = 'edge'
+export const dynamic = 'force-dynamic'
+
+interface SearchParams {
+    category?: string
+    q?: string
+    page?: string
+    sort?: string
+    minPrice?: string
+    maxPrice?: string
+    brand?: string
+}
+
+async function getProducts(category?: string, query?: string) {
+    const db = await getDB()
+    let sql = `SELECT id, name, slug, price, original_price, stock, category, images 
+               FROM products WHERE is_active = 1`
+    const params: any[] = []
+
+    if (category) {
+        sql += ` AND (category = ? OR category = ?)`
+        // Support both name and slug matching
+        params.push(category, category)
+    }
+
+    if (query) {
+        sql += ` AND (name LIKE ? OR description LIKE ?)`
+        params.push(`%${query}%`, `%${query}%`)
+    }
+
+    sql += ` ORDER BY id DESC`
+
+    const { results } = await db.prepare(sql).bind(...params).all()
+
+    return (results || []).map((p: any) => ({
+        ...p,
+        images: typeof p.images === 'string' ? JSON.parse(p.images) : p.images || []
+    }))
+}
+
+async function getCategories() {
+    const db = await getDB()
+    const { results } = await db.prepare(`
+        SELECT c.name, c.slug, 
+               (SELECT COUNT(*) FROM products p WHERE p.is_active = 1 AND (p.category = c.name OR p.category = c.slug)) as count
+        FROM categories c
+        HAVING count > 0
+        ORDER BY c.name ASC
+    `).all()
+    return results || []
+}
+
+async function getBrands(products: any[]) {
+    // Extract brands from product names (first word typically)
+    const brands = new Set<string>()
+    products.forEach(p => {
+        const firstWord = (p.name || '').split(' ')[0]
+        if (firstWord && firstWord.length > 2) {
+            brands.add(firstWord)
+        }
+    })
+    return Array.from(brands).slice(0, 20) // Limit to 20 brands
+}
+
+export default async function ProductsPage({ searchParams }: { searchParams: SearchParams }) {
+    const products = await getProducts(searchParams.category, searchParams.q)
+    const categories = await getCategories()
+    const brands = await getBrands(products)
+
     return (
-        <div className="container mx-auto px-4 py-8 mt-20">
-            <h1 className="text-3xl font-bold mb-8">
-                {searchParams.category || (searchParams.q ? `Sonuçlar: "${searchParams.q}"` : 'Tüm Ürünler')}
-            </h1>
-
-            <div className="flex flex-col lg:flex-row gap-8">
-                <aside className="w-full lg:w-64 shrink-0">
-                    <Suspense fallback={<div>Yükleniyor...</div>}>
-                        <ProductFilters searchParams={searchParams} />
-                    </Suspense>
-                </aside>
-
-                <main className="flex-1">
-                    <Suspense fallback={<div>Yükleniyor...</div>}>
-                        <ProductGrid category={searchParams.category} query={searchParams.q} />
-                    </Suspense>
-                </main>
-            </div>
-        </div>
+        <Suspense fallback={<div className="text-center py-20">Yükleniyor...</div>}>
+            <ProductsClient
+                initialProducts={products}
+                initialCategories={categories as any}
+                initialBrands={brands}
+                searchParams={searchParams}
+            />
+        </Suspense>
     )
 }

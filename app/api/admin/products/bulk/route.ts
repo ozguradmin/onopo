@@ -66,18 +66,22 @@ export async function POST(req: NextRequest) {
 
                 const slug = product.name
                     .toLowerCase()
+                    .replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u')
+                    .replace(/ö/g, 'o').replace(/ç/g, 'c').replace(/ı/g, 'i')
+                    .replace(/İ/g, 'i').replace(/Ş/g, 's').replace(/Ğ/g, 'g')
+                    .replace(/Ü/g, 'u').replace(/Ö/g, 'o').replace(/Ç/g, 'c')
                     .replace(/[^a-z0-9\s-]/g, '')
                     .replace(/\s+/g, '-')
                     .replace(/-+/g, '-')
-                    .trim() + '-' + Date.now() + '-' + Math.floor(Math.random() * 1000)
+                    .trim()
 
                 const numericPrice = typeof product.price === 'number' ? product.price : parseFloat(String(product.price))
 
                 await db.prepare(
                     `INSERT INTO products (
                         name, slug, description, price, original_price, stock, images, category, 
-                        is_active, product_code
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`
+                        is_active, product_code, delivery_info, whatsapp_order_enabled, whatsapp_number
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`
                 ).bind(
                     product.name,
                     slug,
@@ -87,7 +91,10 @@ export async function POST(req: NextRequest) {
                     product.stock || 0,
                     JSON.stringify(product.images || []),
                     product.category || 'Genel',
-                    product.product_code || ''
+                    product.product_code || '',
+                    product.delivery_info || '',
+                    product.whatsapp_order_enabled ? 1 : 0,
+                    product.whatsapp_number || '905058217547'
                 ).run()
 
                 successCount++
