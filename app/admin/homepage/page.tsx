@@ -32,6 +32,7 @@ interface Section {
 const sectionTypes = [
     { type: 'hero', label: 'Hero Slider', icon: ImageIcon },
     { type: 'products', label: 'Ürün Bölümü', icon: Package },
+    { type: 'new_products', label: 'Yeni Ürünler', icon: Star },
     { type: 'categories', label: 'Kategoriler', icon: Package },
     { type: 'features', label: 'Özellikler', icon: Star },
     { type: 'image_card', label: 'Görsel Kart', icon: ImageIcon },
@@ -106,8 +107,8 @@ export default function AdminHomepagePage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 type,
-                title: type === 'products' ? 'Yeni Ürün Bölümü' : type === 'features' ? 'Özellikler' : 'Yeni Bölüm',
-                config: type === 'products' ? { selection_type: 'all', limit: 8 } : {}
+                title: type === 'products' ? 'Trend Ürünler' : type === 'new_products' ? 'Yeni Ürünler' : type === 'features' ? 'Özellikler' : 'Yeni Bölüm',
+                config: (type === 'products' || type === 'new_products') ? { selection_type: type === 'new_products' ? 'newest' : 'all', limit: 8 } : {}
             })
         })
         if (res.ok) {
@@ -159,6 +160,7 @@ export default function AdminHomepagePage() {
                             <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
                                 {section.type === 'hero' && <ImageIcon className="w-5 h-5 text-blue-500" />}
                                 {section.type === 'products' && <Package className="w-5 h-5 text-green-500" />}
+                                {section.type === 'new_products' && <Star className="w-5 h-5 text-orange-500" />}
                                 {section.type === 'features' && <Star className="w-5 h-5 text-yellow-500" />}
                                 {section.type === 'image_card' && <ImageIcon className="w-5 h-5 text-purple-500" />}
                             </div>
@@ -294,7 +296,7 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
                         />
                     </div>
 
-                    {section.type === 'products' && (
+                    {(section.type === 'products' || section.type === 'new_products') && (
                         <>
                             <div>
                                 <label className="block text-sm font-medium mb-2">Ürün Seçimi</label>
@@ -304,6 +306,7 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
                                     className="w-full p-3 border border-slate-200 rounded-lg"
                                 >
                                     <option value="all">Tüm Ürünler</option>
+                                    <option value="newest">En Yeni Eklenenler</option>
                                     <option value="category">Kategoriye Göre</option>
                                     <option value="manual">Manuel Seçim</option>
                                 </select>

@@ -39,17 +39,30 @@ export function Footer() {
             .then(data => setSettings(prev => ({ ...prev, ...data })))
             .catch(() => { })
 
-        // Fetch categories with products
-        fetch('/api/categories')
-            .then(r => r.json())
-            .then(data => {
-                // Filter categories that have products and take up to 4
-                const catsWithProducts = (data || [])
+        // Fetch categories with products, filtered by admin-selected footer_categories
+        Promise.all([
+            fetch('/api/categories').then(r => r.json()),
+            fetch('/api/site-settings').then(r => r.json())
+        ]).then(([categoriesData, settingsData]) => {
+            let footerCats: string[] = []
+            try {
+                footerCats = settingsData.footer_categories ? JSON.parse(settingsData.footer_categories) : []
+            } catch { }
+
+            // If admin selected specific categories, use those
+            // Otherwise show top 4 categories with products
+            const allCats = categoriesData || []
+            let catsToShow: Category[]
+
+            if (footerCats.length > 0) {
+                catsToShow = allCats.filter((c: Category) => footerCats.includes(c.name))
+            } else {
+                catsToShow = allCats
                     .filter((c: Category) => c.product_count && c.product_count > 0)
                     .slice(0, 4)
-                setCategories(catsWithProducts)
-            })
-            .catch(() => { })
+            }
+            setCategories(catsToShow)
+        }).catch(() => { })
     }, [])
 
     return (

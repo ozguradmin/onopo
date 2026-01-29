@@ -22,11 +22,16 @@ export default function AdminSettingsPage() {
     const [footerText, setFooterText] = React.useState('')
     const [siteDescription, setSiteDescription] = React.useState('')
 
+    // Footer Categories
+    const [allCategories, setAllCategories] = React.useState<any[]>([])
+    const [footerCategories, setFooterCategories] = React.useState<string[]>([])
+
     React.useEffect(() => {
         Promise.all([
             fetch('/api/auth/me').then(r => r.json()),
-            fetch('/api/site-settings').then(r => r.json())
-        ]).then(([userData, settingsData]) => {
+            fetch('/api/site-settings').then(r => r.json()),
+            fetch('/api/categories').then(r => r.json())
+        ]).then(([userData, settingsData, categoriesData]) => {
             if (userData.user) {
                 setUser(userData.user)
                 setEmail(userData.user.email)
@@ -36,6 +41,14 @@ export default function AdminSettingsPage() {
                 setLogoUrl(settingsData.logo_url || '')
                 setFooterText(settingsData.footer_text || '')
                 setSiteDescription(settingsData.site_description || '')
+                // Parse footer categories from JSON
+                try {
+                    const fc = settingsData.footer_categories ? JSON.parse(settingsData.footer_categories) : []
+                    setFooterCategories(Array.isArray(fc) ? fc : [])
+                } catch { setFooterCategories([]) }
+            }
+            if (Array.isArray(categoriesData)) {
+                setAllCategories(categoriesData)
             }
             setLoading(false)
         }).catch(() => setLoading(false))
@@ -65,7 +78,8 @@ export default function AdminSettingsPage() {
                     site_name: siteName,
                     logo_url: logoUrl,
                     footer_text: footerText,
-                    site_description: siteDescription
+                    site_description: siteDescription,
+                    footer_categories: JSON.stringify(footerCategories)
                 })
             })
 
@@ -177,6 +191,36 @@ export default function AdminSettingsPage() {
                                 className="w-full p-2 border rounded-lg"
                             />
                         </div>
+
+                        {/* Footer Categories Selection */}
+                        {allCategories.length > 0 && (
+                            <div>
+                                <label className="block text-sm font-medium mb-2">Footer Kategorileri</label>
+                                <p className="text-xs text-slate-500 mb-3">Footer'da görünmesini istediğiniz kategorileri seçin</p>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-3 border rounded-lg bg-slate-50">
+                                    {allCategories.map((cat: any) => (
+                                        <label key={cat.id || cat.slug} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-1 rounded">
+                                            <input
+                                                type="checkbox"
+                                                checked={footerCategories.includes(cat.name)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setFooterCategories([...footerCategories, cat.name])
+                                                    } else {
+                                                        setFooterCategories(footerCategories.filter(c => c !== cat.name))
+                                                    }
+                                                }}
+                                                className="rounded border-slate-300"
+                                            />
+                                            <span>{cat.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-slate-400 mt-2">
+                                    Seçili: {footerCategories.length} kategori
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
