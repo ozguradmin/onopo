@@ -146,6 +146,13 @@ export default function EditProductPage() {
         }
     }
 
+    // Handle price input to allow commas as decimals
+    const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        // Replace comma with dot
+        const value = e.target.value.replace(',', '.')
+        setFormData(prev => ({ ...prev, [e.target.name]: value }))
+    }
+
     const handleDelete = async () => {
         if (!confirm('Bu ürünü silmek istediğinize emin misiniz?')) return
 
@@ -207,10 +214,10 @@ export default function EditProductPage() {
                             <span className="absolute left-3 top-2.5 text-slate-500">₺</span>
                             <input
                                 name="price"
-                                type="number"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
                                 value={formData.price}
-                                onChange={handleInputChange}
+                                onChange={handlePriceChange}
                                 className="w-full pl-8 p-2 border rounded-lg"
                                 placeholder="0.00"
                                 required
@@ -223,10 +230,10 @@ export default function EditProductPage() {
                             <span className="absolute left-3 top-2.5 text-slate-500">₺</span>
                             <input
                                 name="original_price"
-                                type="number"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
                                 value={formData.original_price}
-                                onChange={handleInputChange}
+                                onChange={handlePriceChange}
                                 className="w-full pl-8 p-2 border rounded-lg"
                                 placeholder="Opsiyonel"
                             />

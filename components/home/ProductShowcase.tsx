@@ -30,6 +30,22 @@ export default function ProductShowcase({ title = "Trend Ürünler", products: i
             .catch(() => setLoading(false))
     }, [])
 
+    // Auto Scroll Logic
+    React.useEffect(() => {
+        const container = document.getElementById(`carousel-${title.replace(/\s/g, '')}`)
+        if (!container) return
+
+        const scrollInterval = setInterval(() => {
+            if (container.scrollLeft + container.clientWidth >= container.scrollWidth) {
+                container.scrollTo({ left: 0, behavior: 'smooth' })
+            } else {
+                container.scrollBy({ left: 300, behavior: 'smooth' })
+            }
+        }, 5000) // Scroll every 5 seconds
+
+        return () => clearInterval(scrollInterval)
+    }, [title, products])
+
     if (loading) {
         return <div className="py-20 text-center">Yükleniyor...</div>
     }
