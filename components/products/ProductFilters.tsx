@@ -5,9 +5,19 @@ import { Search } from 'lucide-react'
 async function getCategories() {
     try {
         const db = await getDB()
-        const { results } = await db.prepare('SELECT name, slug FROM categories ORDER BY name ASC').all()
+        // Improve query: Count products per category (by slug match) and filter > 0
+        const { results } = await db.prepare(`
+            SELECT c.name, c.slug, COUNT(p.id) as count
+            FROM categories c
+            JOIN products p ON p.category = c.slug
+            WHERE p.is_active = 1
+            GROUP BY c.slug
+            HAVING count > 0
+            ORDER BY c.name ASC
+        `).all()
         return results || []
-    } catch {
+    } catch (e) {
+        console.error("Category fetch error:", e)
         return []
     }
 }
@@ -44,8 +54,8 @@ export async function ProductFilters({ searchParams }: ProductFiltersProps) {
                     <Link
                         href="/products"
                         className={`block text-sm transition-colors ${!activeCategory
-                                ? 'text-black font-bold'
-                                : 'text-slate-600 hover:text-black'
+                            ? 'text-black font-bold'
+                            : 'text-slate-600 hover:text-black'
                             }`}
                     >
                         Tüm Ürünler
@@ -55,8 +65,8 @@ export async function ProductFilters({ searchParams }: ProductFiltersProps) {
                             key={cat.id || cat.slug}
                             href={`/products?category=${cat.slug}`}
                             className={`block text-sm transition-colors ${activeCategory === cat.slug
-                                    ? 'text-black font-bold'
-                                    : 'text-slate-600 hover:text-black'
+                                ? 'text-black font-bold'
+                                : 'text-slate-600 hover:text-black'
                                 }`}
                         >
                             {cat.name}

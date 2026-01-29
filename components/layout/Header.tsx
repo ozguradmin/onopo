@@ -95,9 +95,6 @@ export function Header() {
                             <a href="/" className="px-4 py-2 rounded-full text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all">
                                 Anasayfa
                             </a>
-                            <a href="/products" className="px-4 py-2 rounded-full text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all">
-                                Tüm Ürünler
-                            </a>
 
                             {/* Static Categories Dropdown */}
                             <div className="relative group">
@@ -111,6 +108,10 @@ export function Header() {
                                     <CategoriesDropdown />
                                 </div>
                             </div>
+
+                            <a href="/products" className="px-4 py-2 rounded-full text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all">
+                                Tüm Ürünler
+                            </a>
 
                             {/* Dynamic Menus */}
                             {customMenus.filter(m => !m.parent_id).map(menu => {
