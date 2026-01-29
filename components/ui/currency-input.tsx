@@ -1,85 +1,116 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
+import * as React from 'react'
+import { cn } from "@/lib/utils"
 
-interface CurrencyInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> {
-    value: string | number
+interface CurrencyInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
+    value?: string | number
     onChange: (value: string) => void
-    currencySymbol?: string
 }
 
-export function CurrencyInput({ value, onChange, className, currencySymbol = '₺', ...props }: CurrencyInputProps) {
-    // Format initial value
-    const formatValue = (val: string | number) => {
-        if (!val) return ''
-        const num = parseFloat(val.toString())
-        if (isNaN(num)) return ''
-        // Use Turkish locale for proper formatting (1.234,56)
-        // However, user asked for "1699" -> auto dot. Usually means thousands separator.
-        // Standard text input behavior for currency.
-        return num.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    }
+export function CurrencyInput({ value, onChange, className, ...props }: CurrencyInputProps) {
+    const [displayValue, setDisplayValue] = React.useState('')
 
-    const [displayValue, setDisplayValue] = useState('')
-
-    useEffect(() => {
-        if (value) {
-            // If the value is a valid number, format it for display
-            setDisplayValue(value.toString())
+    // Initialize display value from prop
+    React.useEffect(() => {
+        if (value === undefined || value === '' || value === null) {
+            setDisplayValue('')
+            return
         }
-    }, [value])
+
+        const valStr = value.toString()
+        // If incoming value is already nicely formatted (has comma), keep it
+        // Or if it's a raw number "1234.56", format it to "1.234,56"
+        if (valStr.includes(',') && valStr.includes('.')) {
+            // likely already formatted or mixed, let's re-format strictly
+            // But careful, user might be typing
+        }
+
+        // Parse raw number to formatted string
+        // 1234.56 -> 1.234,56
+        const parts = valStr.split('.')
+        let integerPart = parts[0]
+        const decimalPart = parts[1] || ''
+
+        // Add dots to integer part
+        integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+
+        let formatted = integerPart
+        if (parts.length > 1) {
+            formatted += ',' + decimalPart
+        }
+
+        setDisplayValue(formatted)
+    }, [value]) // NOTE: This might cause cursor jumps if we aren't careful, but simpler for now.
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         let input = e.target.value
 
-        // Remove non-numeric chars except dot and comma
-        // Actually, user wants "1699" -> "1.699".
-        // This is complex. Let's stick to standard behavior:
-        // User types number, we don't interfere too much, but maybe onBlur we format?
-        // User request: "1699 yazarsak otomatik olarak kendi nokta girsin" (e.g. 1.699)
-        // This implies an input mask.
+        // Allow digits and comma only
+        // Remove everything else (keep comma and dots locally for parsing, but strictly we want to control it)
 
-        // Let's implement a simple version:
-        // 1. Strip non-digits
-        // 2. Treat as cents? No, usually not.
+        // 1. Remove all non-digit and non-comma characters (except dots which might be user typed?)
+        // User said: "nokta koymasam bile... ben virgül tuşuna basarsam virgül çıksın"
+        // So user inputs commas for decimals.
 
-        // Better approach for Next.js/React standard forms:
-        // Just simple number input but visually formatted?
+        // Let's filter input: valid chars are 0-9 and ,
+        // We will ignore dots typed by user often, but since we add them automatically, we should allow them in input but strip them for processing
 
-        // Let's stick to standard input type="number" step="0.01" for now as it's robust,
-        // but maybe the user *hates* type="number".
-        // Let's try to do a text input that cleans itself.
+        // Detect if user typed a comma
+        const hasComma = input.includes(',')
 
-        onChange(input)
-        setDisplayValue(input)
+        // Split by comma
+        const parts = input.split(',')
+
+        // Process integer part (before comma)
+        let integerPart = parts[0].replace(/\D/g, '') // remove all non-digits (dots/spaces)
+
+        // Format integer part with dots
+        if (integerPart) {
+            integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+        }
+
+        // Process decimal part (after comma)
+        let decimalPart = ''
+        if (parts.length > 1) {
+            // Take the part after the first comma
+            // If there are multiple commas, effectively we drop subsequent ones or merge? 
+            // Simple approach: take parts[1] and strip non-digits
+            decimalPart = parts[1].replace(/\D/g, '').substring(0, 2) // Max 2 decimals usually? User said 171,72
+        }
+
+        // Construct display value
+        let newDisplay = integerPart
+        if (hasComma) {
+            newDisplay += ',' + decimalPart
+        }
+
+        // Update local state immediately for smooth typing
+        setDisplayValue(newDisplay)
+
+        // Calculate raw numeric value for parent
+        // "1.234,56" -> 1234.56
+        const rawInteger = integerPart.replace(/\./g, '')
+        let rawValue = rawInteger
+        if (hasComma && decimalPart) {
+            rawValue += '.' + decimalPart
+        }
+
+        // Call parent onChange with the numeric string equivalent
+        onChange(rawValue)
     }
 
-    // NOTE: Simple implementation for now to satisfy the "auto dot" request might correspond to
-    // Intl.NumberFormat onBlur, or a library like `react-currency-input-field`.
-    // Without external lib, standard input with type="number" is safest for values.
-    // BUT the user specifically asked for "kendi nokta girsin".
-    // This usually means while typing.
-
-    // Let's just use type="number" for reliability but maybe add a visual formatter separately?
-    // User asked for "yazarken".
-
-    // Reverting to simple number input to avoid bugs, but maybe formatting on blur.
-
     return (
-        <div className="relative">
-            <Input
-                {...props}
-                type="number"
-                step="0.01"
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                className={cn("pl-8", className)}
-            />
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
-                {currencySymbol}
-            </span>
-        </div>
+        <input
+            {...props}
+            type="text"
+            inputMode="decimal"
+            value={displayValue}
+            onChange={handleChange}
+            className={cn(
+                "flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+                className
+            )}
+        />
     )
 }

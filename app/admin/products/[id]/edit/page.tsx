@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Upload, Loader2, X, Plus, ArrowRight } from 'lucide-react'
-import { AutoDotInput } from '@/components/ui/auto-dot-input'
+import { CurrencyInput } from '@/components/ui/currency-input'
 
 export default function EditProductPage() {
     const router = useRouter()
@@ -146,12 +146,7 @@ export default function EditProductPage() {
         }
     }
 
-    // Handle price input to allow commas as decimals
-    const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        // Replace comma with dot
-        const value = e.target.value.replace(',', '.')
-        setFormData(prev => ({ ...prev, [e.target.name]: value }))
-    }
+
 
     const handleDelete = async () => {
         if (!confirm('Bu ürünü silmek istediğinize emin misiniz?')) return
@@ -212,14 +207,12 @@ export default function EditProductPage() {
                         <label className="block text-sm font-medium mb-1">Fiyat (₺)</label>
                         <div className="relative">
                             <span className="absolute left-3 top-2.5 text-slate-500">₺</span>
-                            <input
+                            <CurrencyInput
                                 name="price"
-                                type="text"
-                                inputMode="decimal"
                                 value={formData.price}
-                                onChange={handlePriceChange}
+                                onChange={(val) => setFormData(prev => ({ ...prev, price: val }))}
                                 className="w-full pl-8 p-2 border rounded-lg"
-                                placeholder="0.00"
+                                placeholder="0,00"
                                 required
                             />
                         </div>
@@ -228,12 +221,10 @@ export default function EditProductPage() {
                         <label className="block text-sm font-medium mb-1">Eski Fiyat</label>
                         <div className="relative">
                             <span className="absolute left-3 top-2.5 text-slate-500">₺</span>
-                            <input
+                            <CurrencyInput
                                 name="original_price"
-                                type="text"
-                                inputMode="decimal"
                                 value={formData.original_price}
-                                onChange={handlePriceChange}
+                                onChange={(val) => setFormData(prev => ({ ...prev, original_price: val }))}
                                 className="w-full pl-8 p-2 border rounded-lg"
                                 placeholder="Opsiyonel"
                             />
