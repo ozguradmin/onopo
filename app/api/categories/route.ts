@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 // GET: List all categories with product count
 export async function GET() {
     try {

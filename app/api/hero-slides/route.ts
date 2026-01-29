@@ -3,6 +3,8 @@ import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 
+export const dynamic = 'force-dynamic'
+
 // GET: Get all hero slides
 export async function GET() {
     try {
