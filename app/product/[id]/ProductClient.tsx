@@ -108,43 +108,35 @@ export default function ProductClient({ id }: { id: string }) {
         setTimeout(() => setAddedToCart(false), 2000)
     }
 
-    const handleSubmitReview = async () => {
-        if (!user) {
-            window.location.href = '/login?redirect=/product/' + id
-            return
-        }
+    import Link from "next/link"
+    import ProductShowcase from "@/components/home/ProductShowcase"
 
-        setSubmittingReview(true)
-        setReviewError('')
+    // ... (keep state logic same)
 
-        try {
-            const res = await fetch(`/api/products/${id}/reviews`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rating: reviewRating, comment: reviewComment })
-            })
-
-            if (!res.ok) {
-                const data = await res.json()
-                throw new Error(data.error || 'Yorum gönderilemedi')
-            }
-
-            // Refresh reviews
-            const reviewsRes = await fetch(`/api/products/${id}/reviews`)
-            const reviewsData = await reviewsRes.json()
-            setReviews(reviewsData || [])
-            setReviewComment('')
-            setReviewRating(5)
-        } catch (err: any) {
-            setReviewError(err.message)
-        } finally {
-            setSubmittingReview(false)
-        }
+    const handleBuyNow = () => {
+        handleAddToCart()
+        setTimeout(() => {
+            window.location.href = '/checkout'
+        }, 100)
     }
 
-    const avgRating = reviews.length > 0
-        ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-        : 5
+    // Similar products state
+    const [similarProducts, setSimilarProducts] = React.useState<any[]>([])
+
+    React.useEffect(() => {
+        if (product && product.category) {
+            fetch(`/api/products?category=${encodeURIComponent(product.category)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        // Filter out current product and limit to 8
+                        const similar = data.filter((p: any) => p.id !== product.id).slice(0, 8)
+                        setSimilarProducts(similar)
+                    }
+                })
+                .catch(() => { })
+        }
+    }, [product])
 
     if (loading) return <div className="min-h-screen pt-24 text-center">Yükleniyor...</div>
     if (!product) return <div className="min-h-screen pt-24 text-center">Ürün bulunamadı</div>
@@ -184,6 +176,7 @@ export default function ProductClient({ id }: { id: string }) {
                                             src={allImages[selectedImage] || '/placeholder.svg'}
                                             alt={product.name}
                                             className="object-contain w-full h-full p-4"
+                                            loading="lazy"
                                         />
                                         {product.original_price && (
                                             <Badge className="absolute top-4 left-4 bg-red-500 text-white text-sm px-3 py-1">
@@ -214,26 +207,33 @@ export default function ProductClient({ id }: { id: string }) {
 
                             {/* Product Info */}
                             <div className="p-6 lg:p-10 flex flex-col">
-                                {/* Category & Rating */}
-                                <div className="flex flex-wrap items-center gap-3 mb-4">
-                                    <a href={`/${product.category?.toLowerCase() || 'products'}`}>
-                                        <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
-                                            {product.category || 'Ürün'}
-                                        </Badge>
-                                    </a>
-                                    <div className="flex items-center gap-1">
-                                        <div className="flex">
-                                            {[1, 2, 3, 4, 5].map((star) => (
-                                                <Star
-                                                    key={star}
-                                                    className={`w-4 h-4 ${star <= Math.floor(avgRating) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-200'}`}
-                                                />
-                                            ))}
+                                {/* Category & Info */}
+                                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <a href={`/${(product.category || '').toLowerCase()}`}>
+                                            <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
+                                                {product.category || 'Ürün'}
+                                            </Badge>
+                                        </a>
+                                        <div className="flex items-center gap-1">
+                                            <div className="flex">
+                                                {[1, 2, 3, 4, 5].map((star) => (
+                                                    <Star
+                                                        key={star}
+                                                        className={`w-4 h-4 ${star <= Math.floor(avgRating) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-200'}`}
+                                                    />
+                                                ))}
+                                            </div>
+                                            <span className="text-sm text-slate-500 ml-2">
+                                                {avgRating.toFixed(1)} ({reviews.length})
+                                            </span>
                                         </div>
-                                        <span className="text-sm text-slate-500 ml-2">
-                                            {avgRating.toFixed(1)} ({reviews.length} değerlendirme)
-                                        </span>
                                     </div>
+                                    {product.product_code && (
+                                        <span className="text-xs font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded">
+                                            KOD: {product.product_code}
+                                        </span>
+                                    )}
                                 </div>
 
                                 {/* Title */}
@@ -304,61 +304,86 @@ export default function ProductClient({ id }: { id: string }) {
                                     </div>
                                 </div>
 
-                                {/* Action Buttons */}
-                                <div className="flex gap-3 mb-8">
-                                    <Button
-                                        size="lg"
-                                        className={`flex-1 h-14 text-base rounded-xl gap-2 transition-all ${addedToCart
-                                            ? 'bg-green-500 hover:bg-green-600'
-                                            : 'bg-slate-900 hover:bg-slate-800'
-                                            }`}
-                                        onClick={handleAddToCart}
-                                    >
-                                        {addedToCart ? (
-                                            <>
-                                                <Check className="w-5 h-5" />
-                                                Eklendi!
-                                            </>
-                                        ) : (
-                                            <>
-                                                <ShoppingBag className="w-5 h-5" />
-                                                Sepete Ekle
-                                            </>
-                                        )}
-                                    </Button>
+                                {/* Action Buttons - Stacked on Mobile, Row on Desktop */}
+                                <div className="flex flex-col gap-3 mb-8">
+                                    <div className="flex gap-3">
+                                        <Button
+                                            size="lg"
+                                            className={`flex-1 h-14 text-base rounded-xl gap-2 transition-all ${addedToCart
+                                                ? 'bg-green-500 hover:bg-green-600'
+                                                : 'bg-slate-900 hover:bg-slate-800'
+                                                }`}
+                                            onClick={handleAddToCart}
+                                        >
+                                            {addedToCart ? (
+                                                <>
+                                                    <Check className="w-5 h-5" />
+                                                    Eklendi!
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ShoppingBag className="w-5 h-5" />
+                                                    Sepete Ekle
+                                                </>
+                                            )}
+                                        </Button>
+                                        <Button
+                                            size="lg"
+                                            onClick={handleBuyNow}
+                                            className="flex-1 h-14 text-base rounded-xl gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200"
+                                        >
+                                            <CreditCard className="w-5 h-5" />
+                                            Hemen Al
+                                        </Button>
+                                    </div>
 
-                                    <Button
-                                        size="lg"
-                                        variant="outline"
-                                        className={`h-14 w-14 rounded-xl border-2 transition-all ${isFavorite
-                                            ? 'bg-red-50 border-red-300'
-                                            : 'bg-white border-slate-200 hover:bg-red-50 hover:border-red-300'
-                                            }`}
-                                        disabled={togglingFavorite}
-                                        onClick={async () => {
-                                            if (!user) {
-                                                window.location.href = '/login?redirect=/product/' + id
-                                                return
-                                            }
-                                            setTogglingFavorite(true)
-                                            try {
-                                                const res = await fetch('/api/favorites', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ productId: parseInt(id) })
-                                                })
-                                                const data = await res.json()
-                                                setIsFavorite(data.favorited)
-                                            } catch (err) {
-                                                console.error('Toggle favorite error:', err)
-                                            } finally {
-                                                setTogglingFavorite(false)
-                                            }
-                                        }}
-                                    >
-                                        <HeartIcon filled={isFavorite} />
-                                    </Button>
+                                    {product.whatsapp_order_enabled && (
+                                        <a
+                                            href={`https://wa.me/${product.whatsapp_number}?text=${encodeURIComponent(`Merhaba, ${product.name} (Kod: ${product.product_code || '-'}) siparişi vermek istiyorum.`)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            <Button
+                                                size="lg"
+                                                className="w-full h-14 text-base rounded-xl gap-2 bg-[#25D366] hover:bg-[#128C7E] text-white shadow-md shadow-green-100"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
+                                                WhatsApp ile Sipariş Ver
+                                            </Button>
+                                        </a>
+                                    )}
+
+                                    <div className="flex justify-center">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className={`text-slate-500 ${isFavorite ? 'text-red-500' : ''}`}
+                                            disabled={togglingFavorite}
+                                            onClick={async () => {
+                                                if (!user) {
+                                                    window.location.href = '/login?redirect=/product/' + id
+                                                    return
+                                                }
+                                                setTogglingFavorite(true)
+                                                try {
+                                                    const res = await fetch('/api/favorites', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ productId: parseInt(id) })
+                                                    })
+                                                    const data = await res.json()
+                                                    setIsFavorite(data.favorited)
+                                                } catch (err) { } finally {
+                                                    setTogglingFavorite(false)
+                                                }
+                                            }}
+                                        >
+                                            <HeartIcon filled={isFavorite} />
+                                            <span className="ml-2">{isFavorite ? 'Favorilerden Çıkar' : 'Favorilere Ekle'}</span>
+                                        </Button>
+                                    </div>
                                 </div>
+                                {/* ... Shipping info etc ... */}
 
                                 {/* Shipping & Guarantee */}
                                 <div className="grid grid-cols-3 gap-3 pt-6 border-t border-slate-100">
@@ -475,6 +500,13 @@ export default function ProductClient({ id }: { id: string }) {
                             </div>
                         )}
                     </div>
+
+                    {/* Similar Products */}
+                    {similarProducts.length > 0 && (
+                        <div className="mt-12 md:mt-20">
+                            <ProductShowcase title="Benzer Ürünler" products={similarProducts} />
+                        </div>
+                    )}
                 </div>
             </main>
         </div>

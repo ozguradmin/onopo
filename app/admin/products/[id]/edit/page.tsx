@@ -29,7 +29,10 @@ export default function EditProductPage() {
         warranty_info: '',
         delivery_info: '',
         installment_info: '',
-        is_active: true
+        is_active: true,
+        product_code: '',
+        whatsapp_order_enabled: false,
+        whatsapp_number: ''
     })
 
     // Fetch product and categories
@@ -50,7 +53,10 @@ export default function EditProductPage() {
                     warranty_info: product.warranty_info || '',
                     delivery_info: product.delivery_info || '',
                     installment_info: product.installment_info || '',
-                    is_active: product.is_active !== undefined ? !!product.is_active : true
+                    is_active: product.is_active !== undefined ? !!product.is_active : true,
+                    product_code: product.product_code || '',
+                    whatsapp_order_enabled: !!product.whatsapp_order_enabled,
+                    whatsapp_number: product.whatsapp_number || ''
                 })
             }
             setCategories(cats || [])
@@ -124,7 +130,10 @@ export default function EditProductPage() {
                     price: parseFloat(formData.price),
                     original_price: formData.original_price ? parseFloat(formData.original_price) : null,
                     stock: parseInt(formData.stock),
-                    is_active: formData.is_active ? 1 : 0
+                    is_active: formData.is_active ? 1 : 0,
+                    product_code: formData.product_code,
+                    whatsapp_order_enabled: formData.whatsapp_order_enabled,
+                    whatsapp_number: formData.whatsapp_number
                 })
             })
 
@@ -196,12 +205,15 @@ export default function EditProductPage() {
                         <label className="block text-sm font-medium mb-1">Fiyat (₺)</label>
                         <div className="relative">
                             <span className="absolute left-3 top-2.5 text-slate-500">₺</span>
-                            <AutoDotInput
+                            <input
                                 name="price"
+                                type="number"
+                                step="0.01"
                                 value={formData.price}
-                                onChange={(val) => setFormData(prev => ({ ...prev, price: val }))}
+                                onChange={handleInputChange}
                                 className="w-full pl-8 p-2 border rounded-lg"
-                                placeholder="0"
+                                placeholder="0.00"
+                                required
                             />
                         </div>
                     </div>
@@ -209,10 +221,12 @@ export default function EditProductPage() {
                         <label className="block text-sm font-medium mb-1">Eski Fiyat</label>
                         <div className="relative">
                             <span className="absolute left-3 top-2.5 text-slate-500">₺</span>
-                            <AutoDotInput
+                            <input
                                 name="original_price"
+                                type="number"
+                                step="0.01"
                                 value={formData.original_price}
-                                onChange={(val) => setFormData(prev => ({ ...prev, original_price: val }))}
+                                onChange={handleInputChange}
                                 className="w-full pl-8 p-2 border rounded-lg"
                                 placeholder="Opsiyonel"
                             />
@@ -261,6 +275,19 @@ export default function EditProductPage() {
                     </div>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Ürün Kodu</label>
+                        <input
+                            name="product_code"
+                            value={formData.product_code || ''}
+                            onChange={handleInputChange}
+                            placeholder="Örn: KOD-123"
+                            className="w-full p-2 border rounded-lg"
+                        />
+                    </div>
+                </div>
+
                 <div className="flex items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-200">
                     <div>
                         <label className="text-sm font-medium text-slate-900 block">Ürün Görünürlüğü</label>
@@ -276,6 +303,41 @@ export default function EditProductPage() {
                         <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-slate-900"></div>
                         <span className="ml-3 text-sm font-medium text-slate-700">{formData.is_active ? 'Yayında' : 'Gizli'}</span>
                     </label>
+                </div>
+
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <label className="text-sm font-medium text-green-900 block flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-circle"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /></svg>
+                                WhatsApp İle Sipariş
+                            </label>
+                            <p className="text-xs text-green-700">Ürün sayfasında WhatsApp butonu göster</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={formData.whatsapp_order_enabled}
+                                onChange={(e) => setFormData(prev => ({ ...prev, whatsapp_order_enabled: e.target.checked }))}
+                            />
+                            <div className="w-11 h-6 bg-green-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                        </label>
+                    </div>
+
+                    {formData.whatsapp_order_enabled && (
+                        <div>
+                            <label className="block text-sm font-medium mb-1">WhatsApp Numarası</label>
+                            <input
+                                name="whatsapp_number"
+                                value={formData.whatsapp_number || ''}
+                                onChange={handleInputChange}
+                                placeholder="Örn: 905551234567"
+                                className="w-full p-2 border rounded-lg"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">Başında 90 olan formatta giriniz.</p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Images */}

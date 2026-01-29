@@ -52,20 +52,45 @@ export default function ProductShowcase({ title = "Trend Ürünler", products: i
                 </a>
             </div>
 
-            {/* Grid layout for desktop, scroll for mobile - MAX WIDTH APPLIED */}
-            <div className="container mx-auto px-4">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
+            {/* Carousel Layout for Desktop & Mobile */}
+            <div className="relative container mx-auto px-4 group/carousel">
+                {/* Scroll Buttons - Visible on hover (Desktop) */}
+                <button
+                    onClick={() => {
+                        const container = document.getElementById(`carousel-${title.replace(/\s/g, '')}`);
+                        if (container) container.scrollBy({ left: -300, behavior: 'smooth' });
+                    }}
+                    className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 backdrop-blur shadow-lg border border-slate-100 p-3 rounded-full text-slate-800 opacity-0 group-hover/carousel:opacity-100 transition-all hover:scale-110 -ml-4"
+                >
+                    <ArrowRight className="w-5 h-5 rotate-180" />
+                </button>
+
+                <button
+                    onClick={() => {
+                        const container = document.getElementById(`carousel-${title.replace(/\s/g, '')}`);
+                        if (container) container.scrollBy({ left: 300, behavior: 'smooth' });
+                    }}
+                    className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 backdrop-blur shadow-lg border border-slate-100 p-3 rounded-full text-slate-800 opacity-0 group-hover/carousel:opacity-100 transition-all hover:scale-110 -mr-4"
+                >
+                    <ArrowRight className="w-5 h-5" />
+                </button>
+
+                <div
+                    id={`carousel-${title.replace(/\s/g, '')}`}
+                    className="flex gap-4 md:gap-6 overflow-x-auto pb-8 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide scroll-smooth"
+                >
                     {products.map((product) => (
-                        <div key={product.id} className="group">
-                            <div className="relative bg-white rounded-2xl md:rounded-3xl p-3 md:p-4 shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 h-full flex flex-col">
-                                {/* Image Area - MAX SIZE CONSTRAINED */}
+                        <div key={product.id} className="min-w-[160px] md:min-w-[280px] snap-start">
+                            <div className="relative bg-white rounded-2xl md:rounded-3xl p-3 md:p-4 shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 h-full flex flex-col group">
+                                {/* Image Area */}
                                 <a href={`/product/${product.id}`} className="block relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-slate-100 mb-3 md:mb-4">
                                     <img
                                         src={product.images && product.images.length > 0 ? product.images[0] : product.image}
                                         alt={product.name}
                                         className="object-cover w-full h-full transform group-hover:scale-105 transition-transform duration-500"
+                                        loading="lazy"
                                     />
-                                    {/* Badge Logic Simplified */}
+                                    {/* Badge Logic */}
                                     {(product.original_price > product.price) && (
                                         <div className="absolute top-2 left-2 z-10">
                                             <Badge className="bg-red-500 text-white text-[10px] md:text-xs px-2 md:px-3 py-1 font-medium border-0 shadow-sm">
@@ -81,7 +106,7 @@ export default function ProductShowcase({ title = "Trend Ürünler", products: i
                                         {product.category}
                                     </p>
                                     <a href={`/product/${product.id}`} className="block group-hover:text-primary transition-colors">
-                                        <h3 className="font-heading font-bold text-sm md:text-base lg:text-lg text-slate-900 mb-2 line-clamp-2">
+                                        <h3 className="font-heading font-bold text-sm md:text-base lg:text-lg text-slate-900 mb-2 line-clamp-2 min-h-[40px] md:min-h-[56px]">
                                             {product.name}
                                         </h3>
                                     </a>
@@ -90,7 +115,6 @@ export default function ProductShowcase({ title = "Trend Ürünler", products: i
                                         <span className="text-base md:text-lg lg:text-xl font-bold text-slate-900">
                                             {formatPrice(product.price)}
                                         </span>
-                                        {/* ALWAYS VISIBLE ADD BUTTON - Adds to cart AND opens drawer */}
                                         <Button
                                             size="icon"
                                             className="rounded-full bg-slate-900 text-white h-8 w-8 md:h-10 md:w-10 shrink-0 hover:bg-slate-700 hover:scale-105 active:scale-95 transition-all shadow-md"

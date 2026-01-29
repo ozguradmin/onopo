@@ -53,7 +53,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             warranty_info,
             delivery_info,
             installment_info,
-            is_active
+            is_active,
+            product_code,
+            whatsapp_order_enabled,
+            whatsapp_number
         } = body
 
         // Prepare values with safe defaults and type conversions
@@ -61,6 +64,8 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         const safeOriginalPrice = original_price ? parseFloat(original_price) : null
         const safeStock = parseInt(stock) || 0
         const safeIsActive = is_active !== undefined ? (is_active ? 1 : 0) : 1
+        const safeWhatsappEnabled = whatsapp_order_enabled ? 1 : 0
+        const safeWhatsappNumber = whatsapp_number || ''
 
         let safeImages = '[]'
         if (typeof images === 'string') {
@@ -77,6 +82,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
                 `UPDATE products SET 
                  name = ?, description = ?, price = ?, original_price = ?, stock = ?, 
                  images = ?, category = ?, warranty_info = ?, delivery_info = ?, installment_info = ?, is_active = ?,
+                 product_code = ?, whatsapp_order_enabled = ?, whatsapp_number = ?,
                  updated_at = CURRENT_TIMESTAMP
                  WHERE id = ?`
             ).bind(
@@ -91,6 +97,9 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
                 delivery_info || '',
                 installment_info || '',
                 safeIsActive,
+                product_code || '',
+                safeWhatsappEnabled,
+                safeWhatsappNumber,
                 intId
             ).run()
         } catch (err: any) {

@@ -31,24 +31,24 @@ export function Header() {
         { href: "/gaming", label: "Oyun" },
     ])
 
+    const [customMenus, setCustomMenus] = React.useState<any[]>([])
+
     React.useEffect(() => {
         setMounted(true)
-        // Fetch site settings for logo and links
+        // Fetch site settings
         fetch('/api/site-settings')
             .then(r => r.json())
             .then(data => {
                 if (data.logo_url) setLogoUrl(data.logo_url)
                 if (data.site_name) setSiteName(data.site_name)
-                if (data.header_links) {
-                    try {
-                        const parsed = JSON.parse(data.header_links)
-                        if (Array.isArray(parsed) && parsed.length > 0) {
-                            setNavLinks(parsed)
-                        }
-                    } catch { }
-                }
-            })
-            .catch(() => { })
+            }).catch(() => { })
+
+        // Fetch Menus
+        fetch('/api/menus')
+            .then(res => res.json())
+            .then(data => {
+                if (Array.isArray(data)) setCustomMenus(data)
+            }).catch(() => { })
     }, [])
 
     const cartItemCount = mounted ? totalItems() : 0
@@ -66,10 +66,11 @@ export function Header() {
             {/* ALWAYS WHITE HEADER - Works on every page */}
             <header
                 className={cn(
-                    "fixed top-0 left-0 right-0 z-50 bg-white transition-shadow duration-300",
+                    "fixed top-0 left-0 right-0 z-50 bg-white transition-shadow duration-300 flex flex-col",
                     isScrolled ? "shadow-lg" : "shadow-sm border-b border-slate-100"
                 )}
             >
+                <TopBar />
                 <div className="container mx-auto px-4">
                     <div className="flex items-center justify-between h-16 md:h-20">
                         {/* Logo - Dynamic from settings */}
@@ -88,29 +89,56 @@ export function Header() {
 
                         {/* Desktop Navigation - Center */}
                         <nav className="hidden lg:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
-                            {navLinks.map((link) => {
-                                if (link.label === 'Kategoriler') {
+                            <a href="/" className="px-4 py-2 rounded-full text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all">
+                                Anasayfa
+                            </a>
+
+                            {/* Static Categories Dropdown */}
+                            <div className="relative group">
+                                <button className="flex items-center gap-1 px-4 py-2 rounded-full text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all">
+                                    Kategoriler
+                                    <svg className="w-4 h-4 transition-transform group-hover:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                </button>
+                                <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform translate-y-2 group-hover:translate-y-0 z-50">
+                                    <CategoriesDropdown />
+                                </div>
+                            </div>
+
+                            {/* Dynamic Menus */}
+                            {customMenus.filter(m => !m.parent_id).map(menu => {
+                                const children = customMenus.filter(c => c.parent_id === menu.id)
+                                if (children.length > 0) {
                                     return (
-                                        <div key={link.href} className="relative group">
+                                        <div key={menu.id} className="relative group">
                                             <button className="flex items-center gap-1 px-4 py-2 rounded-full text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all">
-                                                {link.label}
+                                                {menu.title}
                                                 <svg className="w-4 h-4 transition-transform group-hover:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                     <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
                                                 </svg>
                                             </button>
                                             <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform translate-y-2 group-hover:translate-y-0 z-50">
-                                                <CategoriesDropdown />
+                                                {children.map(child => (
+                                                    <a
+                                                        key={child.id}
+                                                        href={child.url}
+                                                        className="block px-4 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors"
+                                                    >
+                                                        {child.title}
+                                                    </a>
+                                                ))}
                                             </div>
                                         </div>
                                     )
                                 }
                                 return (
                                     <a
-                                        key={link.href}
-                                        href={link.href}
+                                        key={menu.id}
+                                        href={menu.url}
                                         className="px-4 py-2 rounded-full text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all"
                                     >
-                                        {link.label}
+                                        {menu.title}
                                     </a>
                                 )
                             })}

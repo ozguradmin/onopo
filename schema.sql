@@ -33,8 +33,21 @@ CREATE TABLE IF NOT EXISTS products (
     warranty_info TEXT,
     delivery_info TEXT,
     installment_info TEXT,
+    is_active INTEGER DEFAULT 1,
+    product_code TEXT,
+    whatsapp_order_enabled INTEGER DEFAULT 0,
+    whatsapp_number TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Custom Menus
+CREATE TABLE IF NOT EXISTS menus (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    items TEXT, -- JSON array
+    display_order INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Reviews table

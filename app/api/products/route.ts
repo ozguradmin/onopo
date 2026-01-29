@@ -83,10 +83,12 @@ export async function POST(req: NextRequest) {
         console.log('Generated slug:', slug)
 
         try {
-            // INSERT with slug included (slug is NOT NULL in the schema!)
+            // INSERT with slug included
             const result = await db.prepare(
-                `INSERT INTO products (name, slug, description, price, original_price, stock, images, category) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+                `INSERT INTO products (
+                        name, slug, description, price, original_price, stock, images, category, 
+                        is_active, product_code, whatsapp_order_enabled, whatsapp_number
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
             ).bind(
                 name,
                 slug,
@@ -95,12 +97,16 @@ export async function POST(req: NextRequest) {
                 original_price || null,
                 stock || 0,
                 JSON.stringify(images || []),
-                category || ''
+                category || '',
+                body.is_active !== undefined ? (body.is_active ? 1 : 0) : 1,
+                body.product_code || '',
+                body.whatsapp_order_enabled ? 1 : 0,
+                body.whatsapp_number || ''
             ).run()
 
             console.log('INSERT SUCCESSFUL:', result)
 
-            // Try to update optional columns if they exist (fail silently)
+            // Try to update optional columns (separate for compatibility if cols missing)
             const productId = result.meta?.last_row_id
             if (productId && (warranty_info || delivery_info || installment_info)) {
                 try {
@@ -116,7 +122,6 @@ export async function POST(req: NextRequest) {
                     console.log('Optional fields update skipped (columns may not exist)')
                 }
             }
-
         } catch (insertError: any) {
             console.error('FATAL INSERT ERROR:', insertError)
             return NextResponse.json({
