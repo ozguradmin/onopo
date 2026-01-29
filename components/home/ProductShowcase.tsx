@@ -99,7 +99,7 @@ export default function ProductShowcase({ title = "Trend Ürünler", products: i
                         <div key={product.id} className="min-w-[160px] md:min-w-[280px] snap-start">
                             <div className="relative bg-white rounded-2xl md:rounded-3xl p-3 md:p-4 shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 h-full flex flex-col group">
                                 {/* Image Area */}
-                                <a href={`/product/${product.id}`} className="block relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-slate-100 mb-3 md:mb-4">
+                                <a href={`/${product.slug}`} className="block relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-slate-100 mb-3 md:mb-4">
                                     <img
                                         src={product.images && product.images.length > 0 ? product.images[0] : product.image}
                                         alt={product.name}
@@ -121,7 +121,7 @@ export default function ProductShowcase({ title = "Trend Ürünler", products: i
                                     <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">
                                         {product.category}
                                     </p>
-                                    <a href={`/product/${product.id}`} className="block group-hover:text-primary transition-colors">
+                                    <a href={`/${product.slug}`} className="block group-hover:text-primary transition-colors">
                                         <h3 className="font-heading font-bold text-sm md:text-base lg:text-lg text-slate-900 mb-2 line-clamp-2 min-h-[40px] md:min-h-[56px]">
                                             {product.name}
                                         </h3>

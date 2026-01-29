@@ -437,7 +437,9 @@ export default function ProductClient({ id }: { id: string }) {
                                                 : 'Ürün açıklaması bulunmuyor.'
                                         )}
                                         {activeTab === 'warranty' && product.warranty_info}
-                                        {activeTab === 'delivery' && product.delivery_info}
+                                        {activeTab === 'delivery' && product.delivery_info && (
+                                            <div dangerouslySetInnerHTML={{ __html: product.delivery_info }} />
+                                        )}
                                         {activeTab === 'installment' && product.installment_info}
                                     </div>
                                 </div>

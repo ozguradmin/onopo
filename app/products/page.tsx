@@ -65,8 +65,9 @@ async function getBrands(products: any[]) {
     return Array.from(brands).slice(0, 20) // Limit to 20 brands
 }
 
-export default async function ProductsPage({ searchParams }: { searchParams: SearchParams }) {
-    const products = await getProducts(searchParams.category, searchParams.q)
+export default async function ProductsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+    const resolvedParams = await searchParams
+    const products = await getProducts(resolvedParams.category, resolvedParams.q)
     const categories = await getCategories()
     const brands = await getBrands(products)
 
@@ -76,7 +77,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
                 initialProducts={products}
                 initialCategories={categories as any}
                 initialBrands={brands}
-                searchParams={searchParams}
+                searchParams={resolvedParams}
             />
         </Suspense>
     )

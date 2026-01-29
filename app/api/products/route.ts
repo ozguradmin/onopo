@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
     try {
         const db = await getDB()
-        const { results } = await db.prepare('SELECT id, name, slug, price, original_price, stock, images, category FROM products ORDER BY created_at DESC LIMIT 100').all()
+        const { results } = await db.prepare('SELECT id, name, slug, price, original_price, stock, images, category FROM products ORDER BY created_at DESC').all()
 
         const products = results.map((p: any) => ({
             ...p,
