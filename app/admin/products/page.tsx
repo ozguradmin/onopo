@@ -65,33 +65,50 @@ export default function AdminProductsPage() {
 
                 // Transform data
                 const formattedProducts = data.map((item: any) => {
-                    // Create rich description
-                    let descHtml = `<div className="product-specs">`
+                    // Build rich description with proper HTML (class not className!)
+                    let descParts: string[] = []
 
-                    if (item['Açıklama']) descHtml += `<p class="mb-4">${item['Açıklama']}</p>`
+                    // Short description at top
+                    if (item['Kısa Açıklama']) {
+                        descParts.push(`<p class="mb-4 text-slate-700">${item['Kısa Açıklama']}</p>`)
+                    }
 
-                    descHtml += `<table className="w-full border-collapse border border-gray-200 mt-4"><tbody>`
+                    // Long description
+                    if (item['Uzun Detay (Metin)']) {
+                        descParts.push(`<div class="mb-4">${item['Uzun Detay (Metin)']}</div>`)
+                    }
 
-                    if (item['Marka']) descHtml += `<tr><td class="p-2 border border-gray-200 font-semibold">Marka</td><td class="p-2 border border-gray-200">${item['Marka']}</td></tr>`
-                    if (item['Ürün Kodu']) descHtml += `<tr><td class="p-2 border border-gray-200 font-semibold">Ürün Kodu</td><td class="p-2 border border-gray-200">${item['Ürün Kodu']}</td></tr>`
-                    if (item['Barkod']) descHtml += `<tr><td class="p-2 border border-gray-200 font-semibold">Barkod</td><td class="p-2 border border-gray-200">${item['Barkod']}</td></tr>`
-                    if (item['Detay']) descHtml += `<tr><td class="p-2 border border-gray-200 font-semibold">Detay</td><td class="p-2 border border-gray-200">${item['Detay']}</td></tr>`
-                    if (item['Varyantlar']) descHtml += `<tr><td class="p-2 border border-gray-200 font-semibold">Varyantlar</td><td class="p-2 border border-gray-200">${item['Varyantlar']}</td></tr>`
+                    // Specs table with proper class attributes
+                    let tableRows: string[] = []
+                    if (item['Marka']) tableRows.push(`<tr><td class="p-2 border border-gray-200 font-semibold bg-slate-50">Marka</td><td class="p-2 border border-gray-200">${item['Marka']}</td></tr>`)
+                    if (item['Ürün Kodu']) tableRows.push(`<tr><td class="p-2 border border-gray-200 font-semibold bg-slate-50">Ürün Kodu</td><td class="p-2 border border-gray-200">${item['Ürün Kodu']}</td></tr>`)
+                    if (item['Barkod']) tableRows.push(`<tr><td class="p-2 border border-gray-200 font-semibold bg-slate-50">Barkod</td><td class="p-2 border border-gray-200">${item['Barkod']}</td></tr>`)
+                    if (item['Desi']) tableRows.push(`<tr><td class="p-2 border border-gray-200 font-semibold bg-slate-50">Desi</td><td class="p-2 border border-gray-200">${item['Desi']}</td></tr>`)
+                    if (item['Varyant Bilgisi']) tableRows.push(`<tr><td class="p-2 border border-gray-200 font-semibold bg-slate-50">Varyant</td><td class="p-2 border border-gray-200">${item['Varyant Bilgisi']}</td></tr>`)
 
-                    descHtml += `</tbody></table></div>`
+                    if (tableRows.length > 0) {
+                        descParts.push(`<table class="w-full border-collapse border border-gray-200 mt-4"><tbody>${tableRows.join('')}</tbody></table>`)
+                    }
+
+                    const description = descParts.length > 0 ? `<div class="product-specs">${descParts.join('')}</div>` : ''
+
+                    // Parse stock - check multiple column names
+                    const stockValue = item['Stok Adedi'] ?? item['Stok'] ?? 100
+                    const parsedStock = parseInt(String(stockValue)) || 100
 
                     return {
                         name: item['Ürün Adı'] || item['Name'],
                         product_code: item['Ürün Kodu'] || item['Code'] || '',
                         category: item['Kategori'] || 'Genel',
-                        price: parseFloat(String(item['Satış Fiyatı'] || item['Price'] || 0).replace(',', '.')), // Handle comma/dot
+                        price: parseFloat(String(item['Satış Fiyatı'] || item['Price'] || 0).replace(',', '.')),
                         original_price: parseFloat(String(item['Liste Fiyatı'] || 0).replace(',', '.')),
-                        stock: parseInt(String(item['Stok'] || 0)),
-                        description: descHtml,
+                        stock: parsedStock,
+                        description: description,
                         images: [
                             item['Resim 1'],
                             item['Resim 2'],
-                            item['Resim 3']
+                            item['Resim 3'],
+                            item['Resim 4']
                         ].filter(url => url && typeof url === 'string' && url.length > 10)
                     }
                 }).filter(p => p.name && !isNaN(p.price) && p.price > 0)

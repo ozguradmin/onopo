@@ -3,7 +3,17 @@ import React from 'react'
 export function MarkdownRenderer({ content }: { content: string }) {
     if (!content) return null
 
-    // Split by new lines
+    // Check if content contains HTML tags - render as HTML
+    if (content.includes('<div') || content.includes('<table') || content.includes('<p ') || content.includes('<p>')) {
+        return (
+            <div
+                className="prose prose-slate max-w-none [&_table]:w-full [&_td]:p-2 [&_td]:border [&_td]:border-gray-200 [&_.bg-slate-50]:bg-slate-50"
+                dangerouslySetInnerHTML={{ __html: content }}
+            />
+        )
+    }
+
+    // Split by new lines for markdown parsing
     const lines = content.split('\n')
 
     return (

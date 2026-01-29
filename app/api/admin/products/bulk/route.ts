@@ -28,6 +28,30 @@ export async function POST(req: NextRequest) {
 
         console.log(`Starting bulk import of ${products.length} products...`)
 
+        // Auto-create categories from products
+        const uniqueCategories = [...new Set(products.map((p: any) => p.category).filter(Boolean))]
+        console.log(`Found ${uniqueCategories.length} unique categories:`, uniqueCategories)
+
+        for (const categoryName of uniqueCategories) {
+            try {
+                const slug = String(categoryName)
+                    .toLowerCase()
+                    .replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u')
+                    .replace(/ö/g, 'o').replace(/ç/g, 'c').replace(/ı/g, 'i')
+                    .replace(/[^a-z0-9\s-]/g, '')
+                    .replace(/\s+/g, '-')
+                    .replace(/-+/g, '-')
+                    .trim()
+
+                await db.prepare('INSERT OR IGNORE INTO categories (name, slug, icon) VALUES (?, ?, ?)')
+                    .bind(categoryName, slug, 'package')
+                    .run()
+                console.log(`Category added/exists: ${categoryName} -> ${slug}`)
+            } catch (catErr) {
+                console.log(`Category insert skipped for ${categoryName}:`, catErr)
+            }
+        }
+
         let successCount = 0
         let errorCount = 0
         let errors: any[] = []
@@ -103,10 +127,10 @@ export async function DELETE(req: NextRequest) {
         // Delete all products
         await db.prepare('DELETE FROM products').run()
 
-        // Optional: Reset sequence if needed, but not critical
-        // await db.prepare("DELETE FROM sqlite_sequence WHERE name='products'").run()
+        // Also delete all categories
+        await db.prepare('DELETE FROM categories').run()
 
-        return NextResponse.json({ success: true, message: 'All products deleted' })
+        return NextResponse.json({ success: true, message: 'All products and categories deleted' })
     } catch (error: any) {
         console.error('Bulk delete error:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })
