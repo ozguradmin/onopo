@@ -6,13 +6,14 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
     try {
         const db = await getDB()
+        // Remove free_shipping from query since column may not exist in DB
         const { results } = await db.prepare(`
-            SELECT id, name, description, price, original_price, images, category, stock, product_code, free_shipping
+            SELECT id, name, description, price, original_price, images, category, stock, product_code
             FROM products 
             WHERE is_active = 1 AND stock > 0
         `).all() as { results: any[] }
 
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopo.com'
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopo-app.ozgurglr256.workers.dev'
 
         const xmlItems = (results || []).map((product: any) => {
             let images: string[] = []
@@ -49,7 +50,7 @@ export async function GET() {
             <g:shipping>
                 <g:country>TR</g:country>
                 <g:service>Standard</g:service>
-                <g:price>${product.free_shipping ? '0' : '29.90'} TRY</g:price>
+                <g:price>0 TRY</g:price>
             </g:shipping>
         </item>`
         }).join('')
@@ -70,9 +71,9 @@ export async function GET() {
                 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400'
             }
         })
-    } catch (error) {
+    } catch (error: any) {
         console.error('Product feed error:', error)
-        return NextResponse.json({ error: 'Feed generation failed' }, { status: 500 })
+        return NextResponse.json({ error: 'Feed generation failed', details: error.message }, { status: 500 })
     }
 }
 

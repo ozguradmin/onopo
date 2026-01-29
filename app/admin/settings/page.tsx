@@ -26,6 +26,11 @@ export default function AdminSettingsPage() {
     const [allCategories, setAllCategories] = React.useState<any[]>([])
     const [footerCategories, setFooterCategories] = React.useState<string[]>([])
 
+    // Footer Contact Info
+    const [footerEmail, setFooterEmail] = React.useState('')
+    const [footerPhone, setFooterPhone] = React.useState('')
+    const [footerAddress, setFooterAddress] = React.useState('')
+
     React.useEffect(() => {
         Promise.all([
             fetch('/api/auth/me').then(r => r.json()),
@@ -46,6 +51,10 @@ export default function AdminSettingsPage() {
                     const fc = settingsData.footer_categories ? JSON.parse(settingsData.footer_categories) : []
                     setFooterCategories(Array.isArray(fc) ? fc : [])
                 } catch { setFooterCategories([]) }
+                // Footer contact info
+                setFooterEmail(settingsData.footer_email || '')
+                setFooterPhone(settingsData.footer_phone || '')
+                setFooterAddress(settingsData.footer_address || '')
             }
             if (Array.isArray(categoriesData)) {
                 setAllCategories(categoriesData)
@@ -79,7 +88,10 @@ export default function AdminSettingsPage() {
                     logo_url: logoUrl,
                     footer_text: footerText,
                     site_description: siteDescription,
-                    footer_categories: JSON.stringify(footerCategories)
+                    footer_categories: JSON.stringify(footerCategories),
+                    footer_email: footerEmail,
+                    footer_phone: footerPhone,
+                    footer_address: footerAddress
                 })
             })
 
@@ -221,6 +233,43 @@ export default function AdminSettingsPage() {
                                 </p>
                             </div>
                         )}
+
+                        {/* Footer Contact Info */}
+                        <div className="border-t pt-4 mt-4">
+                            <h3 className="font-semibold mb-4 text-sm text-slate-500 uppercase tracking-wider">Footer İletişim Bilgileri</h3>
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">E-posta</label>
+                                    <input
+                                        type="email"
+                                        value={footerEmail}
+                                        onChange={e => setFooterEmail(e.target.value)}
+                                        className="w-full p-2 border rounded-lg"
+                                        placeholder="info@onopo.com"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Telefon</label>
+                                    <input
+                                        type="tel"
+                                        value={footerPhone}
+                                        onChange={e => setFooterPhone(e.target.value)}
+                                        className="w-full p-2 border rounded-lg"
+                                        placeholder="+90 555 123 4567"
+                                    />
+                                </div>
+                            </div>
+                            <div className="mt-4">
+                                <label className="block text-sm font-medium mb-1">Adres</label>
+                                <input
+                                    type="text"
+                                    value={footerAddress}
+                                    onChange={e => setFooterAddress(e.target.value)}
+                                    className="w-full p-2 border rounded-lg"
+                                    placeholder="İstanbul, Türkiye"
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
 

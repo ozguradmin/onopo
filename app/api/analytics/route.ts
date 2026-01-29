@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
             `SELECT a.product_id, p.name, COUNT(*) as count 
              FROM analytics a 
              LEFT JOIN products p ON a.product_id = p.id 
-             WHERE a.product_id IS NOT NULL ${dateFilter}
+             WHERE a.product_id IS NOT NULL AND a.created_at >= datetime('now', '-${range === 'day' ? '1 day' : range === 'week' ? '7 days' : '30 days'}')
              GROUP BY a.product_id 
              ORDER BY count DESC 
              LIMIT 10`
