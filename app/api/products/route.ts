@@ -10,7 +10,22 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
     try {
         const db = await getDB()
-        const { results } = await db.prepare('SELECT id, name, slug, price, original_price, stock, images, category FROM products ORDER BY created_at DESC').all()
+        const { searchParams } = new URL(req.url)
+        const category = searchParams.get('category')
+
+        let sql = 'SELECT id, name, slug, price, original_price, stock, images, category FROM products WHERE is_active = 1'
+        const params: any[] = []
+
+        if (category) {
+            sql += ' AND (category = ? OR category = ?)'
+            params.push(category, category)
+        }
+
+        sql += ' ORDER BY id DESC'
+
+        const { results } = params.length > 0
+            ? await db.prepare(sql).bind(...params).all()
+            : await db.prepare(sql).all()
 
         const products = results.map((p: any) => ({
             ...p,

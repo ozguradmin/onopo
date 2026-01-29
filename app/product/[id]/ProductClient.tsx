@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion } from "framer-motion"
-import { ShoppingBag, Star, Truck, ShieldCheck, ArrowLeft, Minus, Plus, Check, CreditCard, MessageSquare, Send } from "lucide-react"
+import { ShoppingBag, Star, Truck, ShieldCheck, ArrowLeft, Minus, Plus, Check, CreditCard, MessageSquare, Send, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCartStore } from "@/store/cart-store"
 import { Badge } from "@/components/ui/badge"
@@ -56,6 +56,18 @@ export default function ProductClient({ id }: { id: string }) {
     const [submittingReview, setSubmittingReview] = React.useState(false)
     const [reviewError, setReviewError] = React.useState('')
     const [user, setUser] = React.useState<any>(null)
+
+    React.useEffect(() => {
+        // Auto slide
+        if (!product) return
+        const images = product.images && product.images.length > 0 ? product.images : (product.image ? [product.image] : [])
+        if (images.length <= 1) return
+
+        const timer = setInterval(() => {
+            setSelectedImage(prev => (prev + 1) % images.length)
+        }, 5000)
+        return () => clearInterval(timer)
+    }, [product])
 
     React.useEffect(() => {
         // Fetch product
@@ -116,7 +128,7 @@ export default function ProductClient({ id }: { id: string }) {
     const handleBuyNow = () => {
         handleAddToCart()
         setTimeout(() => {
-            window.location.href = '/checkout'
+            window.location.href = '/odeme'
         }, 100)
     }
 
@@ -201,41 +213,99 @@ export default function ProductClient({ id }: { id: string }) {
                     <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
                         <div className="grid grid-cols-1 lg:grid-cols-2">
                             {/* Image Gallery */}
+                            {/* Image Gallery */}
                             <div className="p-6 lg:p-10 bg-slate-50">
                                 <div className="sticky top-24">
                                     {/* Main Image - FIXED: object-contain for proper fit */}
-                                    <motion.div
-                                        key={selectedImage}
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        className="aspect-square relative overflow-hidden rounded-2xl bg-white mb-4 flex items-center justify-center max-h-[350px] lg:max-h-[500px]"
-                                    >
-                                        <img
-                                            src={allImages[selectedImage] || '/placeholder.svg'}
-                                            alt={product.name}
-                                            className="object-contain w-full h-full p-4"
-                                            loading="lazy"
-                                        />
-                                        {product.original_price && product.original_price > product.price && Math.round((1 - product.price / product.original_price) * 100) > 0 && (
-                                            <Badge className="absolute top-4 left-4 bg-red-500 text-white text-sm px-3 py-1">
-                                                %{Math.round((1 - product.price / product.original_price) * 100)} İndirim
-                                            </Badge>
+                                    <div className="relative group">
+                                        <motion.div
+                                            key={selectedImage}
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            transition={{ duration: 0.3 }}
+                                            className="aspect-square relative overflow-hidden rounded-2xl bg-white mb-4 flex items-center justify-center max-h-[350px] lg:max-h-[500px]"
+                                            onTouchStart={(e) => {
+                                                const touch = e.touches[0]
+                                                // @ts-ignore
+                                                e.target.dataset.touchStartX = touch.clientX
+                                            }}
+                                            onTouchEnd={(e) => {
+                                                const touch = e.changedTouches[0]
+                                                // @ts-ignore
+                                                const startX = parseFloat(e.target.dataset.touchStartX)
+                                                const diff = startX - touch.clientX
+                                                if (Math.abs(diff) > 50) {
+                                                    if (diff > 0) {
+                                                        // Swipe Left -> Next
+                                                        setSelectedImage((prev) => (prev + 1) % allImages.length)
+                                                    } else {
+                                                        // Swipe Right -> Prev
+                                                        setSelectedImage((prev) => (prev - 1 + allImages.length) % allImages.length)
+                                                    }
+                                                }
+                                            }}
+                                        >
+                                            <img
+                                                src={allImages[selectedImage] || '/placeholder.svg'}
+                                                alt={product.name}
+                                                className="object-contain w-full h-full p-4"
+                                                loading="lazy"
+                                            />
+                                            <div className="absolute top-4 left-4 flex flex-col gap-2">
+                                                {product.original_price && product.original_price > product.price && Math.round((1 - product.price / product.original_price) * 100) > 0 && (
+                                                    <Badge className="bg-red-500 text-white text-sm px-3 py-1">
+                                                        %{Math.round((1 - product.price / product.original_price) * 100)} İndirim
+                                                    </Badge>
+                                                )}
+                                                {product.free_shipping === 1 && (
+                                                    <Badge className="bg-blue-600 text-white text-sm px-3 py-1 flex items-center gap-1">
+                                                        <Truck className="w-3 h-3" /> Kargo Bedava
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </motion.div>
+
+                                        {/* Navigation Arrows (Desktop) */}
+                                        {allImages.length > 1 && (
+                                            <>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        setSelectedImage((prev) => (prev - 1 + allImages.length) % allImages.length)
+                                                    }}
+                                                    className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white rounded-full shadow-md text-slate-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                >
+                                                    <ChevronLeft className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        setSelectedImage((prev) => (prev + 1) % allImages.length)
+                                                    }}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white rounded-full shadow-md text-slate-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                >
+                                                    <ChevronRight className="w-5 h-5" />
+                                                </button>
+                                            </>
                                         )}
-                                    </motion.div>
+                                    </div>
 
                                     {/* Thumbnails */}
                                     {allImages.length > 1 && (
-                                        <div className="flex gap-3 overflow-x-auto pb-2">
+                                        <div className="flex gap-3 overflow-x-auto pb-2 px-1">
                                             {allImages.map((img: string, idx: number) => (
                                                 <button
                                                     key={idx}
                                                     onClick={() => setSelectedImage(idx)}
-                                                    className={`aspect-square w-20 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all bg-white ${selectedImage === idx
+                                                    className={`aspect-square w-20 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all bg-white relative ${selectedImage === idx
                                                         ? 'border-slate-900 ring-2 ring-slate-900/20'
                                                         : 'border-slate-200 hover:border-slate-300'
                                                         }`}
                                                 >
                                                     <img src={img} alt="" className="object-contain w-full h-full p-1" />
+                                                    {selectedImage === idx && (
+                                                        <div className="absolute inset-0 bg-slate-900/10" />
+                                                    )}
                                                 </button>
                                             ))}
                                         </div>

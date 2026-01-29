@@ -1,6 +1,6 @@
 "use client"
 
-import { Truck, ShieldCheck, MapPin, HeadphonesIcon } from "lucide-react"
+import { Truck, ShieldCheck, MapPin, HeadphonesIcon, RefreshCw } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 
@@ -40,7 +40,9 @@ const iconMap: any = {
     truck: Truck,
     shield: ShieldCheck,
     map: MapPin,
-    headphones: HeadphonesIcon
+    headphones: HeadphonesIcon,
+    'refresh-cw': RefreshCw,
+    refreshcw: RefreshCw
 }
 
 export function FeaturesSection({ title = "Neden Onopo?", features: custFeatures }: FeaturesSectionProps) {
@@ -51,7 +53,7 @@ export function FeaturesSection({ title = "Neden Onopo?", features: custFeatures
                 <div className="mb-12 text-center">
                     <h2 className="text-3xl font-bold text-slate-900 mb-4">{title}</h2>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
                     {displayFeatures.map((feature: any, index: number) => {
                         // Resolve icon component
                         const IconComponent = typeof feature.icon === 'string'

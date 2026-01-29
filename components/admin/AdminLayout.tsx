@@ -18,7 +18,8 @@ import {
     FolderOpen,
     ShoppingCart,
     Ticket,
-    CreditCard
+    CreditCard,
+    Image as ImageIcon
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -35,6 +36,7 @@ const navItems = [
     { href: '/admin/coupons', label: 'Kuponlar', icon: Ticket },
     { href: '/admin/users', label: 'Kullanıcılar', icon: Users },
     { href: '/admin/settings', label: 'Site Ayarları', icon: Settings },
+    { href: '/admin/image-optimization', label: 'Görsel Optimizasyonu', icon: ImageIcon },
     { href: '/admin/analytics', label: 'İstatistikler', icon: BarChart3 },
 ]
 

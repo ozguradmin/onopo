@@ -27,7 +27,8 @@ export default function AddProductPage() {
         is_active: true,
         product_code: '',
         whatsapp_order_enabled: false,
-        whatsapp_number: ''
+        whatsapp_number: '',
+        free_shipping: false
     })
 
     // Fetch categories
@@ -107,7 +108,8 @@ export default function AddProductPage() {
                     is_active: formData.is_active ? 1 : 0,
                     product_code: formData.product_code,
                     whatsapp_order_enabled: formData.whatsapp_order_enabled,
-                    whatsapp_number: formData.whatsapp_number
+                    whatsapp_number: formData.whatsapp_number,
+                    free_shipping: formData.free_shipping ? 1 : 0
                 })
             })
 
@@ -254,6 +256,23 @@ export default function AddProductPage() {
                         />
                         <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-slate-900"></div>
                         <span className="ml-3 text-sm font-medium text-slate-700">{formData.is_active ? 'Yayında' : 'Gizli'}</span>
+                    </label>
+                </div>
+
+                <div className="flex items-center justify-between bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <div>
+                        <label className="text-sm font-medium text-blue-900 block">Ücretsiz Kargo</label>
+                        <p className="text-xs text-blue-700">Bu ürün için kargo ücreti alınmasın</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={formData.free_shipping}
+                            onChange={(e) => setFormData(prev => ({ ...prev, free_shipping: e.target.checked }))}
+                        />
+                        <div className="w-11 h-6 bg-blue-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span className="ml-3 text-sm font-medium text-blue-700">{formData.free_shipping ? 'Evet' : 'Hayır'}</span>
                     </label>
                 </div>
 

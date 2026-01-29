@@ -272,6 +272,9 @@ export function Header() {
                                     Anasayfa
                                     <span className="text-slate-400">→</span>
                                 </a>
+
+                                <MobileCategoriesDropdown onClose={() => setIsMobileMenuOpen(false)} />
+
                                 <a
                                     href="/products"
                                     className="flex items-center justify-between px-4 py-4 rounded-xl text-lg font-semibold text-slate-800 hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all"
@@ -280,8 +283,6 @@ export function Header() {
                                     Tüm Ürünler
                                     <span className="text-slate-400">→</span>
                                 </a>
-
-                                <MobileCategoriesDropdown onClose={() => setIsMobileMenuOpen(false)} />
 
                                 {/* Dynamic Menus Mobile */}
                                 {customMenus.filter(m => !m.parent_id).map(menu => {

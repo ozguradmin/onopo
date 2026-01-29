@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ShoppingBag, SlidersHorizontal, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatPrice } from '@/lib/formatPrice'
@@ -44,6 +45,30 @@ export default function ProductsClient({
     const [sortBy, setSortBy] = useState(searchParams.sort || 'newest')
 
     const currentPage = parseInt(searchParams.page || '1')
+
+    const router = useRouter()
+
+    // Search state
+    const [searchQuery, setSearchQuery] = useState(searchParams.q || '')
+
+    // Debounce search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (searchQuery !== (searchParams.q || '')) {
+                updateUrl({ q: searchQuery, page: '1' })
+            }
+        }, 500)
+        return () => clearTimeout(timer)
+    }, [searchQuery])
+
+    const updateUrl = (updates: any) => {
+        const params = new URLSearchParams(window.location.search)
+        Object.entries(updates).forEach(([key, value]) => {
+            if (value) params.set(key, String(value))
+            else params.delete(key)
+        })
+        router.push(`/products?${params.toString()}`)
+    }
 
     // Apply client-side filtering
     const filteredProducts = useMemo(() => {
@@ -151,39 +176,73 @@ export default function ProductsClient({
     }
 
     return (
+
         <div className="container mx-auto px-4 py-8 mt-20">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-900">
-                        {searchParams.category || (searchParams.q ? `Sonuçlar: "${searchParams.q}"` : 'Tüm Ürünler')}
-                    </h1>
-                    <p className="text-slate-500 mt-1">
-                        Toplam <strong>{filteredProducts.length}</strong> ürün bulunmaktadır
-                    </p>
-                </div>
+            <div className="flex flex-col gap-4 mb-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-900">
+                            {searchParams.category || (searchParams.q ? `Sonuçlar: "${searchParams.q}"` : 'Tüm Ürünler')}
+                        </h1>
+                        <p className="text-slate-500 mt-1">
+                            Toplam <strong>{filteredProducts.length}</strong> ürün bulunmaktadır
+                        </p>
+                    </div>
 
-                <div className="flex items-center gap-3">
-                    {/* Sort dropdown */}
-                    <select
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value)}
-                        className="px-4 py-2 border border-slate-200 rounded-lg bg-white text-sm"
-                    >
-                        <option value="newest">En Yeni</option>
-                        <option value="price-asc">Fiyat (Düşükten Yükseğe)</option>
-                        <option value="price-desc">Fiyat (Yüksekten Düşüğe)</option>
-                        <option value="name">İsme Göre (A-Z)</option>
-                    </select>
+                    <div className="flex flex-wrap items-center gap-3">
+                        {/* Search Input */}
+                        <div className="relative">
+                            <input
+                                type="text"
+                                placeholder="Ürün ara..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-sm w-[150px] md:w-[200px] focus:outline-none focus:border-slate-400"
+                            />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => setSearchQuery('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
 
-                    <Button
-                        variant="outline"
-                        onClick={() => setShowFilters(!showFilters)}
-                        className="gap-2 lg:hidden"
-                    >
-                        <SlidersHorizontal className="w-4 h-4" />
-                        Filtrele
-                    </Button>
+                        {/* Category Select */}
+                        <select
+                            value={searchParams.category || ''}
+                            onChange={(e) => updateUrl({ category: e.target.value, page: '1' })}
+                            className="px-3 py-2 border border-slate-200 rounded-lg bg-white text-sm max-w-[150px]"
+                        >
+                            <option value="">Tüm Kategoriler</option>
+                            {initialCategories.map(cat => (
+                                <option key={cat.slug} value={cat.name}>{cat.name} ({cat.count})</option>
+                            ))}
+                        </select>
+
+                        {/* Sort dropdown */}
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value)}
+                            className="px-3 py-2 border border-slate-200 rounded-lg bg-white text-sm"
+                        >
+                            <option value="newest">En Yeni</option>
+                            <option value="price-asc">Fiyat Artan</option>
+                            <option value="price-desc">Fiyat Azalan</option>
+                            <option value="name">İsim (A-Z)</option>
+                        </select>
+
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowFilters(!showFilters)}
+                            className="gap-2 lg:hidden"
+                        >
+                            <SlidersHorizontal className="w-4 h-4" />
+                            Filtrele
+                        </Button>
+                    </div>
                 </div>
             </div>
 

@@ -98,6 +98,14 @@ export function Footer() {
                         </ul>
                     </div>
 
+                    {/* Social Media */}
+                    <div className="flex gap-4 mb-8">
+                        {settings.facebook_url && <SocialLink href={settings.facebook_url} icon={<Facebook className="w-5 h-5" />} />}
+                        {settings.instagram_url && <SocialLink href={settings.instagram_url} icon={<Instagram className="w-5 h-5" />} />}
+                        {settings.twitter_url && <SocialLink href={settings.twitter_url} icon={<Twitter className="w-5 h-5" />} />}
+                        {settings.linkedin_url && <SocialLink href={settings.linkedin_url} icon={<Linkedin className="w-5 h-5" />} />}
+                    </div>
+
                     {/* Support */}
                     <div>
                         <h4 className="font-heading text-white font-semibold mb-6">Destek</h4>

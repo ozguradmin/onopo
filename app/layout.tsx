@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
-import { CartDrawer } from "@/components/cart/CartDrawer";
-import { MobileNav } from "@/components/layout/MobileNav";
+import { LayoutProvider } from "@/components/layout/LayoutProvider";
 import { Toaster } from 'sonner';
 import "./globals.css";
 
@@ -72,15 +69,12 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} antialiased selection:bg-accent selection:text-white pb-16 md:pb-0`}
       >
-        <Header />
-        <CartDrawer />
-        <main className="min-h-screen pt-16">
+        <LayoutProvider>
           {children}
-        </main>
-        <Footer />
-        <MobileNav />
+        </LayoutProvider>
         <Toaster />
       </body>
     </html>
   );
 }
+

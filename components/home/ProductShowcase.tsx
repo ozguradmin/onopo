@@ -41,7 +41,7 @@ export default function ProductShowcase({ title = "Trend Ürünler", products: i
             } else {
                 container.scrollBy({ left: 300, behavior: 'smooth' })
             }
-        }, 5000) // Scroll every 5 seconds
+        }, 7000) // Scroll every 7 seconds (slower)
 
         return () => clearInterval(scrollInterval)
     }, [title, products])

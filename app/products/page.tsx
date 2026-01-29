@@ -55,14 +55,30 @@ async function getCategories() {
 
 async function getBrands(products: any[]) {
     // Extract brands from product names (first word typically)
-    const brands = new Set<string>()
+    // Case-insensitive deduplication, prefer capitalized version
+    const brandMap = new Map<string, string>()
     products.forEach(p => {
         const firstWord = (p.name || '').split(' ')[0]
         if (firstWord && firstWord.length > 2) {
-            brands.add(firstWord)
+            const lowerKey = firstWord.toLowerCase()
+            // Keep the capitalized version if exists
+            if (!brandMap.has(lowerKey) || firstWord[0] === firstWord[0].toUpperCase()) {
+                brandMap.set(lowerKey, firstWord)
+            }
         }
     })
-    return Array.from(brands).slice(0, 20) // Limit to 20 brands
+
+    // Convert to array and sort with Onopo first
+    let brands = Array.from(brandMap.values())
+    brands = brands.filter(b => b.toLowerCase() !== 'onopo') // Remove Onopo temporarily
+    brands.sort((a, b) => a.localeCompare(b))
+
+    // Add Onopo at the beginning if it exists
+    if (brandMap.has('onopo')) {
+        brands.unshift(brandMap.get('onopo')!)
+    }
+
+    return brands.slice(0, 20) // Limit to 20 brands
 }
 
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {

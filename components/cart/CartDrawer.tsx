@@ -203,7 +203,7 @@ export function CartDrawer() {
                                     <p>{formatPrice(totalPrice())}</p>
                                 </div>
 
-                                <a href="/checkout" onClick={closeCart}>
+                                <a href="/odeme" onClick={closeCart}>
                                     <Button className="w-full h-14 text-lg rounded-2xl bg-slate-900 text-white hover:bg-slate-800 shadow-lg font-bold flex items-center justify-center gap-2">
                                         Ödemeye Geç <ArrowRight className="w-5 h-5" />
                                     </Button>
