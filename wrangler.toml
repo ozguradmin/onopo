@@ -18,7 +18,19 @@ database_id = "750bb90b-a48c-4e9f-9c21-88e8a5e2e313"
 binding = "BUCKET"
 bucket_name = "onopo-storage"
 
+# Environment Variables
+[vars]
+NEXT_PUBLIC_BASE_URL = "https://onopo-app.ozgurglr256.workers.dev"
+R2_ENDPOINT = "https://3c39c225b3a27de7822833feb24b65b1.r2.cloudflarestorage.com"
+R2_BUCKET_NAME = "onopo-storage"
+CLOUDFLARE_ACCOUNT_ID = "3c39c225b3a27de7822833feb24b65b1"
+
+# Secrets (add via: npx wrangler secret put R2_ACCESS_KEY_ID)
+# R2_ACCESS_KEY_ID
+# R2_SECRET_ACCESS_KEY
+
 # Observability
 [observability]
 enabled = true
+
 
