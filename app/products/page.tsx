@@ -2,7 +2,6 @@ import { Suspense } from 'react'
 import { getDB } from '@/lib/db'
 import ProductsClient from '@/components/products/ProductsClient'
 
-export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 
 interface SearchParams {
