@@ -23,7 +23,7 @@ async function getProducts(category?: string, query?: string) {
         params.push(`%${query}%`, `%${query}%`)
     }
 
-    sql += ' ORDER BY created_at DESC LIMIT 50'
+    sql += ' ORDER BY created_at DESC LIMIT 200'
 
     const { results } = await db.prepare(sql).bind(...params).all()
 

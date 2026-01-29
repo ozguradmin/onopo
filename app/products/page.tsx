@@ -9,9 +9,19 @@ export default function ProductsPage({ searchParams }: { searchParams: { categor
                 {searchParams.category || (searchParams.q ? `Sonuçlar: "${searchParams.q}"` : 'Tüm Ürünler')}
             </h1>
 
-            <Suspense fallback={<div>Yükleniyor...</div>}>
-                <ProductGrid category={searchParams.category} query={searchParams.q} />
-            </Suspense>
+            <div className="flex flex-col lg:flex-row gap-8">
+                <aside className="w-full lg:w-64 shrink-0">
+                    <Suspense fallback={<div>Yükleniyor...</div>}>
+                        <ProductFilters searchParams={searchParams} />
+                    </Suspense>
+                </aside>
+
+                <main className="flex-1">
+                    <Suspense fallback={<div>Yükleniyor...</div>}>
+                        <ProductGrid category={searchParams.category} query={searchParams.q} />
+                    </Suspense>
+                </main>
+            </div>
         </div>
     )
 }

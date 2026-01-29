@@ -65,27 +65,36 @@ export default function AdminProductsPage() {
 
                 // Transform data
                 const formattedProducts = data.map((item: any) => {
-                    // Map Excel columns to DB fields
+                    // Create rich description
+                    let descHtml = `<div className="product-specs">`
+
+                    if (item['Açıklama']) descHtml += `<p class="mb-4">${item['Açıklama']}</p>`
+
+                    descHtml += `<table className="w-full border-collapse border border-gray-200 mt-4"><tbody>`
+
+                    if (item['Marka']) descHtml += `<tr><td class="p-2 border border-gray-200 font-semibold">Marka</td><td class="p-2 border border-gray-200">${item['Marka']}</td></tr>`
+                    if (item['Ürün Kodu']) descHtml += `<tr><td class="p-2 border border-gray-200 font-semibold">Ürün Kodu</td><td class="p-2 border border-gray-200">${item['Ürün Kodu']}</td></tr>`
+                    if (item['Barkod']) descHtml += `<tr><td class="p-2 border border-gray-200 font-semibold">Barkod</td><td class="p-2 border border-gray-200">${item['Barkod']}</td></tr>`
+                    if (item['Detay']) descHtml += `<tr><td class="p-2 border border-gray-200 font-semibold">Detay</td><td class="p-2 border border-gray-200">${item['Detay']}</td></tr>`
+                    if (item['Varyantlar']) descHtml += `<tr><td class="p-2 border border-gray-200 font-semibold">Varyantlar</td><td class="p-2 border border-gray-200">${item['Varyantlar']}</td></tr>`
+
+                    descHtml += `</tbody></table></div>`
+
                     return {
                         name: item['Ürün Adı'] || item['Name'],
                         product_code: item['Ürün Kodu'] || item['Code'] || '',
                         category: item['Kategori'] || 'Genel',
-                        price: parseFloat(item['Satış Fiyatı'] || item['Price'] || 0),
-                        original_price: parseFloat(item['Liste Fiyatı'] || 0),
-                        stock: parseInt(item['Stok'] || 0),
-                        description: `
-                            <p>${item['Açıklama'] || ''}</p>
-                            <br/>
-                            <p>${item['Detay'] || ''}</p>
-                            ${item['Marka'] ? `<br/><p><strong>Marka:</strong> ${item['Marka']}</p>` : ''}
-                        `,
+                        price: parseFloat(String(item['Satış Fiyatı'] || item['Price'] || 0).replace(',', '.')), // Handle comma/dot
+                        original_price: parseFloat(String(item['Liste Fiyatı'] || 0).replace(',', '.')),
+                        stock: parseInt(String(item['Stok'] || 0)),
+                        description: descHtml,
                         images: [
                             item['Resim 1'],
                             item['Resim 2'],
                             item['Resim 3']
-                        ].filter(url => url && typeof url === 'string' && url.length > 5)
+                        ].filter(url => url && typeof url === 'string' && url.length > 10)
                     }
-                }).filter(p => p.name && p.price > 0)
+                }).filter(p => p.name && !isNaN(p.price) && p.price > 0)
 
                 if (formattedProducts.length === 0) {
                     toast.error('Dosyada geçerli ürün bulunamadı. Kolon isimlerini kontrol edin.')
