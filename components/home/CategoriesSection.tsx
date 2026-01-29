@@ -97,7 +97,7 @@ export function CategoriesSection({ title = "Kategoriler", categories: propCateg
                         return (
                             <Link
                                 key={category.id}
-                                href={`/${category.slug}`}
+                                href={`/products?category=${encodeURIComponent(category.name)}`}
                                 className="group bg-slate-50 rounded-2xl p-6 flex flex-col items-center text-center hover:bg-slate-100 hover:scale-105 transition-all duration-200"
                             >
                                 <div className="w-16 h-16 rounded-2xl bg-white shadow-sm flex items-center justify-center mb-4 group-hover:shadow-md transition-shadow">

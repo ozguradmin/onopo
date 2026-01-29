@@ -102,10 +102,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 transform transition-transform duration-200 ease-in-out
                 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
             `}>
-                <div className="flex flex-col h-full">
+                <div className="flex flex-col h-full overflow-hidden">
                     {/* Logo */}
-                    <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-                        <Link href="/admin" className="text-xl font-bold">
+                    <div className="p-6 border-b border-slate-800 flex items-center justify-between shrink-0">
+                        <Link href="/admin" className="text-xl font-bold truncate">
                             Onopo Admin
                         </Link>
                         <button
@@ -117,7 +117,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     </div>
 
                     {/* Navigation */}
-                    <nav className="flex-1 p-4 space-y-1">
+                    <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
                         {navItems.map(item => {
                             const isActive = pathname === item.href ||
                                 (item.href !== '/admin' && pathname.startsWith(item.href))

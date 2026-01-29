@@ -247,7 +247,7 @@ export default function ProductClient({ id }: { id: string }) {
                                 {/* Category & Info */}
                                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                                     <div className="flex items-center gap-3">
-                                        <a href={`/${(product.category || '').toLowerCase()}`}>
+                                        <a href={`/products?category=${encodeURIComponent(product.category || '')}`}>
                                             <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
                                                 {product.category || 'Ürün'}
                                             </Badge>
