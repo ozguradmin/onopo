@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { CartDrawer } from "@/components/cart/CartDrawer";
 import { MobileNav } from "@/components/layout/MobileNav";
+import { Toaster } from 'sonner';
 import "./globals.css";
 
 const inter = Inter({
@@ -78,6 +79,7 @@ export default function RootLayout({
         </main>
         <Footer />
         <MobileNav />
+        <Toaster />
       </body>
     </html>
   );
