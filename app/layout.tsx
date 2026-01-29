@@ -17,8 +17,48 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Onopo Store | Future of Tech",
-  description: "Premium tech accessories and lifestyle essentials.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://onopo.com'),
+  title: {
+    default: "Onopo Store | Teknoloji ve Yaşam",
+    template: "%s | Onopo Store"
+  },
+  description: "En yeni teknoloji aksesuarları, premium yaşam ürünleri ve daha fazlası Onopo Store'da. Güvenli ödeme ve hızlı kargo.",
+  openGraph: {
+    type: 'website',
+    locale: 'tr_TR',
+    url: '/',
+    siteName: 'Onopo Store',
+    title: 'Onopo Store | Teknoloji ve Yaşam',
+    description: 'En yeni teknoloji aksesuarları, premium yaşam ürünleri ve daha fazlası.',
+    images: [
+      {
+        url: '/og-image.jpg',
+        width: 1200,
+        height: 630,
+        alt: 'Onopo Store'
+      }
+    ]
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Onopo Store',
+    description: 'En yeni teknoloji aksesuarları ve premium ürünler.',
+    creator: '@onopostore'
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  verification: {
+    google: 'google-verification-code', // User to fill
+  }
 };
 
 export default function RootLayout({
@@ -27,7 +67,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="tr">
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} antialiased selection:bg-accent selection:text-white pb-16 md:pb-0`}
       >
