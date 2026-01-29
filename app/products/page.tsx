@@ -47,7 +47,7 @@ async function getCategories() {
         SELECT c.name, c.slug, 
                (SELECT COUNT(*) FROM products p WHERE p.is_active = 1 AND (p.category = c.name OR p.category = c.slug)) as count
         FROM categories c
-        HAVING count > 0
+        WHERE (SELECT COUNT(*) FROM products p WHERE p.is_active = 1 AND (p.category = c.name OR p.category = c.slug)) > 0
         ORDER BY c.name ASC
     `).all()
     return results || []
