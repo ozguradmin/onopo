@@ -6,7 +6,6 @@ export const dynamic = 'force-dynamic'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopo.com'
-    console.log("Generating sitemap for:", baseUrl)
 
     try {
         const db = await getDB()
@@ -14,37 +13,57 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         // 1. Static Routes
         const routes = [
             '',
-            '/about',
-            '/contact',
-            '/category',
+            '/products',
+            '/login',
+            '/register',
         ].map((route) => ({
             url: `${baseUrl}${route}`,
             lastModified: new Date(),
             changeFrequency: 'daily' as const,
-            priority: 1,
+            priority: route === '' ? 1 : 0.8,
         }))
 
-        // 2. Products
-        const products = await db.prepare('SELECT slug, updated_at FROM products WHERE is_active = 1').all() as any[]
-        const productUrls = products.map((product) => ({
-            url: `${baseUrl}/${product.slug}`,
+        // 2. Products - use id since slug column doesn't exist
+        const { results: products } = await db.prepare(
+            'SELECT id, updated_at FROM products WHERE is_active = 1'
+        ).all() as { results: any[] }
+
+        const productUrls = (products || []).map((product: any) => ({
+            url: `${baseUrl}/product/${product.id}`,
             lastModified: new Date(product.updated_at || Date.now()),
             changeFrequency: 'weekly' as const,
             priority: 0.8,
         }))
 
         // 3. Categories
-        const categories = await db.prepare('SELECT name FROM categories').all() as any[]
-        const categoryUrls = categories.map((cat) => ({
-            url: `${baseUrl}/products?category=${encodeURIComponent(cat.name)}`,
+        const { results: categories } = await db.prepare(
+            'SELECT slug, name FROM categories'
+        ).all() as { results: any[] }
+
+        const categoryUrls = (categories || []).map((cat: any) => ({
+            url: `${baseUrl}/${cat.slug}`,
             lastModified: new Date(),
             changeFrequency: 'weekly' as const,
-            priority: 0.8,
+            priority: 0.7,
         }))
 
-        return [...routes, ...productUrls, ...categoryUrls]
+        // 4. Static pages
+        const staticPages = ['help', 'shipping', 'policy', 'terms'].map(page => ({
+            url: `${baseUrl}/page/${page}`,
+            lastModified: new Date(),
+            changeFrequency: 'monthly' as const,
+            priority: 0.5,
+        }))
+
+        return [...routes, ...productUrls, ...categoryUrls, ...staticPages]
     } catch (error) {
-        console.error("Sitemap failed:", error)
-        return []
+        console.error("Sitemap generation error:", error)
+        // Return basic routes if DB fails
+        return [{
+            url: baseUrl,
+            lastModified: new Date(),
+            changeFrequency: 'daily' as const,
+            priority: 1,
+        }]
     }
 }

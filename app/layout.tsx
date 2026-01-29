@@ -64,8 +64,55 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopo.com'
+
+  // Organization structured data for SEO
+  const organizationSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Onopo Store",
+    "url": baseUrl,
+    "logo": `${baseUrl}/logo.png`,
+    "description": "En yeni teknoloji aksesuarları, premium yaşam ürünleri ve daha fazlası",
+    "sameAs": [
+      "https://www.instagram.com/onopostore",
+      "https://www.facebook.com/onopostore",
+      "https://twitter.com/onopostore"
+    ],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "telephone": "+90-XXX-XXX-XXXX",
+      "contactType": "customer service",
+      "availableLanguage": "Turkish"
+    }
+  }
+
+  const webSiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Onopo Store",
+    "url": baseUrl,
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": `${baseUrl}/products?search={search_term_string}`,
+      "query-input": "required name=search_term_string"
+    }
+  }
+
   return (
     <html lang="tr">
+      <head>
+        <link rel="canonical" href={baseUrl} />
+        <link rel="alternate" type="application/rss+xml" title="Onopo Product Feed" href={`${baseUrl}/api/feed/products`} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteSchema) }}
+        />
+      </head>
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} antialiased selection:bg-accent selection:text-white pb-16 md:pb-0`}
       >

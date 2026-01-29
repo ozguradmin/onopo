@@ -66,31 +66,31 @@ export function Footer() {
     }, [])
 
     return (
-        <footer className="bg-slate-950 text-slate-300 py-16 mt-20">
+        <footer className="bg-slate-950 text-slate-300 py-10 mt-12">
             <div className="container mx-auto px-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
                     {/* Brand */}
-                    <div className="space-y-4">
+                    <div className="col-span-2 md:col-span-1 space-y-3">
                         {settings.logo_url ? (
-                            <img src={settings.logo_url} alt={settings.site_name} className="h-8 object-contain brightness-0 invert" />
+                            <img src={settings.logo_url} alt={settings.site_name} className="h-7 object-contain brightness-0 invert" />
                         ) : (
-                            <h3 className="font-heading text-2xl font-bold text-white tracking-tighter">{settings.site_name}</h3>
+                            <h3 className="font-heading text-xl font-bold text-white tracking-tighter">{settings.site_name}</h3>
                         )}
-                        <p className="text-sm text-slate-400 max-w-xs">
+                        <p className="text-sm text-slate-400 max-w-xs leading-relaxed">
                             {settings.site_description}
                         </p>
-                        <div className="flex space-x-4 pt-2">
-                            {settings.facebook_url && <SocialLink icon={<Facebook className="w-5 h-5" />} href={settings.facebook_url} />}
-                            {settings.instagram_url && <SocialLink icon={<Instagram className="w-5 h-5" />} href={settings.instagram_url} />}
-                            {settings.twitter_url && <SocialLink icon={<Twitter className="w-5 h-5" />} href={settings.twitter_url} />}
-                            {settings.linkedin_url && <SocialLink icon={<Linkedin className="w-5 h-5" />} href={settings.linkedin_url} />}
+                        <div className="flex gap-3 pt-1">
+                            {settings.facebook_url && <SocialLink icon={<Facebook className="w-4 h-4" />} href={settings.facebook_url} />}
+                            {settings.instagram_url && <SocialLink icon={<Instagram className="w-4 h-4" />} href={settings.instagram_url} />}
+                            {settings.twitter_url && <SocialLink icon={<Twitter className="w-4 h-4" />} href={settings.twitter_url} />}
+                            {settings.linkedin_url && <SocialLink icon={<Linkedin className="w-4 h-4" />} href={settings.linkedin_url} />}
                         </div>
                     </div>
 
                     {/* Shop - Dynamic Categories */}
                     <div>
-                        <h4 className="font-heading text-white font-semibold mb-6">Alışveriş</h4>
-                        <ul className="space-y-3 text-sm">
+                        <h4 className="font-heading text-white font-semibold mb-4 text-sm">Alışveriş</h4>
+                        <ul className="space-y-2 text-sm">
                             <FooterLink href="/products">Tüm Ürünler</FooterLink>
                             {categories.map(cat => (
                                 <FooterLink key={cat.id} href={`/${cat.slug}`}>{cat.name}</FooterLink>
@@ -98,28 +98,40 @@ export function Footer() {
                         </ul>
                     </div>
 
-                    {/* Social Media */}
-                    <div className="flex gap-4 mb-8">
-                        {settings.facebook_url && <SocialLink href={settings.facebook_url} icon={<Facebook className="w-5 h-5" />} />}
-                        {settings.instagram_url && <SocialLink href={settings.instagram_url} icon={<Instagram className="w-5 h-5" />} />}
-                        {settings.twitter_url && <SocialLink href={settings.twitter_url} icon={<Twitter className="w-5 h-5" />} />}
-                        {settings.linkedin_url && <SocialLink href={settings.linkedin_url} icon={<Linkedin className="w-5 h-5" />} />}
-                    </div>
-
                     {/* Support */}
                     <div>
-                        <h4 className="font-heading text-white font-semibold mb-6">Destek</h4>
-                        <ul className="space-y-3 text-sm">
+                        <h4 className="font-heading text-white font-semibold mb-4 text-sm">Destek</h4>
+                        <ul className="space-y-2 text-sm">
                             <FooterLink href="/page/help">Yardım Merkezi</FooterLink>
-                            <FooterLink href="/page/shipping">Kargo &amp; İade</FooterLink>
+                            <FooterLink href="/page/shipping">Kargo & İade</FooterLink>
                             <FooterLink href="/page/policy">Gizlilik Politikası</FooterLink>
                             <FooterLink href="/page/terms">Kullanım Koşulları</FooterLink>
                         </ul>
                     </div>
+
+                    {/* Contact */}
+                    <div>
+                        <h4 className="font-heading text-white font-semibold mb-4 text-sm">İletişim</h4>
+                        <ul className="space-y-2 text-sm">
+                            {settings.footer_email && (
+                                <li><a href={`mailto:${settings.footer_email}`} className="hover:text-white transition-colors">{settings.footer_email}</a></li>
+                            )}
+                            {settings.footer_phone && (
+                                <li><a href={`tel:${settings.footer_phone}`} className="hover:text-white transition-colors">{settings.footer_phone}</a></li>
+                            )}
+                            {settings.footer_address && (
+                                <li className="text-slate-400">{settings.footer_address}</li>
+                            )}
+                            {!settings.footer_email && !settings.footer_phone && !settings.footer_address && (
+                                <li className="text-slate-500">info@onopo.com</li>
+                            )}
+                        </ul>
+                    </div>
                 </div>
 
-                <div className="border-t border-slate-900 mt-16 pt-8 flex flex-col md:flex-row justify-between items-center text-xs text-slate-500">
+                <div className="border-t border-slate-800 mt-8 pt-6 flex flex-col md:flex-row justify-between items-center text-xs text-slate-500 gap-2">
                     <p>{settings.footer_text}</p>
+                    <p>Güvenli Ödeme & Hızlı Teslimat</p>
                 </div>
             </div>
         </footer>
