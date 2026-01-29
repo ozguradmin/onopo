@@ -144,3 +144,17 @@ VALUES (2, 'products', 'Trend Ürünler', '{"selection_type": "all", "limit": 8}
 
 INSERT OR IGNORE INTO homepage_sections (id, type, title, config, display_order, is_active) 
 VALUES (3, 'features', 'Neden Onopo', '{"items": [{"icon": "truck", "title": "Hızlı Teslimat", "description": "Aynı gün kargo"}, {"icon": "shield", "title": "Güvenli Ödeme", "description": "256-bit SSL"}, {"icon": "headphones", "title": "7/24 Destek", "description": "Her zaman yanınızda"}]}', 3, 1);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_categories_slug ON categories(slug);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+CREATE INDEX IF NOT EXISTS idx_products_is_active ON products(is_active);
+CREATE INDEX IF NOT EXISTS idx_products_price ON products(price);
+CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites(user_id);
+CREATE INDEX IF NOT EXISTS idx_favorites_product_id ON favorites(product_id);
+CREATE INDEX IF NOT EXISTS idx_homepage_sections_is_active ON homepage_sections(is_active);
