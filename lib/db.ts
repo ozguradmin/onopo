@@ -2,22 +2,22 @@
 // This provides access to Cloudflare bindings like D1, R2, KV etc.
 
 export const runtime = 'edge'
+export async function getDB() {
+    try {
+        // Import dynamically to avoid build-time issues
+        const { getCloudflareContext } = await import('@opennextjs/cloudflare')
+        const { env } = await getCloudflareContext()
 
-try {
-    // Import dynamically to avoid build-time issues
-    const { getCloudflareContext } = await import('@opennextjs/cloudflare')
-    const { env } = await getCloudflareContext()
+        if (!env?.DB) {
+            console.error('DATABASE ERROR: Binding DB not found in environment.')
+            throw new Error('Database binding not found')
+        }
 
-    if (!env?.DB) {
-        console.error('DATABASE ERROR: Binding DB not found in environment.')
-        throw new Error('Database binding not found')
+        return env.DB
+    } catch (err) {
+        console.error('getDB FAILED:', err)
+        throw err
     }
-
-    return env.DB
-} catch (err) {
-    console.error('getDB FAILED:', err)
-    throw err
-}
 }
 
 export async function getBucket() {
