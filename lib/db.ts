@@ -6,9 +6,17 @@ export async function getDB() {
     try {
         // Import dynamically to avoid build-time issues
         const { getCloudflareContext } = await import('@opennextjs/cloudflare')
-        const { env } = await getCloudflareContext()
+        const context = await getCloudflareContext()
+        const env = context.env
 
-        if (!env?.DB) {
+        if (!env) {
+            console.error('DATABASE ERROR: Cloudflare context env is undefined.')
+            throw new Error('Cloudflare environment not found')
+        }
+
+        console.log('AVAILABLE ENV KEYS:', Object.keys(env))
+
+        if (!env.DB) {
             console.error('DATABASE ERROR: Binding DB not found in environment.')
             throw new Error('Database binding not found')
         }
