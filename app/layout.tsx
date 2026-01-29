@@ -102,8 +102,22 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <head>
+        {/* Favicon and Icons */}
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <meta name="theme-color" content="#4F46E5" />
+
+        {/* SEO Links */}
         <link rel="canonical" href={baseUrl} />
-        <link rel="alternate" type="application/rss+xml" title="Onopo Product Feed" href={`${baseUrl}/api/feed/products`} />
+        <link rel="alternate" type="application/rss+xml" title="Onopo Product Feed" href={`${baseUrl}/api/feeds/google`} />
+        <link rel="alternate" type="application/atom+xml" title="Google Merchant Feed" href={`${baseUrl}/api/feeds/google`} />
+
+        {/* Preconnect for performance */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+
+        {/* Structured Data */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}

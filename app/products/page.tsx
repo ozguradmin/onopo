@@ -1,8 +1,47 @@
 import { Suspense } from 'react'
+import { Metadata } from 'next'
 import { getDB } from '@/lib/db'
 import ProductsClient from '@/components/products/ProductsClient'
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ category?: string; q?: string }> }): Promise<Metadata> {
+    const params = await searchParams
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopo.com'
+
+    let title = 'Tüm Ürünler'
+    let description = 'Onopo Store\'da en yeni teknoloji ürünleri, aksesuarlar ve yaşam ürünlerini keşfedin. Uygun fiyatlar, hızlı kargo.'
+
+    if (params.category) {
+        title = `${params.category} Ürünleri`
+        description = `${params.category} kategorisindeki en iyi ürünleri Onopo Store'da bulun. Güvenli ödeme ve hızlı teslimat.`
+    }
+
+    if (params.q) {
+        title = `"${params.q}" Arama Sonuçları`
+        description = `"${params.q}" araması için ürün sonuçları. Onopo Store'da aradığınız ürünü bulun.`
+    }
+
+    return {
+        title,
+        description,
+        openGraph: {
+            title: `${title} | Onopo Store`,
+            description,
+            url: `${baseUrl}/products`,
+            type: 'website',
+            images: [{ url: `${baseUrl}/og-products.jpg`, width: 1200, height: 630 }]
+        },
+        twitter: {
+            card: 'summary_large_image',
+            title: `${title} | Onopo Store`,
+            description
+        },
+        alternates: {
+            canonical: `${baseUrl}/products`
+        }
+    }
+}
 
 interface SearchParams {
     category?: string

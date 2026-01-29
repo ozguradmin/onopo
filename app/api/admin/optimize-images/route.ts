@@ -3,8 +3,7 @@ import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import { getDB } from '@/lib/db'
 
-// Cloudflare Workers runtime - no Sharp, no S3 SDK
-export const runtime = 'edge'
+// Note: This endpoint just validates images - real optimization done via local script
 
 export async function POST(req: NextRequest) {
     try {
