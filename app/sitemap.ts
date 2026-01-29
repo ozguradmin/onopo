@@ -2,6 +2,8 @@
 import { MetadataRoute } from 'next'
 import { getDB } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopo.com'
     const db = await getDB()

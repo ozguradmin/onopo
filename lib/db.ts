@@ -6,7 +6,7 @@ export async function getDB() {
     try {
         // Import dynamically to avoid build-time issues
         const { getCloudflareContext } = await import('@opennextjs/cloudflare')
-        const context = await getCloudflareContext()
+        const context = await getCloudflareContext({ async: true })
         const env = context.env
 
         if (!env) {
@@ -30,7 +30,7 @@ export async function getDB() {
 
 export async function getBucket() {
     const { getCloudflareContext } = await import('@opennextjs/cloudflare')
-    const { env } = await getCloudflareContext()
+    const { env } = await getCloudflareContext({ async: true })
 
     if (!env?.BUCKET) {
         throw new Error('R2 bucket binding not found')
