@@ -3,7 +3,6 @@ import ProductClient from "../product/[id]/ProductClient"
 import { notFound } from "next/navigation"
 import { getDB } from "@/lib/db"
 
-export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 
 const VALID_CATEGORIES = ['tech', 'gaming', 'beauty', 'products', 'new']
