@@ -3,7 +3,7 @@ import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 
-
+export const runtime = 'edge'
 
 export async function GET(req: NextRequest) {
     try {

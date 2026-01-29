@@ -17,3 +17,8 @@ database_id = "750bb90b-a48c-4e9f-9c21-88e8a5e2e313"
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "onopo-storage"
+
+# Observability
+[observability]
+enabled = true
+
