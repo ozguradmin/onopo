@@ -3,8 +3,10 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Edit, Trash2, Plus } from 'lucide-react'
+import { Edit, Trash2, Plus, Upload, Trash, Loader2 } from 'lucide-react'
 import { formatPrice } from '@/lib/formatPrice'
+import * as XLSX from 'xlsx'
+import { toast } from 'sonner'
 
 export default function AdminProductsPage() {
     const router = useRouter()
@@ -24,6 +26,99 @@ export default function AdminProductsPage() {
         if (!confirm('Bu ürünü silmek istediğinize emin misiniz?')) return
         await fetch(`/api/products/${id}`, { method: 'DELETE' })
         setProducts(products.filter(p => p.id !== id))
+        toast.success('Ürün silindi')
+    }
+
+    const handleBulkDelete = async () => {
+        const confirm1 = confirm('TÜM ÜRÜNLERİ silmek üzeresiniz! Bu işlem geri alınamaz.')
+        if (!confirm1) return
+        const confirm2 = confirm('Gerçekten EMİN MİSİNİZ? Bütün ürün veritabanı silinecek!')
+        if (!confirm2) return
+
+        try {
+            setLoading(true)
+            const res = await fetch('/api/admin/products/bulk', { method: 'DELETE' })
+            if (!res.ok) throw new Error('Silme işlemi başarısız')
+
+            setProducts([])
+            toast.success('Tüm ürünler başarıyla silindi.')
+        } catch (error) {
+            console.error(error)
+            toast.error('Bir hata oluştu.')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        const reader = new FileReader()
+        reader.onload = async (evt) => {
+            try {
+                const bstr = evt.target?.result
+                const wb = XLSX.read(bstr, { type: 'binary' })
+                const wsname = wb.SheetNames[0]
+                const ws = wb.Sheets[wsname]
+                const data = XLSX.utils.sheet_to_json(ws)
+
+                // Transform data
+                const formattedProducts = data.map((item: any) => {
+                    // Map Excel columns to DB fields
+                    return {
+                        name: item['Ürün Adı'] || item['Name'],
+                        product_code: item['Ürün Kodu'] || item['Code'] || '',
+                        category: item['Kategori'] || 'Genel',
+                        price: parseFloat(item['Satış Fiyatı'] || item['Price'] || 0),
+                        original_price: parseFloat(item['Liste Fiyatı'] || 0),
+                        stock: parseInt(item['Stok'] || 0),
+                        description: `
+                            <p>${item['Açıklama'] || ''}</p>
+                            <br/>
+                            <p>${item['Detay'] || ''}</p>
+                            ${item['Marka'] ? `<br/><p><strong>Marka:</strong> ${item['Marka']}</p>` : ''}
+                        `,
+                        images: [
+                            item['Resim 1'],
+                            item['Resim 2'],
+                            item['Resim 3']
+                        ].filter(url => url && typeof url === 'string' && url.length > 5)
+                    }
+                }).filter(p => p.name && p.price > 0)
+
+                if (formattedProducts.length === 0) {
+                    toast.error('Dosyada geçerli ürün bulunamadı. Kolon isimlerini kontrol edin.')
+                    return
+                }
+
+                // Send to API
+                setLoading(true)
+                const res = await fetch('/api/admin/products/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ products: formattedProducts })
+                })
+
+                const result = await res.json()
+                if (result.success) {
+                    toast.success(`${result.imported} ürün başarıyla yüklendi.`)
+                    // Refresh list
+                    window.location.reload()
+                } else {
+                    toast.error(`Hata: ${result.error}`)
+                }
+
+            } catch (error) {
+                console.error('Excel parse error:', error)
+                toast.error('Excel dosyası okunamadı.')
+            } finally {
+                setLoading(false)
+                // Reset input
+                e.target.value = ''
+            }
+        }
+        reader.readAsBinaryString(file)
     }
 
     if (loading) return <div className="text-center py-8">Yükleniyor...</div>
@@ -32,12 +127,35 @@ export default function AdminProductsPage() {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold text-slate-900">Ürünler</h1>
-                <Button
-                    onClick={() => router.push('/admin/products/new')}
-                    className="gap-2 bg-slate-900 text-white hover:bg-slate-800"
-                >
-                    <Plus className="w-4 h-4" /> Yeni Ürün
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        onClick={handleBulkDelete}
+                        variant="destructive"
+                        disabled={products.length === 0}
+                        className="gap-2"
+                    >
+                        <Trash className="w-4 h-4" /> Tümünü Sil
+                    </Button>
+
+                    <div className="relative">
+                        <input
+                            type="file"
+                            accept=".xlsx, .xls"
+                            onChange={handleFileUpload}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                        <Button className="gap-2 bg-green-600 hover:bg-green-700 text-white">
+                            <Upload className="w-4 h-4" /> Excel ile Yükle
+                        </Button>
+                    </div>
+
+                    <Button
+                        onClick={() => router.push('/admin/products/new')}
+                        className="gap-2 bg-slate-900 text-white hover:bg-slate-800"
+                    >
+                        <Plus className="w-4 h-4" /> Yeni Ürün
+                    </Button>
+                </div>
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
