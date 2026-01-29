@@ -62,14 +62,15 @@ export async function POST(req: NextRequest) {
         })
 
         const orderResult = await db.prepare(
-            `INSERT INTO orders (user_id, guest_email, status, total_amount, shipping_address) 
-             VALUES (?, ?, ?, ?, ?) RETURNING id`
+            `INSERT INTO orders (user_id, guest_email, status, total_amount, shipping_address, payment_status) 
+             VALUES (?, ?, ?, ?, ?, ?) RETURNING id`
         ).bind(
             userId,
             customerInfo.email,
             'pending',
             totalAmount,
-            shippingAddress
+            shippingAddress,
+            'pending'
         ).first()
 
         if (!orderResult) throw new Error("Sipariş oluşturulamadı")
@@ -83,10 +84,55 @@ export async function POST(req: NextRequest) {
         const batch = orderItems.map(item => stmt.bind(orderId, item.product_id, item.quantity, item.price))
         await db.batch(batch)
 
+        // PAYMENT INTEGRATION
+        const settings = await db.prepare('SELECT * FROM payment_settings WHERE is_active = 1 LIMIT 1').first() as any
+
+        let paymentResult = { status: 'success', paymentId: 'offline', iframeUrl: undefined as string | undefined, htmlContent: undefined as string | undefined }
+
+        if (settings && settings.provider !== 'offline') {
+            try {
+                let provider = null
+
+                if (settings.provider === 'paytr') {
+                    const { PaytrProvider } = require('@/lib/payment/paytr')
+                    provider = new PaytrProvider(settings)
+                } else if (settings.provider === 'iyzico') {
+                    const { IyzicoProvider } = require('@/lib/payment/iyzico')
+                    provider = new IyzicoProvider(settings)
+                }
+
+                if (provider) {
+                    const ip = req.headers.get('x-forwarded-for') || '127.0.0.1'
+                    const userForPayment = {
+                        id: userId,
+                        email: customerInfo.email,
+                        name: customerInfo.fullName
+                    }
+                    const orderForPayment = {
+                        id: orderId,
+                        total: totalAmount,
+                        address: customerInfo.address,
+                        phone: customerInfo.phone
+                    }
+
+                    const result = await provider.initializePayment(orderForPayment, userForPayment, orderItems, ip)
+                    if (result.status === 'failure') {
+                        throw new Error(result.errorMessage || 'Ödeme sağlayıcı hatası')
+                    }
+                    paymentResult = { ...paymentResult, ...result }
+                }
+            } catch (err: any) {
+                // Cancel order if payment init failed
+                await db.prepare('UPDATE orders SET status = ?, payment_status = ? WHERE id = ?').bind('cancelled', 'failed', orderId).run()
+                return NextResponse.json({ error: 'Ödeme başlatılamadı: ' + err.message }, { status: 400 })
+            }
+        }
+
         return NextResponse.json({
             success: true,
             orderId,
-            message: 'Siparişiniz başarıyla oluşturuldu!'
+            message: 'Siparişiniz başarıyla oluşturuldu!',
+            payment: paymentResult
         })
 
     } catch (error: any) {
