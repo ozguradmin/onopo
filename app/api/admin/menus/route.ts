@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRequestContext } from '@cloudflare/next-on-pages'
-
-export const runtime = 'edge'
+import { getDB } from '@/lib/db'
 
 // GET: List all menus (Public/Admin use)
 export async function GET() {
     try {
-        const db = getRequestContext().env.DB
-        if (!db) return NextResponse.json({ error: 'Database not available' }, { status: 500 })
-
+        const db = await getDB()
         const { results } = await db.prepare("SELECT * FROM menus ORDER BY sort_order ASC").run()
         return NextResponse.json(results)
     } catch (error: any) {
@@ -19,9 +15,7 @@ export async function GET() {
 // POST: Create a new menu
 export async function POST(req: NextRequest) {
     try {
-        const db = getRequestContext().env.DB
-        if (!db) return NextResponse.json({ error: 'Database not available' }, { status: 500 })
-
+        const db = await getDB()
         const body = await req.json()
         const { title, url, parent_id, sort_order, is_active } = body
 
@@ -46,9 +40,7 @@ export async function POST(req: NextRequest) {
 // PUT: Update a menu
 export async function PUT(req: NextRequest) {
     try {
-        const db = getRequestContext().env.DB
-        if (!db) return NextResponse.json({ error: 'Database not available' }, { status: 500 })
-
+        const db = await getDB()
         const body = await req.json()
         const { id, title, url, parent_id, sort_order, is_active } = body
 
@@ -74,9 +66,7 @@ export async function PUT(req: NextRequest) {
 // DELETE: Delete a menu
 export async function DELETE(req: NextRequest) {
     try {
-        const db = getRequestContext().env.DB
-        if (!db) return NextResponse.json({ error: 'Database not available' }, { status: 500 })
-
+        const db = await getDB()
         const { searchParams } = new URL(req.url)
         const id = searchParams.get('id')
 
