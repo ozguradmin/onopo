@@ -4,6 +4,7 @@ import * as React from "react"
 import { ShoppingBag, User, Search, Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import Link from 'next/link'
 import { useCartStore } from "@/store/cart-store"
 
 import { TopBar } from "./TopBar"
@@ -85,7 +86,7 @@ export function Header() {
                 <div className="container mx-auto px-4">
                     <div className="flex items-center justify-between h-16 md:h-20">
                         {/* Logo - Dynamic from settings */}
-                        <a
+                        <Link
                             href="/"
                             className="flex items-center"
                         >
@@ -96,7 +97,7 @@ export function Header() {
                                     {siteName}
                                 </span>
                             )}
-                        </a>
+                        </Link>
 
 
                         {/* Desktop Navigation - Center */}
@@ -203,15 +204,9 @@ export function Header() {
                             </div>
 
                             {/* User */}
-                            <a href="/profile">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="rounded-full w-10 h-10 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                                >
-                                    <User className="w-5 h-5" />
-                                </Button>
-                            </a>
+                            <Link href="/profile" className="inline-flex items-center justify-center rounded-full w-10 h-10 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 active:scale-95 hover:bg-slate-100 hover:text-slate-900 text-slate-600">
+                                <User className="w-5 h-5" />
+                            </Link>
 
                             {/* Cart */}
                             <Button
@@ -325,11 +320,11 @@ export function Header() {
                                         <Search className="w-4 h-4" />
                                     </Button>
                                 </form>
-                                <a href="/login">
-                                    <Button variant="outline" className="w-full h-12 rounded-xl border-slate-200 text-slate-700">
+                                <Link href="/login">
+                                    <div className="inline-flex items-center justify-center rounded-xl text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-95 border border-slate-200 bg-transparent hover:bg-slate-100 hover:text-slate-900 w-full h-12 text-slate-700">
                                         <User className="w-4 h-4 mr-2" /> Hesabım
-                                    </Button>
-                                </a>
+                                    </div>
+                                </Link>
                             </div>
                         </div>
                     </div>

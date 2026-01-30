@@ -112,7 +112,11 @@ export default async function Page(props: { params: Promise<{ slug: string }> })
         if (similarSlug) {
             redirect(`/${similarSlug}`)
         }
-    } catch (e) {
+    } catch (e: any) {
+        // Essential: Re-throw redirect error so Next.js can handle it
+        if (e?.digest?.startsWith('NEXT_REDIRECT')) {
+            throw e;
+        }
         console.error('Product lookup error:', e)
     }
 
