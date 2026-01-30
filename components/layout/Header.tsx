@@ -324,7 +324,7 @@ export function Header() {
                                         <Search className="w-4 h-4" />
                                     </Button>
                                 </form>
-                                <Link href="/login">
+                                <Link href="/profile">
                                     <div className="inline-flex items-center justify-center rounded-xl text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-95 border border-slate-200 bg-transparent hover:bg-slate-100 hover:text-slate-900 w-full h-12 text-slate-700">
                                         <User className="w-4 h-4 mr-2" /> Hesabım
                                     </div>

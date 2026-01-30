@@ -30,6 +30,49 @@ const HeartIcon = ({ filled = false }: { filled?: boolean }) => (
     </div>
 )
 
+// Helper to format messy description text
+function preprocessDescription(text: string): string {
+    if (!text) return ""
+
+    let formatted = text
+
+    // Add headers and newlines before key sections
+    const sections = [
+        "Ürün Açıklaması",
+        "Detaylı Bilgi",
+        "Teknik Özellikler",
+        "Özellikleri",
+        "Kutu İçeriği"
+    ]
+
+    sections.forEach(section => {
+        // Replace "SectionName" with "\n\n## SectionName\n"
+        // Handle cases where it's mashed like "TextSectionName"
+        const regex = new RegExp(`([^\\n])(${section})`, 'g')
+        formatted = formatted.replace(regex, '$1\n\n## $2\n')
+
+        // Also handle if it's at start or already has space
+        const regex2 = new RegExp(`^(${section})`, 'g')
+        formatted = formatted.replace(regex2, '## $1\n')
+    })
+
+    // Format Key-Value pairs like "Marka: HUTT" or "MarkaHUTT"
+    const keys = ["Marka", "Ürün Kodu", "Barkod", "Desi", "Model", "Renk", "Güç", "Kapasite", "Ağırlık"]
+    keys.forEach(key => {
+        // Case 1: "Key: Value" -> "**Key:** Value"
+        // Case 2: "KeyValue" -> "**Key:** Value" (Harder to guess value start, assuming CamelCase or just text)
+        // Let's stick to simple newline insertion for readability
+
+        const regex = new RegExp(`(${key})`, 'g')
+        // Ensure it starts on new line
+        formatted = formatted.replace(regex, '\n- **$1:** ')
+    })
+
+    // Clean up excessive newlines
+    return formatted.replace(/\n{3,}/g, '\n\n')
+}
+
+
 interface Review {
     id: number
     user_name: string
@@ -511,7 +554,7 @@ export default function ProductClient({ id }: { id: string }) {
                                     <div className="text-slate-600 leading-relaxed min-h-[60px]">
                                         {activeTab === 'desc' && (
                                             product.description
-                                                ? <MarkdownRenderer content={product.description} />
+                                                ? <MarkdownRenderer content={preprocessDescription(product.description)} />
                                                 : 'Ürün açıklaması bulunmuyor.'
                                         )}
                                         {activeTab === 'warranty' && product.warranty_info}
