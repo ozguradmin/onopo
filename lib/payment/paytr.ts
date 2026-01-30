@@ -20,14 +20,15 @@ export class PaytrProvider implements PaymentProvider {
 
             // Prepare basket - format: [[name, price, qty], [name, price, qty], ...]
             const basketArray = basketItems.map(item => [
-                item.name || 'Ürün',
+                item.name || 'Urun',
                 (item.price || 0).toFixed(2),
                 item.quantity || 1
             ])
             const user_basket = Buffer.from(JSON.stringify(basketArray)).toString('base64')
 
-            // Unique merchant order ID
-            const merchant_oid = `${order.id}_${Date.now()}`
+            // Unique merchant order ID - MUST BE ALPHANUMERIC ONLY (no underscores, dashes, or special chars)
+            // Format: SPorderIdtimestamp (e.g., SP101738240123456)
+            const merchant_oid = `SP${order.id}T${Date.now()}`
 
             // Payment amount in kuruş (cents) - integer
             const payment_amount = Math.round(order.total * 100).toString()
