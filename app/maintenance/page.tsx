@@ -1,20 +1,52 @@
 'use client'
 
 import * as React from 'react'
+import { useRouter } from 'next/navigation'
 import { Wrench, Clock, Mail } from 'lucide-react'
 
 export default function MaintenancePage() {
+    const router = useRouter()
     const [settings, setSettings] = React.useState({
         site_name: 'ONOPO',
         footer_email: 'info@onopo.com'
     })
+    const [isInMaintenance, setIsInMaintenance] = React.useState(true)
+    const [checked, setChecked] = React.useState(false)
 
     React.useEffect(() => {
         fetch('/api/site-settings')
             .then(r => r.json())
-            .then(data => setSettings(prev => ({ ...prev, ...data })))
-            .catch(() => { })
-    }, [])
+            .then(data => {
+                setSettings(prev => ({ ...prev, ...data }))
+                const maintenanceOn = data.maintenance_mode === 'true' || data.maintenance_mode === true
+                setIsInMaintenance(maintenanceOn)
+                setChecked(true)
+
+                // If not in maintenance mode, redirect to home
+                if (!maintenanceOn) {
+                    router.push('/')
+                }
+            })
+            .catch(() => {
+                setChecked(true)
+                // On error, redirect to home to be safe
+                router.push('/')
+            })
+    }, [router])
+
+    // Show loading while checking
+    if (!checked) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+                <div className="animate-spin w-8 h-8 border-4 border-slate-600 border-t-white rounded-full"></div>
+            </div>
+        )
+    }
+
+    // If not in maintenance, show nothing (will redirect)
+    if (!isInMaintenance) {
+        return null
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
