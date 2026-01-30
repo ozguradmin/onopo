@@ -4,16 +4,26 @@ import { getDB } from '@/lib/db'
 export const dynamic = 'force-dynamic'
 
 // GET: List all categories with product count
-export async function GET() {
+export async function GET(req: NextRequest) {
     try {
         const db = await getDB()
+        const { searchParams } = new URL(req.url)
+        const hideEmpty = searchParams.get('hideEmpty') === 'true'
+
         // Get categories with product count
-        const { results } = await db.prepare(`
+        let query = `
             SELECT c.*, 
-                   (SELECT COUNT(*) FROM products p WHERE LOWER(p.category) = LOWER(c.slug) OR LOWER(p.category) = LOWER(c.name)) as product_count
+                   (SELECT COUNT(*) FROM products p WHERE (LOWER(p.category) = LOWER(c.slug) OR LOWER(p.category) = LOWER(c.name)) AND p.is_active = 1) as product_count
             FROM categories c 
-            ORDER BY c.name
-        `).all()
+        `
+
+        if (hideEmpty) {
+            query += ` WHERE (SELECT COUNT(*) FROM products p WHERE (LOWER(p.category) = LOWER(c.slug) OR LOWER(p.category) = LOWER(c.name)) AND p.is_active = 1) > 0`
+        }
+
+        query += ` ORDER BY c.name`
+
+        const { results } = await db.prepare(query).all()
 
         // Cache for 5 minutes
         return NextResponse.json(results || [], {

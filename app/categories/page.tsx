@@ -59,7 +59,7 @@ export default function CategoriesPage() {
     const [loading, setLoading] = React.useState(true)
 
     React.useEffect(() => {
-        fetch('/api/categories')
+        fetch('/api/categories?hideEmpty=true')
             .then(res => res.json())
             .then(data => {
                 setCategories(Array.isArray(data) ? data : [])

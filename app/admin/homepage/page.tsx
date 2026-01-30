@@ -259,9 +259,9 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
     const [categories, setCategories] = React.useState<any[]>([])
 
     React.useEffect(() => {
-        if (section.type === 'products') {
-            fetch('/api/products').then(r => r.json()).then(setProducts)
-            fetch('/api/categories').then(r => r.json()).then(setCategories)
+        if (section.type === 'products' || section.type === 'new_products') {
+            fetch('/api/products').then(r => r.json()).then(data => setProducts(Array.isArray(data) ? data : []))
+            fetch('/api/categories?hideEmpty=true').then(r => r.json()).then(data => setCategories(Array.isArray(data) ? data : []))
         }
     }, [section.type])
 

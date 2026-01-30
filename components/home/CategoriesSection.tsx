@@ -11,7 +11,7 @@ import {
     Calculator, Utensils, Armchair, Dumbbell, Dog, Flower2,
     Briefcase, Hammer, Baby, Scissors, Anchor, Sun,
     Moon, Cloud, Umbrella, Key, Lock, Map, Compass,
-    Globe, Award, Medal, Crown, Trophy, Jewel
+    Globe, Award, Medal, Crown, Trophy
 } from 'lucide-react'
 
 // Icon mapping for categories
@@ -87,12 +87,10 @@ export function CategoriesSection({ title = "Kategoriler", categories: propCateg
 
     React.useEffect(() => {
         if (!propCategories || propCategories.length === 0) {
-            fetch('/api/categories')
+            fetch('/api/categories?hideEmpty=true')
                 .then(res => res.json())
                 .then(data => {
-                    // Filter categories with products
-                    const catsWithProducts = (data || []).filter((c: Category) => c.product_count && c.product_count > 0)
-                    setCategories(catsWithProducts)
+                    setCategories(Array.isArray(data) ? data : [])
                 })
                 .catch(() => { })
         }
