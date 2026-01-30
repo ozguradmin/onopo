@@ -53,6 +53,9 @@ export async function POST(req: NextRequest) {
             })
         }
 
+        // Get Payment Settings EARLY to store provider in shipping_address
+        const settings = await db.prepare('SELECT * FROM payment_settings WHERE is_active = 1 LIMIT 1').first() as any
+
         // Create order
         const shippingAddress = JSON.stringify({
             fullName: customerInfo.fullName,
@@ -61,7 +64,8 @@ export async function POST(req: NextRequest) {
             city: customerInfo.city || '',
             district: customerInfo.district || '',
             postalCode: customerInfo.postalCode || '',
-            note: customerInfo.note || ''
+            note: customerInfo.note || '',
+            provider: settings?.provider || 'offline' // Store provider for filtering in Admin Panel
         })
 
         const orderResult = await db.prepare(
@@ -89,8 +93,6 @@ export async function POST(req: NextRequest) {
         await db.batch(batch)
 
         // PAYMENT INTEGRATION
-        const settings = await db.prepare('SELECT * FROM payment_settings WHERE is_active = 1 LIMIT 1').first() as any
-
         let paymentResult = { status: 'success', paymentId: 'offline', iframeUrl: undefined as string | undefined, htmlContent: undefined as string | undefined }
 
         if (settings && settings.provider !== 'offline') {
@@ -135,7 +137,6 @@ export async function POST(req: NextRequest) {
         // Store items in order for later retrieval (as JSON)
         await db.prepare('UPDATE orders SET items = ? WHERE id = ?').bind(JSON.stringify(orderItems), orderId).run()
 
-        // Send emails (awaited to ensure execution in Serverless/Edge)
         // Send emails (awaited)
         // ONLY send now if payment is already complete (offline or direct).
         // For PayTR (iframe), email will be sent in callback.
@@ -201,7 +202,31 @@ export async function GET(req: NextRequest) {
             ? await db.prepare(query).bind(...bindArgs).all()
             : await db.prepare(query).all()
 
-        return NextResponse.json(results || [])
+        // Filter out pending PayTR/Online orders for Admin
+        // This prevents 'Pending Payment' / Abandoned carts from clogging the view
+        const filteredResults = (results || []).filter((order: any) => {
+            if (userRole !== 'admin') return true // Users see their own pending orders
+
+            try {
+                const addr = JSON.parse(order.shipping_address || '{}')
+                const provider = addr.provider
+
+                // If it's an online payment (paytr/iyzico) AND status is pending -> Hide it
+                // Offline payments (havale) should remain visible even if pending
+                const isOnlinePayment = provider === 'paytr' || provider === 'iyzico'
+
+                // Also check if provider is missing (legacy orders) -> Show them to be safe
+                if (provider && isOnlinePayment && order.payment_status === 'pending' && order.status === 'pending') {
+                    return false
+                }
+
+                return true
+            } catch (e) {
+                return true // Show on error
+            }
+        })
+
+        return NextResponse.json(filteredResults)
 
     } catch (error: any) {
         console.error('Orders fetch error:', error)
