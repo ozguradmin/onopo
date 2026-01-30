@@ -72,11 +72,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         }
 
         // Send email notification for tracking number
-        if (send_notification && tracking_number && order.guest_email) {
-            try {
-                await sendTrackingUpdate({ id: order.id }, tracking_number, order.guest_email)
-            } catch (emailError) {
-                console.error('Tracking email sending failed:', emailError)
+        if (send_notification && tracking_number) {
+            let recipientEmail = order.guest_email
+
+            // If no guest email, try to get from user
+            if (!recipientEmail && order.user_id) {
+                const user = await db.prepare('SELECT email FROM users WHERE id = ?').bind(order.user_id).first()
+                if (user) {
+                    recipientEmail = user.email
+                }
+            }
+
+            if (recipientEmail) {
+                try {
+                    await sendTrackingUpdate({ id: order.id }, tracking_number, recipientEmail)
+                } catch (emailError) {
+                    console.error('Tracking email sending failed:', emailError)
+                }
+            } else {
+                console.warn('Could not find email for order', order.id)
             }
         }
 

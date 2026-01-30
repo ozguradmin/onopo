@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { hashPassword, signJWT } from '@/lib/auth'
+import { sendWelcomeEmail } from '@/lib/email'
 
 
 
@@ -31,6 +32,14 @@ export async function POST(req: NextRequest) {
 
         // Sign Token
         const token = await signJWT({ email, role: 'user' })
+
+        // Send welcome email
+        try {
+            await sendWelcomeEmail(email)
+        } catch (emailError) {
+            console.error('Failed to send welcome email:', emailError)
+            // Don't fail registration if email fails
+        }
 
         const response = NextResponse.json({ success: true, user: { email, name, role: 'user' } })
 

@@ -67,8 +67,14 @@ export const emailTemplates = {
                     <div style="background: white; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1px solid #e2e8f0; text-align: center;">
                         <h3 style="margin-top: 0; color: #1e293b;">Kargo Takip Numarası</h3>
                         <p style="font-size: 24px; font-weight: bold; color: #8b5cf6; margin: 10px 0;">${trackingNumber}</p>
+                        <p style="margin: 15px 0;">
+                            <a href="https://www.araskargo.com.tr/trmNrSrworking.aspx?q=${trackingNumber}" 
+                               style="background: #8b5cf6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                                Kargo Takip
+                            </a>
+                        </p>
                         <p style="color: #64748b; font-size: 14px;">
-                            Bu numara ile kargo firmasının web sitesinden takip yapabilirsiniz.
+                            Yukarıdaki butona tıklayarak veya takip numarasını Aras Kargo sitesinde sorgulayarak kargonuzu takip edebilirsiniz.
                         </p>
                     </div>
                 </div>

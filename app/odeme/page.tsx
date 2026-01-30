@@ -220,7 +220,7 @@ export default function CheckoutPage() {
     // Payment Iframe (PayTR)
     if (iframeUrl) {
         return (
-            <div className="min-h-screen bg-slate-50 py-8">
+            <div className="min-h-screen bg-slate-50 pt-24 pb-8">
                 <div className="container mx-auto px-4 max-w-4xl">
                     <div className="mb-6">
                         <p className="text-slate-500 mb-2 text-center">Ödeme İşlemi - Sipariş #{orderId}</p>

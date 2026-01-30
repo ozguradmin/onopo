@@ -2,7 +2,8 @@
 
 import * as React from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { ArrowLeft, Save, Package, Truck, Check, X, Clock } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowLeft, Save, Package, Truck, Check, X, Clock, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -185,11 +186,25 @@ export default function OrderEditPage() {
                         <label className="block text-sm font-medium text-slate-700 mb-2">
                             Kargo Takip Numarası
                         </label>
-                        <Input
-                            value={formData.tracking_number}
-                            onChange={e => setFormData({ ...formData, tracking_number: e.target.value })}
-                            placeholder="Takip numarasını girin..."
-                        />
+                        <div className="flex gap-2">
+                            <Input
+                                value={formData.tracking_number}
+                                onChange={e => setFormData({ ...formData, tracking_number: e.target.value })}
+                                placeholder="Takip numarasını girin..."
+                                className="flex-1"
+                            />
+                            {formData.tracking_number && (
+                                <a
+                                    href={`https://www.araskargo.com.tr/trmNrSrworking.aspx?q=${formData.tracking_number}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm font-medium transition-colors"
+                                >
+                                    <ExternalLink className="w-4 h-4" />
+                                    Takip Et
+                                </a>
+                            )}
+                        </div>
                         <p className="text-xs text-slate-500 mt-1">
                             Müşteriye otomatik bildirim gönderilir.
                         </p>
@@ -226,10 +241,22 @@ export default function OrderEditPage() {
                     {items.map((item: any, idx: number) => (
                         <div key={idx} className="flex items-center gap-4 p-3 bg-slate-50 rounded-lg">
                             {item.image && (
-                                <img src={item.image} alt={item.name} className="w-16 h-16 rounded-lg object-cover" />
+                                <Link href={`/product/${item.productId || item.id}`} target="_blank">
+                                    <img
+                                        src={item.image}
+                                        alt={item.name}
+                                        className="w-16 h-16 rounded-lg object-cover hover:opacity-80 transition-opacity cursor-pointer"
+                                    />
+                                </Link>
                             )}
                             <div className="flex-1">
-                                <p className="font-medium text-slate-900">{item.name}</p>
+                                <Link
+                                    href={`/product/${item.productId || item.id}`}
+                                    target="_blank"
+                                    className="font-medium text-slate-900 hover:text-blue-600 hover:underline"
+                                >
+                                    {item.name}
+                                </Link>
                                 <p className="text-sm text-slate-500">Adet: {item.quantity}</p>
                             </div>
                             <p className="font-bold text-slate-900">{(item.price * item.quantity).toFixed(2)} ₺</p>

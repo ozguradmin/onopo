@@ -30,8 +30,14 @@ export async function POST(req: NextRequest) {
         let recipients: string[] = []
 
         if (recipientType === 'single') {
-            if (!email) return NextResponse.json({ error: 'E-posta adresi zorunludur' }, { status: 400 })
-            recipients = [email]
+            // Frontend sends emails array for single type too
+            if (emails && Array.isArray(emails) && emails.length > 0) {
+                recipients = emails
+            } else if (email) {
+                recipients = [email]
+            } else {
+                return NextResponse.json({ error: 'E-posta adresi zorunludur' }, { status: 400 })
+            }
         } else if (recipientType === 'all') {
             // Fetch all users + guest emails from orders
             const db = await getDB()
