@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json()
-        const { recipientType, email, subject, message } = body
+        const { recipientType, email, emails, subject, message } = body
 
         if (!subject || !message) {
             return NextResponse.json({ error: 'Konu ve mesaj zorunludur' }, { status: 400 })
@@ -46,6 +46,12 @@ export async function POST(req: NextRequest) {
 
             // Merge unique
             recipients = [...new Set([...userEmails, ...guestEmails])]
+        } else if (recipientType === 'selected' || recipientType === 'manual') {
+            // Emails array passed directly from frontend
+            if (!emails || !Array.isArray(emails) || emails.length === 0) {
+                return NextResponse.json({ error: 'E-posta adresleri zorunludur' }, { status: 400 })
+            }
+            recipients = emails
         }
 
         if (recipients.length === 0) {

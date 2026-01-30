@@ -57,6 +57,30 @@ export async function GET(req: NextRequest) {
             }
         }
 
+        // Add items column if missing (stores order items as JSON)
+        try {
+            await db.prepare(`ALTER TABLE orders ADD COLUMN items TEXT`).run()
+            results.push('Added items column')
+        } catch (e: any) {
+            if (e.message?.includes('duplicate column')) {
+                results.push('items column already exists')
+            } else {
+                results.push('items: ' + e.message)
+            }
+        }
+
+        // Add admin_notes column if missing
+        try {
+            await db.prepare(`ALTER TABLE orders ADD COLUMN admin_notes TEXT`).run()
+            results.push('Added admin_notes column')
+        } catch (e: any) {
+            if (e.message?.includes('duplicate column')) {
+                results.push('admin_notes column already exists')
+            } else {
+                results.push('admin_notes: ' + e.message)
+            }
+        }
+
         return NextResponse.json({
             success: true,
             message: 'Migration completed',

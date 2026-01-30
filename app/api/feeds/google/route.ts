@@ -29,12 +29,12 @@ export async function GET() {
 
         // Fetch site settings
         const settingsResults = await db.prepare(
-            `SELECT key, value FROM settings WHERE key IN ('site_name', 'site_url', 'currency')`
+            `SELECT key, value FROM site_settings WHERE key IN ('site_name', 'site_url', 'currency')`
         ).all()
 
         const settings: Settings = {
             site_name: 'Onopo',
-            site_url: process.env.NEXT_PUBLIC_BASE_URL || 'https://onopo.com',
+            site_url: 'https://onopostore.com',
             currency: 'TRY'
         }
 
