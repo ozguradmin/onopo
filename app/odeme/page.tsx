@@ -106,6 +106,32 @@ export default function CheckoutPage() {
             .catch(() => { })
     }, [])
 
+    // Poll for payment status when iframe is displayed
+    React.useEffect(() => {
+        if (!iframeUrl || !orderId) return
+
+        const checkPaymentStatus = async () => {
+            try {
+                const res = await fetch(`/api/orders/${orderId}`)
+                if (res.ok) {
+                    const order = await res.json()
+                    if (order.payment_status === 'paid' || order.status === 'approved') {
+                        setOrderComplete(true)
+                        setIframeUrl(null)
+                        clearCart()
+                    }
+                }
+            } catch (e) {
+                console.error('Payment status check failed:', e)
+            }
+        }
+
+        // Check every 3 seconds
+        const interval = setInterval(checkPaymentStatus, 3000)
+
+        return () => clearInterval(interval)
+    }, [iframeUrl, orderId, clearCart])
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target
         setFormData(prev => ({ ...prev, [name]: value }))
@@ -222,8 +248,9 @@ export default function CheckoutPage() {
         return (
             <div className="min-h-screen bg-slate-50 pt-32 pb-8">
                 <div className="container mx-auto px-4 max-w-4xl">
-                    <div className="mb-6">
-                        <p className="text-slate-500 mb-2 text-center">Ödeme İşlemi - Sipariş #{orderId}</p>
+                    <div className="mb-6 text-center">
+                        <p className="text-slate-500 mb-2">Ödeme İşlemi - Sipariş #{orderId}</p>
+                        <p className="text-xs text-slate-400">Ödeme tamamlandığında otomatik olarak yönlendirileceksiniz</p>
                     </div>
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                         <iframe
@@ -231,6 +258,30 @@ export default function CheckoutPage() {
                             className="w-full min-h-[600px] border-0"
                             title="Ödeme Ekranı"
                         ></iframe>
+                    </div>
+                    <div className="mt-4 text-center">
+                        <button
+                            onClick={async () => {
+                                try {
+                                    const res = await fetch(`/api/orders/${orderId}`)
+                                    if (res.ok) {
+                                        const order = await res.json()
+                                        if (order.payment_status === 'paid' || order.status === 'approved') {
+                                            setOrderComplete(true)
+                                            setIframeUrl(null)
+                                            clearCart()
+                                        } else {
+                                            alert('Ödeme henüz tamamlanmadı. Lütfen bekleyin veya ödemeyi tamamlayın.')
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.error('Manual check failed:', e)
+                                }
+                            }}
+                            className="text-sm text-slate-500 hover:text-slate-700 underline"
+                        >
+                            Ödeme tamamlandı mı? Kontrol et
+                        </button>
                     </div>
                 </div>
             </div>

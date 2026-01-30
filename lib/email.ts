@@ -68,9 +68,9 @@ export const emailTemplates = {
                         <h3 style="margin-top: 0; color: #1e293b;">Kargo Takip Numarası</h3>
                         <p style="font-size: 24px; font-weight: bold; color: #8b5cf6; margin: 10px 0;">${trackingNumber}</p>
                         <p style="margin: 15px 0;">
-                            <a href="https://www.araskargo.com.tr/trmNrSrworking.aspx?q=${trackingNumber}" 
+                            <a href="https://kargotakip.araskargo.com.tr/mainpage.aspx?code=${trackingNumber}" 
                                style="background: #8b5cf6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-                                Kargo Takip
+                                Aras Kargo Takip
                             </a>
                         </p>
                         <p style="color: #64748b; font-size: 14px;">

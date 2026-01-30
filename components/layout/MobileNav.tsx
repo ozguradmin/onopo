@@ -11,12 +11,22 @@ export function MobileNav() {
     const pathname = usePathname()
     const { totalItems, toggleCart } = useCartStore()
     const [mounted, setMounted] = React.useState(false)
+    const [isLoggedIn, setIsLoggedIn] = React.useState(false)
 
     React.useEffect(() => {
         setMounted(true)
+        // Check if user is logged in
+        fetch('/api/auth/me')
+            .then(res => {
+                if (res.ok) setIsLoggedIn(true)
+            })
+            .catch(() => { })
     }, [])
 
     const cartItemCount = mounted ? totalItems() : 0
+
+    // Prevent hydration mismatch
+    if (!mounted) return null
 
     return (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-background/80 backdrop-blur-lg border-t border-border h-16 px-6 flex items-center justify-between">
@@ -38,7 +48,12 @@ export function MobileNav() {
                 <span className="text-[10px] font-medium">Sepet</span>
             </button>
 
-            <NavItem href="/login" icon={<User className="w-6 h-6" />} label="Profil" />
+            <NavItem
+                href={isLoggedIn ? "/profile" : "/login"}
+                icon={<User className="w-6 h-6" />}
+                label={isLoggedIn ? "Profilim" : "Giriş"}
+                active={pathname === "/profile" || pathname === "/login"}
+            />
         </div>
     )
 }
@@ -57,3 +72,4 @@ function NavItem({ href, icon, label, active }: { href: string; icon: React.Reac
         </Link>
     )
 }
+

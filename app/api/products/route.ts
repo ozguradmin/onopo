@@ -92,12 +92,24 @@ export async function POST(req: NextRequest) {
         }
 
         // Generate slug from name (CRITICAL - slug column is NOT NULL)
-        const slug = name
+        // Strip brand name from start and handle Turkish characters
+        let nameForSlug = name
+            .replace(/^onopo[\s-]*/i, '') // Remove "Onopo" or "Onopo-" from start
+            .replace(/^onopo\s+/gi, '') // Remove "ONOPO " from anywhere at start
+
+        const slug = nameForSlug
             .toLowerCase()
+            // Replace Turkish characters with ASCII equivalents
+            .replace(/ğ/g, 'g')
+            .replace(/ü/g, 'u')
+            .replace(/ş/g, 's')
+            .replace(/ı/g, 'i')
+            .replace(/ö/g, 'o')
+            .replace(/ç/g, 'c')
             .replace(/[^a-z0-9\s-]/g, '')
             .replace(/\s+/g, '-')
             .replace(/-+/g, '-')
-            .trim() + '-' + Date.now()
+            .trim()
 
         console.log('Generated slug:', slug)
 

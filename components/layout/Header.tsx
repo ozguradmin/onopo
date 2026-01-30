@@ -217,11 +217,11 @@ export function Header() {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={toggleCart}
+                                onClick={mounted ? toggleCart : undefined}
                                 className="rounded-full w-10 h-10 relative bg-slate-900 text-white hover:bg-slate-800"
                             >
                                 <ShoppingBag className="w-5 h-5" />
-                                {cartItemCount > 0 && (
+                                {mounted && cartItemCount > 0 && (
                                     <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold border-2 border-white">
                                         {cartItemCount}
                                     </span>
@@ -234,11 +234,11 @@ export function Header() {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={toggleCart}
+                                onClick={mounted ? toggleCart : undefined}
                                 className="rounded-full w-10 h-10 relative bg-slate-900 text-white"
                             >
                                 <ShoppingBag className="w-5 h-5" />
-                                {cartItemCount > 0 && (
+                                {mounted && cartItemCount > 0 && (
                                     <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold border-2 border-white">
                                         {cartItemCount}
                                     </span>

@@ -65,15 +65,16 @@ export async function POST(req: NextRequest) {
         })
 
         const orderResult = await db.prepare(
-            `INSERT INTO orders (user_id, guest_email, status, total_amount, shipping_address, payment_status) 
-             VALUES (?, ?, ?, ?, ?, ?) RETURNING id`
+            `INSERT INTO orders (user_id, guest_email, status, total_amount, shipping_address, payment_status, note) 
+             VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`
         ).bind(
             userId,
             customerInfo.email,
             'pending',
             totalAmount,
             shippingAddress,
-            'pending'
+            'pending',
+            customerInfo.note || ''
         ).first()
 
         if (!orderResult) throw new Error("Sipariş oluşturulamadı")
