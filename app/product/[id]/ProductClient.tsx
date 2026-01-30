@@ -30,59 +30,76 @@ const HeartIcon = ({ filled = false }: { filled?: boolean }) => (
     </div>
 )
 
+// Helper to decode common HTML entities
+function decodeHtmlEntities(text: string): string {
+    const entities: { [key: string]: string } = {
+        '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'",
+        '&nbsp;': ' ', '&ouml;': 'ö', '&Ouml;': 'Ö', '&ccedil;': 'ç', '&Ccedil;': 'Ç',
+        '&ş': 'ş', '&Ş': 'Ş', '&ı': 'ı', '&İ': 'İ', '&ğ': 'ğ', '&Ğ': 'Ğ',
+        '&uuml;': 'ü', '&Uuml;': 'Ü', '&rsquo;': "'", '&lsquo;': "'", '&rdquo;': '"',
+        '&ldquo;': '"', '&ndash;': '-', '&mdash;': '—', '&bull;': '•', '&middot;': '·',
+        '&euro;': '€', '&copy;': '©', '&reg;': '®', '&le;': '≤', '&ge;': '≥'
+    }
+    return text.replace(/&[a-z0-9#]+;/gi, (match) => entities[match] || match)
+}
+
 // Helper to format messy description text
 function preprocessDescription(text: string): string {
     if (!text) return ""
 
-    let formatted = text
+    // 1. Decode entities first
+    let formatted = decodeHtmlEntities(text)
 
-    // 0. Strip common HTML wrapper tags that might be literal in the text
-    // Some descriptions come with literal <div> or <p> tags displayed as text
-    formatted = formatted.replace(/<div[^>]*>/g, '')
-    formatted = formatted.replace(/<\/div>/g, '')
-    formatted = formatted.replace(/<p[^>]*>/g, '\n')
-    formatted = formatted.replace(/<\/p>/g, '\n')
-    formatted = formatted.replace(/<br\s*\/?>/g, '\n')
+    // 2. Strip literal HTML tags displayed as text
+    formatted = formatted.replace(/<div[^>]*>/gi, '')
+    formatted = formatted.replace(/<\/div>/gi, '\n')
+    formatted = formatted.replace(/<p[^>]*>/gi, '\n')
+    formatted = formatted.replace(/<\/p>/gi, '\n')
+    formatted = formatted.replace(/<br\s*\/?>/gi, '\n')
+    formatted = formatted.replace(/<span[^>]*>/gi, '')
+    formatted = formatted.replace(/<\/span>/gi, '')
 
-    // 1. Handle mashed categories/sections
-    const sections = [
-        "Ürün Açıklaması",
-        "Detaylı Bilgi",
-        "Teknik Özellikler",
-        "Özellikleri",
-        "Kutu İçeriği"
-    ]
-
+    // 3. Handle Sections/Headers
+    const sections = ["Ürün Açıklaması", "Detaylı Bilgi", "Teknik Özellikler", "Özellikleri", "Kutu İçeriği", "Ürün Özellikleri"]
     sections.forEach(section => {
-        // Find existing occurrences and ensure they have newlines
-        // Match section name even if it's right after other text
-        const regex = new RegExp(`([^\\n#])(${section})`, 'g')
+        const regex = new RegExp(`([^\\n#])(${section})`, 'gi')
         formatted = formatted.replace(regex, '$1\n\n## $2\n\n')
-
-        // Ensure even if at start or already has newline, it's formatted
-        const regexStart = new RegExp(`^(${section})`, 'g')
+        const regexStart = new RegExp(`^(${section})`, 'gi')
         formatted = formatted.replace(regexStart, '## $1\n\n')
     })
 
-    // 2. Handle Key-Value pairs even if mashed (e.g., MarkaOnopo)
-    const keys = ["Marka", "Ürün Kodu", "Barkod", "Desi", "Model", "Renk", "Güç", "Kapasite", "Ağırlık", "Garanti"]
+    // 4. Split mashed sentences in "Detaylı Bilgi" or long blocks
+    // Look for period followed by capital letter with no space or just one space
+    formatted = formatted.replace(/([a-z0-9])\.([A-Z])/g, '$1.\n$2')
+    formatted = formatted.replace(/([a-z0-9])\. ([A-Z])/g, '$1.\n$2')
+
+    // 5. Precise Key-Value pairs
+    const keys = ["Marka", "Ürün Kodu", "Barkod", "Desi", "Model", "Renk", "Güç", "Kapasite", "Ağırlık", "Garanti", "Pil", "Uyumluluk", "Bağlantı"]
     keys.forEach(key => {
-        // If the key is found and NOT followed by a separator, split it
-        const regexMashed = new RegExp(`(${key})([^\\s:])`, 'g')
+        // Mashed keys: "MarkaOnopo" -> "\n- **Marka:** Onopo"
+        const regexMashed = new RegExp(`(\\b${key})([^\\s:]{2,})`, 'gi')
         formatted = formatted.replace(regexMashed, '\n- **$1:** $2')
 
-        // Ensure existing key-value pairs are on their own line with bullet points
-        const regexExist = new RegExp(`([^\\n])(\\b${key}:?\\s*)`, 'g')
-        formatted = formatted.replace(regexExist, '$1\n- **$2**')
+        // Clean existing keys: "Marka: Onopo" -> "\n- **Marka:** Onopo"
+        const regexClean = new RegExp(`(?:^|\\n|\\s)(?:•|\\*|-)?\\s*(${key})\\s*[:：]\\s*`, 'gi')
+        formatted = formatted.replace(regexClean, '\n- **$1:** ')
     })
 
-    // 3. Special handling for Variant blocks [ - Renk: : Kahverengi ...]
+    // 6. Handle Variant blocks and bullets
     formatted = formatted.replace(/\[\s*-\s*/g, '\n- ')
     formatted = formatted.replace(/\]/g, '')
+    // Replace dots/bullets with clean markdown bullets if they are at start of semantic line
+    formatted = formatted.replace(/^\s*[•·]\s*/gm, '- ')
 
-    // Clean up excessive newlines and spaces
+    // 7. Final Cleanup
+    // Remove empty bullets or broken bold markers
+    formatted = formatted.replace(/^\s*[-*]\s*$/gm, '')
+    formatted = formatted.replace(/\*\*\s*\*\*/g, '')
+
+    // Normalize newlines
     return formatted.replace(/\n{3,}/g, '\n\n').trim()
 }
+
 
 
 
