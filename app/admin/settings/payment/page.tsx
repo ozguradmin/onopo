@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { Save, ExternalLink, Check, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { toast } from 'sonner'
 
 export default function PaymentSettingsPage() {
     const [settings, setSettings] = useState<any>({
@@ -13,9 +14,12 @@ export default function PaymentSettingsPage() {
         api_key: '',
         secret_key: '',
         merchant_id: '',
-        base_url: ''
+        merchant_salt: '',
+        base_url: '',
+        test_mode: 1
     })
     const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
     const [activeTab, setActiveTab] = useState<'general' | 'paytr' | 'iyzico'>('general')
 
     useEffect(() => {
@@ -27,7 +31,14 @@ export default function PaymentSettingsPage() {
             const res = await fetch('/api/admin/payment-settings')
             if (res.ok) {
                 const data = await res.json()
-                if (data) setSettings(data)
+                if (data && Object.keys(data).length > 0) {
+                    setSettings({
+                        ...settings,
+                        ...data,
+                        is_active: data.is_active || 0,
+                        test_mode: data.test_mode ?? 1
+                    })
+                }
             }
         } catch (error) {
             console.error(error)
@@ -37,15 +48,24 @@ export default function PaymentSettingsPage() {
     }
 
     const handleSave = async () => {
+        setSaving(true)
         try {
             const res = await fetch('/api/admin/payment-settings', {
-                method: 'POST', // Or PUT
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(settings)
             })
-            if (res.ok) alert('Ayarlar kaydedildi')
+            if (res.ok) {
+                toast.success('Ödeme ayarları kaydedildi!')
+            } else {
+                const data = await res.json()
+                toast.error(data.error || 'Kayıt başarısız')
+            }
         } catch (error) {
             console.error(error)
+            toast.error('Bir hata oluştu')
+        } finally {
+            setSaving(false)
         }
     }
 
@@ -98,7 +118,7 @@ export default function PaymentSettingsPage() {
                                 <input
                                     type="checkbox"
                                     id="active_check"
-                                    checked={settings.is_active === 1}
+                                    checked={settings.is_active === 1 || settings.is_active === true}
                                     onChange={e => setSettings({ ...settings, is_active: e.target.checked ? 1 : 0 })}
                                     className="w-4 h-4 text-indigo-600"
                                 />
@@ -111,20 +131,19 @@ export default function PaymentSettingsPage() {
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                             <div className="space-y-4">
                                 <h3 className="font-semibold text-lg flex items-center gap-2">
-                                    <img src="/paytr-logo-placeholder.png" alt="" className="h-6" />
                                     PayTR API Bilgileri
                                 </h3>
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Merchant ID (Mağaza No)</label>
-                                    <Input value={settings.merchant_id} onChange={e => setSettings({ ...settings, merchant_id: e.target.value })} />
+                                    <Input value={settings.merchant_id || ''} onChange={e => setSettings({ ...settings, merchant_id: e.target.value })} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">API Key (Mağaza Anahtarı)</label>
-                                    <Input value={settings.api_key} onChange={e => setSettings({ ...settings, api_key: e.target.value })} type="password" />
+                                    <label className="block text-sm font-medium mb-1">Merchant Key (Mağaza Parolası)</label>
+                                    <Input value={settings.api_key || ''} onChange={e => setSettings({ ...settings, api_key: e.target.value })} type="password" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Secret Key (Mağaza Gizli Anahtarı)</label>
-                                    <Input value={settings.secret_key} onChange={e => setSettings({ ...settings, secret_key: e.target.value })} type="password" />
+                                    <label className="block text-sm font-medium mb-1">Merchant Salt (Gizli Anahtar)</label>
+                                    <Input value={settings.merchant_salt || ''} onChange={e => setSettings({ ...settings, merchant_salt: e.target.value })} type="password" />
                                 </div>
                             </div>
 
