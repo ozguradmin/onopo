@@ -28,6 +28,14 @@ const nextConfig: NextConfig = {
   // Force trailing slashes for better SEO
   trailingSlash: true,
 
+  async rewrites() {
+    return [
+      {
+        source: '/export/3d8f6f5317c8d55d5f54b082f1fcb46cpnldbKp6eyhPkP9SVQ==',
+        destination: '/api/feeds/akakce',
+      },
+    ]
+  },
   // Headers for security and caching
   async headers() {
     return [
