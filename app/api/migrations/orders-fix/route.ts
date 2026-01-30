@@ -81,6 +81,18 @@ export async function GET(req: NextRequest) {
             }
         }
 
+        // Add note column if missing (customer note during checkout)
+        try {
+            await db.prepare(`ALTER TABLE orders ADD COLUMN note TEXT`).run()
+            results.push('Added note column')
+        } catch (e: any) {
+            if (e.message?.includes('duplicate column')) {
+                results.push('note column already exists')
+            } else {
+                results.push('note: ' + e.message)
+            }
+        }
+
         return NextResponse.json({
             success: true,
             message: 'Migration completed',
