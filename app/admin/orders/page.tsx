@@ -15,7 +15,8 @@ interface Order {
     status: string
     total_amount: number
     shipping_address: string
-    tracking_code: string | null
+    tracking_number: string | null
+    admin_notes: string | null
     created_at: string
 }
 
@@ -53,7 +54,7 @@ function OrdersContent() {
             setOrders(Array.isArray(data) ? data : [])
             // Initialize tracking codes
             const codes: Record<number, string> = {}
-            data.forEach((o: Order) => { if (o.tracking_code) codes[o.id] = o.tracking_code })
+            data.forEach((o: Order) => { if (o.tracking_number) codes[o.id] = o.tracking_number })
             setTrackingCode(codes)
 
             // Auto expand if highlighted
@@ -104,7 +105,7 @@ function OrdersContent() {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    tracking_code: trackingCode[orderId],
+                    tracking_number: trackingCode[orderId],
                     send_notification: true
                 })
             })

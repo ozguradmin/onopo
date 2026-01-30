@@ -122,9 +122,25 @@ export default function OrderEditPage() {
 
                     <div>
                         <h3 className="font-semibold text-slate-700 mb-2">Teslimat Adresi</h3>
-                        <p className="text-slate-600 text-sm">
-                            {order.shipping_address || 'Adres bilgisi yok'}
-                        </p>
+                        {(() => {
+                            try {
+                                const addr = JSON.parse(order.shipping_address || '{}')
+                                return (
+                                    <div className="text-slate-600 text-sm space-y-1">
+                                        {addr.fullName && <p className="font-medium">{addr.fullName}</p>}
+                                        {addr.phone && <p>📞 {addr.phone}</p>}
+                                        {addr.address && <p>{addr.address}</p>}
+                                        {(addr.district || addr.city) && (
+                                            <p>{[addr.district, addr.city].filter(Boolean).join(', ')}</p>
+                                        )}
+                                        {addr.postalCode && !addr.postalCode.includes('(') && <p>Posta Kodu: {addr.postalCode}</p>}
+                                        {addr.note && <p className="mt-2 italic text-slate-500">Not: {addr.note}</p>}
+                                    </div>
+                                )
+                            } catch {
+                                return <p className="text-slate-600 text-sm">{order.shipping_address || 'Adres bilgisi yok'}</p>
+                            }
+                        })()}
                     </div>
                 </div>
 
@@ -145,8 +161,8 @@ export default function OrderEditPage() {
                                         key={status.value}
                                         onClick={() => setFormData({ ...formData, status: status.value })}
                                         className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all text-left ${isSelected
-                                                ? `border-${status.color}-500 bg-${status.color}-50 text-${status.color}-700`
-                                                : 'border-slate-200 hover:border-slate-300'
+                                            ? `border-${status.color}-500 bg-${status.color}-50 text-${status.color}-700`
+                                            : 'border-slate-200 hover:border-slate-300'
                                             }`}
                                     >
                                         <Icon className={`w-4 h-4 ${isSelected ? `text-${status.color}-600` : 'text-slate-400'}`} />

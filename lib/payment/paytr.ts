@@ -37,7 +37,7 @@ export class PaytrProvider implements PaymentProvider {
             const no_installment = '0' // 0 = taksit var, 1 = taksit yok
             const max_installment = '0' // 0 = limit yok
             const currency = 'TL'
-            const test_mode = '1' // Test mode - change to '0' for production
+            const test_mode = '0' // Production mode - real payments
 
             // User info
             const email = user.email || 'test@test.com'

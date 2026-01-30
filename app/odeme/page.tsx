@@ -180,8 +180,11 @@ export default function CheckoutPage() {
                         <p className="text-slate-500 mb-4">
                             Sipariş numaranız: <span className="font-bold text-slate-900">#{orderId}</span>
                         </p>
-                        <p className="text-slate-500 mb-6">
+                        <p className="text-slate-500 mb-2">
                             Sipariş detaylarınız <span className="font-medium">{formData.email}</span> adresine gönderilecektir.
+                        </p>
+                        <p className="text-sm text-amber-600 mb-6">
+                            📧 Mail gelmezse lütfen spam/gereksiz klasörünü kontrol edin.
                         </p>
                         <div className="flex gap-4 justify-center">
                             <Link href="/">
