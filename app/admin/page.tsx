@@ -3,20 +3,24 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ShoppingBag, TrendingUp, Package, DollarSign, Plus, Edit, Trash2 } from 'lucide-react'
+import { ShoppingBag, TrendingUp, Package, DollarSign, Plus, Edit, Trash2, Wrench, AlertTriangle } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function AdminDashboard() {
     const router = useRouter()
     const [products, setProducts] = React.useState<any[]>([])
     const [orders, setOrders] = React.useState<any[]>([])
     const [stats, setStats] = React.useState({ totalProducts: 0, totalOrders: 0, totalRevenue: 0, todayViews: 0 })
+    const [maintenanceMode, setMaintenanceMode] = React.useState(false)
+    const [savingMaintenance, setSavingMaintenance] = React.useState(false)
 
     React.useEffect(() => {
         Promise.all([
             fetch('/api/products').then(r => r.json()).catch(() => []),
             fetch('/api/orders').then(r => r.json()).catch(() => []),
-            fetch('/api/analytics?range=day').then(r => r.json()).catch(() => ({ totalViews: 0 }))
-        ]).then(([prods, ords, analytics]) => {
+            fetch('/api/analytics?range=day').then(r => r.json()).catch(() => ({ totalViews: 0 })),
+            fetch('/api/site-settings').then(r => r.json()).catch(() => ({}))
+        ]).then(([prods, ords, analytics, settings]) => {
             setProducts(prods || [])
             setOrders(ords || [])
             const revenue = (ords || []).reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0)
@@ -26,6 +30,7 @@ export default function AdminDashboard() {
                 totalRevenue: revenue,
                 todayViews: analytics?.totalViews || 0
             })
+            setMaintenanceMode(settings?.maintenance_mode === 'true' || settings?.maintenance_mode === true)
         })
     }, [])
 
@@ -35,8 +40,48 @@ export default function AdminDashboard() {
         setProducts(products.filter(p => p.id !== id))
     }
 
+    const toggleMaintenanceMode = async () => {
+        setSavingMaintenance(true)
+        const newValue = !maintenanceMode
+        try {
+            const res = await fetch('/api/site-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ maintenance_mode: newValue ? 'true' : 'false' })
+            })
+            if (res.ok) {
+                setMaintenanceMode(newValue)
+                toast.success(newValue ? 'Site bakıma alındı!' : 'Site yayına açıldı!')
+            } else {
+                toast.error('Ayar kaydedilemedi')
+            }
+        } catch {
+            toast.error('Bir hata oluştu')
+        } finally {
+            setSavingMaintenance(false)
+        }
+    }
+
     return (
         <div className="space-y-8">
+            {/* Maintenance Mode Alert */}
+            {maintenanceMode && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex items-center gap-3">
+                    <AlertTriangle className="w-5 h-5 text-yellow-600" />
+                    <div className="flex-1">
+                        <p className="font-semibold text-yellow-800">Site Bakım Modunda</p>
+                        <p className="text-sm text-yellow-700">Ziyaretçiler bakım sayfasını görüyor. Siteyi açmak için aşağıdaki butonu kullanın.</p>
+                    </div>
+                    <Button
+                        onClick={toggleMaintenanceMode}
+                        disabled={savingMaintenance}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                        Siteyi Aç
+                    </Button>
+                </div>
+            )}
+
             {/* Stats Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -88,7 +133,7 @@ export default function AdminDashboard() {
             {/* Quick Actions */}
             <section>
                 <h2 className="text-xl font-bold text-slate-900 mb-4">Hızlı İşlemler</h2>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     <Button
                         onClick={() => router.push('/admin/products/new')}
                         className="h-auto py-4 flex-col gap-2 bg-slate-900 text-white hover:bg-slate-800"
@@ -119,6 +164,15 @@ export default function AdminDashboard() {
                     >
                         <Edit className="w-6 h-6" />
                         <span>Site Ayarları</span>
+                    </Button>
+                    <Button
+                        onClick={toggleMaintenanceMode}
+                        disabled={savingMaintenance}
+                        variant="outline"
+                        className={`h-auto py-4 flex-col gap-2 ${maintenanceMode ? 'border-green-500 text-green-600 hover:bg-green-50' : 'border-yellow-500 text-yellow-600 hover:bg-yellow-50'}`}
+                    >
+                        <Wrench className="w-6 h-6" />
+                        <span>{maintenanceMode ? 'Siteyi Aç' : 'Bakıma Al'}</span>
                     </Button>
                 </div>
             </section>

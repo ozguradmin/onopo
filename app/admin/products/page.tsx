@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Edit, Trash2, Plus, Upload, Trash, Loader2 } from 'lucide-react'
+import { Edit, Trash2, Plus, Upload, Trash, Loader2, Search } from 'lucide-react'
 import { formatPrice } from '@/lib/formatPrice'
 import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
@@ -11,16 +11,35 @@ import { toast } from 'sonner'
 export default function AdminProductsPage() {
     const router = useRouter()
     const [products, setProducts] = React.useState<any[]>([])
+    const [categories, setCategories] = React.useState<{ id: number, name: string }[]>([])
     const [loading, setLoading] = React.useState(true)
 
+    // Search and Filter state
+    const [searchQuery, setSearchQuery] = React.useState('')
+    const [selectedCategory, setSelectedCategory] = React.useState('')
+
     React.useEffect(() => {
-        fetch('/api/products')
-            .then(r => r.json())
-            .then(data => {
-                setProducts(data || [])
-                setLoading(false)
-            })
+        Promise.all([
+            fetch('/api/products').then(r => r.json()),
+            fetch('/api/categories').then(r => r.json())
+        ]).then(([prods, cats]) => {
+            setProducts(prods || [])
+            setCategories(cats || [])
+            setLoading(false)
+        }).catch(() => setLoading(false))
     }, [])
+
+    // Filtered products
+    const filteredProducts = React.useMemo(() => {
+        return products.filter(p => {
+            const matchesSearch = searchQuery === '' ||
+                p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                p.product_code?.toLowerCase().includes(searchQuery.toLowerCase())
+            const matchesCategory = selectedCategory === '' ||
+                p.category?.toLowerCase() === selectedCategory.toLowerCase()
+            return matchesSearch && matchesCategory
+        })
+    }, [products, searchQuery, selectedCategory])
 
     const handleDelete = async (id: number) => {
         if (!confirm('Bu ürünü silmek istediğinize emin misiniz?')) return
@@ -212,6 +231,46 @@ export default function AdminProductsPage() {
                 </div>
             </div>
 
+            {/* Search and Filter Bar */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-4 flex flex-col md:flex-row gap-3">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                        type="text"
+                        placeholder="Ürün adı veya kodu ile ara..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                    />
+                </div>
+                <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent min-w-[200px]"
+                >
+                    <option value="">Tüm Kategoriler</option>
+                    {categories.map(cat => (
+                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                    ))}
+                </select>
+                {(searchQuery || selectedCategory) && (
+                    <Button
+                        variant="ghost"
+                        onClick={() => { setSearchQuery(''); setSelectedCategory(''); }}
+                        className="text-slate-500"
+                    >
+                        Temizle
+                    </Button>
+                )}
+            </div>
+
+            {/* Results count */}
+            {(searchQuery || selectedCategory) && (
+                <p className="text-sm text-slate-500 mb-2">
+                    {filteredProducts.length} ürün bulundu
+                </p>
+            )}
+
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -226,7 +285,7 @@ export default function AdminProductsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {products.map(product => (
+                            {filteredProducts.map(product => (
                                 <tr key={product.id} className="hover:bg-slate-50">
                                     <td className="p-4">
                                         <img
@@ -258,7 +317,7 @@ export default function AdminProductsPage() {
                                     </td>
                                 </tr>
                             ))}
-                            {products.length === 0 && (
+                            {filteredProducts.length === 0 && (
                                 <tr><td colSpan={6} className="p-8 text-center text-slate-500">Henüz ürün yok.</td></tr>
                             )}
                         </tbody>
