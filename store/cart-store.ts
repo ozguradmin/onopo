@@ -104,6 +104,23 @@ export const useCartStore = create<CartState>()(
         }),
         {
             name: 'onopo-cart-storage',
+            skipHydration: true, // CRITICAL: Skip initial hydration to prevent SSR mismatch
         }
     )
 )
+
+// Hook to check if store is hydrated (safe to use on client)
+import { useEffect, useState } from 'react'
+
+export function useCartHydration() {
+    const [hydrated, setHydrated] = useState(false)
+
+    useEffect(() => {
+        // Rehydrate the store on mount
+        useCartStore.persist.rehydrate()
+        setHydrated(true)
+    }, [])
+
+    return hydrated
+}
+

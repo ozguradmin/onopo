@@ -1,6 +1,6 @@
 import CategoryClient from "./CategoryClient"
 import ProductClient from "../product/[id]/ProductClient"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { getDB } from "@/lib/db"
 
 export const dynamic = 'force-dynamic'
@@ -44,6 +44,49 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     return { title: 'ONOPO' }
 }
 
+// Helper to find similar slug
+async function findSimilarProduct(db: any, slug: string): Promise<string | null> {
+    // Try variations:
+    // 1. Add "onopo-" prefix if missing
+    // 2. Remove "onopo-" prefix if present
+    // 3. Search for partial match
+
+    const variations = []
+
+    // If slug doesn't start with "onopo-", try adding it
+    if (!slug.startsWith('onopo-')) {
+        variations.push('onopo-' + slug)
+    }
+
+    // If slug starts with "onopo-", try removing it
+    if (slug.startsWith('onopo-')) {
+        variations.push(slug.substring(6))
+    }
+
+    // Try each variation
+    for (const variant of variations) {
+        const { results } = await db.prepare(
+            `SELECT slug FROM products WHERE slug = ? AND is_active = 1 LIMIT 1`
+        ).bind(variant).all()
+
+        if (results && results.length > 0) {
+            return (results[0] as any).slug
+        }
+    }
+
+    // Try partial match (slug contains or is contained)
+    const searchTerm = slug.replace('onopo-', '').substring(0, 20)
+    const { results } = await db.prepare(
+        `SELECT slug FROM products WHERE slug LIKE ? AND is_active = 1 LIMIT 1`
+    ).bind(`%${searchTerm}%`).all()
+
+    if (results && results.length > 0) {
+        return (results[0] as any).slug
+    }
+
+    return null
+}
+
 export default async function Page(props: { params: Promise<{ slug: string }> }) {
     const params = await props.params
 
@@ -63,6 +106,12 @@ export default async function Page(props: { params: Promise<{ slug: string }> })
             const product = results[0] as any
             return <ProductClient id={String(product.id)} />
         }
+
+        // Product not found - try to find similar slug and redirect
+        const similarSlug = await findSimilarProduct(db, params.slug)
+        if (similarSlug) {
+            redirect(`/${similarSlug}`)
+        }
     } catch (e) {
         console.error('Product lookup error:', e)
     }
@@ -70,3 +119,4 @@ export default async function Page(props: { params: Promise<{ slug: string }> })
     // Neither category nor product found
     notFound()
 }
+

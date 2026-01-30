@@ -6,6 +6,7 @@ import { Header } from "@/components/layout/Header"
 import { Footer } from "@/components/layout/Footer"
 import { CartDrawer } from "@/components/cart/CartDrawer"
 import { MobileNav } from "@/components/layout/MobileNav"
+import { useCartStore } from "@/store/cart-store"
 
 export function LayoutProvider({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
@@ -19,9 +20,11 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
     const [maintenanceMode, setMaintenanceMode] = React.useState(false)
     const [checked, setChecked] = React.useState(false)
 
-    // Set mounted on client only
+    // Set mounted on client only AND hydrate Zustand store
     React.useEffect(() => {
         setMounted(true)
+        // Hydrate the cart store from localStorage after mount
+        useCartStore.persist.rehydrate()
     }, [])
 
     React.useEffect(() => {

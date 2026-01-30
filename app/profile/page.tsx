@@ -12,6 +12,7 @@ export default function ProfilePage() {
     const [user, setUser] = React.useState<any>(null)
     const [favorites, setFavorites] = React.useState<any[]>([])
     const [loading, setLoading] = React.useState(true)
+    const [redirecting, setRedirecting] = React.useState(false)
     const [activeTab, setActiveTab] = React.useState<'profile' | 'favorites'>('profile')
 
     React.useEffect(() => {
@@ -26,6 +27,8 @@ export default function ProfilePage() {
                 setLoading(false)
             })
             .catch(() => {
+                setRedirecting(true)
+                setLoading(false)
                 router.push('/login?redirect=/profile')
             })
 
@@ -56,6 +59,14 @@ export default function ProfilePage() {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-slate-500">Yükleniyor...</div>
+            </div>
+        )
+    }
+
+    if (redirecting) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-slate-500">Giriş sayfasına yönlendiriliyorsunuz...</div>
             </div>
         )
     }
