@@ -4,6 +4,8 @@ import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import { sendTrackingUpdate } from '@/lib/email'
 
+export const dynamic = 'force-dynamic'
+
 // GET: Get single order
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {

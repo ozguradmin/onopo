@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
-import { sendOrderConfirmation, sendAdminNewOrderNotification } from '@/lib/email'
+import { sendAdminNewOrderNotification, sendOrderConfirmation } from '@/lib/email'
 
-// Create Order (Guest or User)
+export const dynamic = 'force-dynamic'
+
+// POST: Create new order (Guest or User)
 export async function POST(req: NextRequest) {
     try {
         const db = await getDB()
