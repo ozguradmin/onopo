@@ -52,7 +52,7 @@ export default async function Home() {
       let filtered = [...productsWithImages]
 
       if (config.selection_type === 'category' && config.category) {
-        filtered = filtered.filter(p => p.category === config.category)
+        filtered = filtered.filter(p => p.category && p.category.toLowerCase() === config.category.toLowerCase())
       } else if (config.selection_type === 'manual' && config.product_ids && config.product_ids.length > 0) {
         filtered = filtered.filter(p => config.product_ids.includes(p.id))
       }
@@ -99,6 +99,7 @@ export default async function Home() {
               title={section.title}
               description={config.description}
               products={products}
+              category={config.selection_type === 'category' ? config.category : undefined}
             />
           )
         } else if (section.type === 'products') {

