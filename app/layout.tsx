@@ -128,6 +128,40 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteSchema) }}
         />
+        {/* Global Error Handler for removeChild hydration errors */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                var reloadAttempted = false;
+                window.onerror = function(msg, url, line, col, error) {
+                  if (!reloadAttempted && msg && (
+                    msg.indexOf('removeChild') !== -1 || 
+                    msg.indexOf('properties of null') !== -1 ||
+                    msg.indexOf('insertBefore') !== -1 ||
+                    msg.indexOf('appendChild') !== -1
+                  )) {
+                    reloadAttempted = true;
+                    console.log('[ErrorRecovery] Detected hydration error, forcing reload...');
+                    window.location.reload();
+                    return true;
+                  }
+                  return false;
+                };
+                window.addEventListener('unhandledrejection', function(event) {
+                  if (!reloadAttempted && event.reason && event.reason.message && (
+                    event.reason.message.indexOf('removeChild') !== -1 ||
+                    event.reason.message.indexOf('properties of null') !== -1
+                  )) {
+                    reloadAttempted = true;
+                    console.log('[ErrorRecovery] Detected unhandled hydration error, forcing reload...');
+                    window.location.reload();
+                  }
+                });
+              })();
+            `
+          }}
+        />
       </head>
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} antialiased selection:bg-accent selection:text-white pb-16 md:pb-0`}

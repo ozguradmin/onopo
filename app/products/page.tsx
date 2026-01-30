@@ -66,16 +66,31 @@ async function getProducts(category?: string, query?: string) {
     }
 
     if (query) {
-        // Sanitize query: Remove problematic characters and limit length
+        // AGGRESSIVE SANITIZATION to prevent "LIKE pattern too complex" error
+        // 1. Normalize Turkish characters to ASCII
         let sanitizedQuery = query
+            .replace(/ü/gi, 'u')
+            .replace(/ö/gi, 'o')
+            .replace(/ş/gi, 's')
+            .replace(/ğ/gi, 'g')
+            .replace(/ı/gi, 'i')
+            .replace(/İ/g, 'I')
+            .replace(/ç/gi, 'c')
             .replace(/[%_\\'"]/g, ' ')  // Remove SQL wildcards and quotes
+            .replace(/[^\w\s]/g, ' ')    // Remove special chars
             .replace(/\s+/g, ' ')        // Normalize whitespace
             .trim()
-            .slice(0, 100)               // Limit query length
 
-        if (sanitizedQuery.length > 0) {
-            sql += ` AND (name LIKE ? OR description LIKE ?)`
-            params.push(`%${sanitizedQuery}%`, `%${sanitizedQuery}%`)
+        // 2. Split into words and take only first 2 meaningful words (3+ chars)
+        const words = sanitizedQuery.split(' ').filter(w => w.length >= 3).slice(0, 2)
+
+        if (words.length > 0) {
+            // Search for each word separately (AND logic)
+            const conditions = words.map(() => `(name LIKE ? OR slug LIKE ?)`).join(' AND ')
+            sql += ` AND (${conditions})`
+            words.forEach(word => {
+                params.push(`%${word}%`, `%${word}%`)
+            })
         }
     }
 

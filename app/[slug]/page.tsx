@@ -45,12 +45,28 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 }
 
 // Helper to find similar slug using fuzzy matching
-// STRICT MATCHING: Only redirect if we're very confident it's the right product
+// IMPROVED MATCHING: Handle common URL variations
 async function findSimilarProduct(db: any, slug: string): Promise<string | null> {
-    // 1. Try simple variations first (fastest)
-    const exactVariations = []
+    // 1. Try exact variations first (fastest)
+    const exactVariations: string[] = []
+
+    // Add/remove onopo- prefix
     if (!slug.startsWith('onopo-')) exactVariations.push('onopo-' + slug)
     if (slug.startsWith('onopo-')) exactVariations.push(slug.substring(6))
+
+    // Normalize dots in model numbers: 3.5mm → 35mm
+    const normalizedSlug = slug.replace(/(\d)\.(\d)/g, '$1$2')
+    if (normalizedSlug !== slug) {
+        exactVariations.push(normalizedSlug)
+        if (!normalizedSlug.startsWith('onopo-')) exactVariations.push('onopo-' + normalizedSlug)
+    }
+
+    // Also try with onopo prefix + normalized
+    const withPrefix = 'onopo-' + slug.replace('onopo-', '')
+    const withPrefixNormalized = withPrefix.replace(/(\d)\.(\d)/g, '$1$2')
+    if (!exactVariations.includes(withPrefixNormalized)) {
+        exactVariations.push(withPrefixNormalized)
+    }
 
     for (const variant of exactVariations) {
         const { results } = await db.prepare(
@@ -59,12 +75,15 @@ async function findSimilarProduct(db: any, slug: string): Promise<string | null>
         if (results && results.length > 0) return (results[0] as any).slug
     }
 
-    // 2. STRICT Fuzzy Search Strategy
-    // Clean the slug: remove 'onopo-', split by dashes
-    const cleanSlug = slug.replace('onopo-', '').toLowerCase()
+    // 2. FUZZY Search Strategy
+    // Clean the slug: remove 'onopo-', normalize dots, split by dashes
+    const cleanSlug = slug
+        .replace('onopo-', '')
+        .replace(/(\d)\.(\d)/g, '$1$2')  // 3.5mm → 35mm for matching
+        .toLowerCase()
 
     // Stop words to ignore during search
-    const stopWords = ['ve', 'ile', 'icin', 'cok', 'daha', 'en', 'hizli', 'guclu', 'sarj', 'kablo', 'usb', 'type', 'to', 'adaptoru', 'cihazi', 'arada', 'li', 'lu', 'u', 'in', 'katlanabilir', 'fonksiyonlu', 'guvenli', 'guvenlik', 'tasinabilir', 'portatif', 'kablosuz', 'mini', 'arac', 'tekerlekli', 'cocuk', 'ayarlanabilir', 'yukseklikli', 'korumali', 'yas']
+    const stopWords = ['ve', 'ile', 'icin', 'cok', 'daha', 'en', 'hizli', 'guclu', 'sarj', 'kablo', 'usb', 'type', 'to', 'adaptoru', 'cihazi', 'arada', 'li', 'lu', 'u', 'in', 'katlanabilir', 'fonksiyonlu', 'guvenli', 'guvenlik', 'tasinabilir', 'portatif', 'kablosuz', 'mini', 'arac', 'tekerlekli', 'cocuk', 'ayarlanabilir', 'yukseklikli', 'korumali', 'yas', 'yuksek', 'ses', 'kaliteli', 'kablolu', 'telefon', 'tablet', 'uyumlu']
 
     // Split into tokens
     const tokens = cleanSlug.split('-').filter(w => w.length > 1 && !stopWords.includes(w))
@@ -72,12 +91,11 @@ async function findSimilarProduct(db: any, slug: string): Promise<string | null>
     if (tokens.length === 0) return null
 
     // Separate "Model Numbers" (tokens with digits) from regular words
-    const modelTokens = tokens.filter(t => /\d/.test(t)) // e.g., '20000pa', '12w', '2.4a'
-    const wordTokens = tokens.filter(t => !/\d/.test(t)) // e.g., 'supurge', 'siyah'
+    const modelTokens = tokens.filter(t => /\d/.test(t)) // e.g., '35mm', '12w', 'v5'
+    const wordTokens = tokens.filter(t => !/\d/.test(t)) // e.g., 'kulaklik', 'siyah'
 
-    // CRITICAL: If we have model numbers, we MUST match ALL of them
-    // Otherwise we might redirect "20000pa supurge" to "20000mah powerbank"
-    if (modelTokens.length === 0 && wordTokens.length < 3) {
+    // LESS STRICT: Allow matching even with just word tokens
+    if (modelTokens.length === 0 && wordTokens.length < 2) {
         // Not enough info to make a confident match
         return null
     }
