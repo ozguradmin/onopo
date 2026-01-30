@@ -51,6 +51,15 @@ export default function ProductsClient({
     // Search state
     const [searchQuery, setSearchQuery] = useState(searchParams.q || '')
 
+    // Sync state with URL params (Critical for navigation/popstate)
+    useEffect(() => {
+        setSearchQuery(searchParams.q || '')
+        setMinPrice(searchParams.minPrice || '')
+        setMaxPrice(searchParams.maxPrice || '')
+        setSelectedBrand(searchParams.brand || '')
+        setSortBy(searchParams.sort || 'newest')
+    }, [searchParams])
+
     // Debounce search
     useEffect(() => {
         const timer = setTimeout(() => {

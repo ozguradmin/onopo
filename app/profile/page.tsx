@@ -29,7 +29,8 @@ export default function ProfilePage() {
             .catch(() => {
                 setRedirecting(true)
                 setLoading(false)
-                router.push('/login?redirect=/profile')
+                // Use window.location for reliable redirect clearing any client state
+                window.location.href = '/login?redirect=/profile'
             })
 
         // Fetch favorites

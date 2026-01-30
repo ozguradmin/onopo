@@ -61,13 +61,13 @@ async function findSimilarProduct(db: any, slug: string): Promise<string | null>
     // 2. Fuzzy Search Strategy
     // Clean the slug: remove 'onopo-', split by dashes, remove common words
     const cleanSlug = slug.replace('onopo-', '').toLowerCase()
-    const words = cleanSlug.split('-').filter(w => w.length > 2)
+    const stopWords = ['ve', 'ile', 'icin', 'cok', 'daha', 'en', 'hizli', 'guclu', 'sarj', 'kablo', 'usb', 'type', 'to']
+    const words = cleanSlug.split('-').filter(w => w.length > 2 && !stopWords.includes(w))
 
     if (words.length === 0) return null
 
     // Build values for bound parameters
     // We search for products that match AT LEAST ONE of the significant words
-    // We limit to 50 candidates to process in JS
     const conditions = words.map(() => `slug LIKE ?`).join(' OR ')
     const bindValues = words.map(w => `%${w}%`)
 
@@ -95,17 +95,22 @@ async function findSimilarProduct(db: any, slug: string): Promise<string | null>
                 }
             }
 
-            // Jaccard-like score: matches / distinct total words
-            // Emphasize match count
-            const score = matchCount
+            // Calculate score purely based on number of matched significant words
+            // Penalize candidates that are too long if they don't match many words? No.
+            // Just prioritize highest match count.
 
-            if (score > maxScore && score >= Math.min(2, words.length)) { // At least 2 matches or all if short
-                maxScore = score
+            if (matchCount > maxScore) {
+                maxScore = matchCount
                 bestMatch = cSlug
             }
         }
 
-        return bestMatch
+        // Strict threshold: Must match at least 50% of significant words if we have many, or all if distinct
+        // Example: '20000pa' (1 word). Match count 1.
+        // Example: '20000pa-supurge' (2 words).
+
+        if (maxScore > 0) return bestMatch
+        return null
     } catch (err) {
         console.error('Fuzzy search error:', err)
         return null
