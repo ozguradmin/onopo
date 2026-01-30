@@ -74,9 +74,6 @@ export default function OrderEditPage() {
         }
     }
 
-    if (loading) return <div className="p-8 text-center">Yükleniyor...</div>
-    if (!order) return <div className="p-8 text-center text-red-500">Sipariş bulunamadı</div>
-
     const items = React.useMemo(() => {
         if (!order?.items) return []
         try {
@@ -86,6 +83,10 @@ export default function OrderEditPage() {
             return []
         }
     }, [order?.items])
+
+    if (loading) return <div className="p-8 text-center">Yükleniyor...</div>
+    if (!order) return <div className="p-8 text-center text-red-500">Sipariş bulunamadı</div>
+
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
