@@ -108,44 +108,44 @@ export function HeroSection() {
                         </motion.div>
                     </div>
                 </motion.div>
+
+            </AnimatePresence>
+
+            {/* Scroll Indicator */}
+            <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1, duration: 1 }}
+                className="absolute bottom-24 left-0 right-0 z-20 flex justify-center pointer-events-none"
+            >
+                <motion.div
+                    animate={{ y: [0, 10, 0] }}
+                    transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                    className="flex flex-col items-center gap-2 text-white/50"
+                >
+                    <span className="text-xs uppercase tracking-widest font-medium">Kaydır</span>
+                    <ArrowDown className="w-6 h-6" />
+                </motion.div>
             </motion.div>
-        </AnimatePresence>
 
-            {/* Scroll Indicator */ }
-    <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1, duration: 1 }}
-        className="absolute bottom-24 left-0 right-0 z-20 flex justify-center pointer-events-none"
-    >
-        <motion.div
-            animate={{ y: [0, 10, 0] }}
-            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-            className="flex flex-col items-center gap-2 text-white/50"
-        >
-            <span className="text-xs uppercase tracking-widest font-medium">Kaydır</span>
-            <ArrowDown className="w-6 h-6" />
-        </motion.div>
-    </motion.div>
-
-    {/* Slider Controls */ }
-    {
-        slides.length > 1 && (
-            <div className="absolute bottom-10 left-0 right-0 z-20">
-                <div className="container mx-auto px-4 flex justify-center gap-3">
-                    {slides.map((s, index) => (
-                        <button
-                            key={s.id || index}
-                            onClick={() => setCurrentSlide(index)}
-                            className={`h-1.5 rounded-full transition-all duration-300 shadow-sm ${index === currentSlide ? "w-12 bg-white" : "w-6 bg-white/40 hover:bg-white/60"
-                                }`}
-                            aria-label={`Go to slide ${index + 1}`}
-                        />
-                    ))}
-                </div>
-            </div>
-        )
-    }
+            {/* Slider Controls */}
+            {
+                slides.length > 1 && (
+                    <div className="absolute bottom-10 left-0 right-0 z-20">
+                        <div className="container mx-auto px-4 flex justify-center gap-3">
+                            {slides.map((s, index) => (
+                                <button
+                                    key={s.id || index}
+                                    onClick={() => setCurrentSlide(index)}
+                                    className={`h-1.5 rounded-full transition-all duration-300 shadow-sm ${index === currentSlide ? "w-12 bg-white" : "w-6 bg-white/40 hover:bg-white/60"
+                                        }`}
+                                    aria-label={`Go to slide ${index + 1}`}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )
+            }
         </section >
     )
 }
