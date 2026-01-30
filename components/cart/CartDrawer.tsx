@@ -21,8 +21,17 @@ export function CartDrawer() {
         setMounted(true)
     }, [])
 
-    // Don't render anything during SSR to prevent hydration errors
-    if (!mounted) return null
+    // Prevent scrolling when cart is open - MUST be before any early returns
+    React.useEffect(() => {
+        if (isOpen && mounted) {
+            document.body.style.overflow = "hidden"
+        } else {
+            document.body.style.overflow = "unset"
+        }
+        return () => {
+            document.body.style.overflow = "unset"
+        }
+    }, [isOpen, mounted])
 
     const handleApplyCoupon = async () => {
         if (!couponCode) return
@@ -46,14 +55,8 @@ export function CartDrawer() {
         }
     }
 
-    // Prevent scrolling when cart is open
-    React.useEffect(() => {
-        if (isOpen) {
-            document.body.style.overflow = "hidden"
-        } else {
-            document.body.style.overflow = "unset"
-        }
-    }, [isOpen])
+    // Don't render anything during SSR to prevent hydration errors
+    if (!mounted) return null
 
     return (
         <AnimatePresence>
