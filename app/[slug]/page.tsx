@@ -45,6 +45,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 }
 
 // Helper to find similar slug using fuzzy matching
+// STRICT MATCHING: Only redirect if we're very confident it's the right product
 async function findSimilarProduct(db: any, slug: string): Promise<string | null> {
     // 1. Try simple variations first (fastest)
     const exactVariations = []
@@ -58,12 +59,12 @@ async function findSimilarProduct(db: any, slug: string): Promise<string | null>
         if (results && results.length > 0) return (results[0] as any).slug
     }
 
-    // 2. Fuzzy Search Strategy
+    // 2. STRICT Fuzzy Search Strategy
     // Clean the slug: remove 'onopo-', split by dashes
     const cleanSlug = slug.replace('onopo-', '').toLowerCase()
 
     // Stop words to ignore during search
-    const stopWords = ['ve', 'ile', 'icin', 'cok', 'daha', 'en', 'hizli', 'guclu', 'sarj', 'kablo', 'usb', 'type', 'to', 'adaptoru', 'cihazi', 'arada', 'li', 'lu', 'u', 'in', 'katlanabilir', 'fonksiyonlu', 'guvenli', 'guvenlik']
+    const stopWords = ['ve', 'ile', 'icin', 'cok', 'daha', 'en', 'hizli', 'guclu', 'sarj', 'kablo', 'usb', 'type', 'to', 'adaptoru', 'cihazi', 'arada', 'li', 'lu', 'u', 'in', 'katlanabilir', 'fonksiyonlu', 'guvenli', 'guvenlik', 'tasinabilir', 'portatif', 'kablosuz', 'mini', 'arac', 'tekerlekli', 'cocuk', 'ayarlanabilir', 'yukseklikli', 'korumali', 'yas']
 
     // Split into tokens
     const tokens = cleanSlug.split('-').filter(w => w.length > 1 && !stopWords.includes(w))
@@ -74,21 +75,35 @@ async function findSimilarProduct(db: any, slug: string): Promise<string | null>
     const modelTokens = tokens.filter(t => /\d/.test(t)) // e.g., '20000pa', '12w', '2.4a'
     const wordTokens = tokens.filter(t => !/\d/.test(t)) // e.g., 'supurge', 'siyah'
 
-    // Build query conditions
-    // We want to find candidates that match ANY of our important tokens
-    const searchTokens = [...modelTokens, ...wordTokens]
-    if (searchTokens.length === 0) return null
+    // CRITICAL: If we have model numbers, we MUST match ALL of them
+    // Otherwise we might redirect "20000pa supurge" to "20000mah powerbank"
+    if (modelTokens.length === 0 && wordTokens.length < 3) {
+        // Not enough info to make a confident match
+        return null
+    }
 
-    const conditions = searchTokens.map(() => `slug LIKE ?`).join(' OR ')
-    const bindValues = searchTokens.map(w => `%${w}%`)
+    // Build query conditions - require ALL model tokens if present
+    let query: string
+    let bindValues: string[]
+
+    if (modelTokens.length > 0) {
+        // STRICT: Require ALL model tokens to be present
+        const conditions = modelTokens.map(() => `slug LIKE ?`).join(' AND ')
+        bindValues = modelTokens.map(w => `%${w}%`)
+        query = `SELECT slug FROM products WHERE is_active = 1 AND (${conditions}) LIMIT 20`
+    } else {
+        // No model tokens - require at least 2 word tokens to match
+        const conditions = wordTokens.slice(0, 3).map(() => `slug LIKE ?`).join(' AND ')
+        bindValues = wordTokens.slice(0, 3).map(w => `%${w}%`)
+        query = `SELECT slug FROM products WHERE is_active = 1 AND (${conditions}) LIMIT 20`
+    }
 
     try {
-        const query = `SELECT slug FROM products WHERE is_active = 1 AND (${conditions}) LIMIT 70`
         const { results: candidates } = await db.prepare(query).bind(...bindValues).all()
 
         if (!candidates || candidates.length === 0) return null
 
-        // 3. Find Best Match in JS using Weighted Scoring
+        // 3. Find Best Match in JS using STRICT Weighted Scoring
         let bestMatch = null
         let maxScore = 0
 
@@ -98,39 +113,43 @@ async function findSimilarProduct(db: any, slug: string): Promise<string | null>
             const cTokens = cClean.split('-')
 
             let score = 0
-
-            // Check Model Token Matches (High Value +10)
             let matchedModels = 0
+
+            // Check Model Token Matches (MUST match ALL)
             for (const mt of modelTokens) {
-                // Approximate match for model numbers (e.g. 2.4a vs 24a)
-                // Remove dots for comparison
                 const mtSimple = mt.replace('.', '')
 
                 const found = cTokens.some((ct: string) => {
                     const ctSimple = ct.replace('.', '')
-                    return ct.includes(mt) || mt.includes(ct) || ctSimple === mtSimple
+                    // Strict comparison - must be exact or contain fully
+                    return ct === mt || ctSimple === mtSimple ||
+                        (ct.includes(mt) && mt.length >= 3) ||
+                        (mt.includes(ct) && ct.length >= 3)
                 })
 
                 if (found) {
-                    score += 15
+                    score += 20
                     matchedModels++
                 }
             }
 
-            // Check Word Token Matches (Low Value +2)
+            // CRITICAL: If we have model tokens, ALL must match
+            if (modelTokens.length > 0 && matchedModels !== modelTokens.length) {
+                continue // Skip this candidate - doesn't match all model numbers
+            }
+
+            // Check Word Token Matches
+            let matchedWords = 0
             for (const wt of wordTokens) {
-                if (cTokens.some((ct: string) => ct.includes(wt) || wt.includes(ct))) {
-                    score += 2
+                if (cTokens.some((ct: string) => ct === wt || (ct.includes(wt) && wt.length >= 3))) {
+                    score += 3
+                    matchedWords++
                 }
             }
 
-            // Penalize if candidate is missing model numbers that we searched for
-            // If user searched for '20000pa', and candidate doesn't have it, it's a weak match
-            // score logic handles this implicitly by not adding points
-
-            // Boost if candidate starts with same word (excluding onopo)
-            if (cClean.startsWith(cleanSlug.substring(0, 4))) {
-                score += 3
+            // Boost if starts with same prefix
+            if (cClean.startsWith(cleanSlug.substring(0, 6))) {
+                score += 5
             }
 
             if (score > maxScore) {
@@ -139,9 +158,10 @@ async function findSimilarProduct(db: any, slug: string): Promise<string | null>
             }
         }
 
-        // Threshold: Must have at least one strong match (15) or multiple weak matches
-        // If we searched for a model number, we expect a high score
-        const threshold = modelTokens.length > 0 ? 10 : 3
+        // STRICT Threshold: Require high confidence
+        // Model tokens: Need all models matched (20 each) + at least some words
+        // Word tokens only: Need at least 9 points (3 words matched)
+        const threshold = modelTokens.length > 0 ? (modelTokens.length * 20) : 9
 
         if (maxScore >= threshold) return bestMatch
 

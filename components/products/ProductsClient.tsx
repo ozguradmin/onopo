@@ -60,15 +60,27 @@ export default function ProductsClient({
         setSortBy(searchParams.sort || 'newest')
     }, [searchParams])
 
-    // Debounce search
+    // Debounce search - use window.location.href for reliable navigation
     useEffect(() => {
         const timer = setTimeout(() => {
-            if (searchQuery !== (searchParams.q || '')) {
-                updateUrl({ q: searchQuery, page: '1' })
+            const currentQ = searchParams.q || ''
+            const newQ = searchQuery.trim()
+
+            // Only navigate if query actually changed
+            if (newQ !== currentQ) {
+                const params = new URLSearchParams(window.location.search)
+                if (newQ) {
+                    params.set('q', newQ)
+                } else {
+                    params.delete('q')
+                }
+                params.set('page', '1')
+                // Force navigation with window.location for reliability
+                window.location.href = `/products?${params.toString()}`
             }
-        }, 500)
+        }, 600) // Slightly longer debounce
         return () => clearTimeout(timer)
-    }, [searchQuery])
+    }, [searchQuery, searchParams.q])
 
     const updateUrl = (updates: any) => {
         const params = new URLSearchParams(window.location.search)
@@ -76,7 +88,8 @@ export default function ProductsClient({
             if (value) params.set(key, String(value))
             else params.delete(key)
         })
-        router.push(`/products?${params.toString()}`)
+        // Use window.location.href for reliable navigation (avoids hydration issues)
+        window.location.href = `/products?${params.toString()}`
     }
 
     // Apply client-side filtering
@@ -215,7 +228,11 @@ export default function ProductsClient({
                                     onClick={(e) => {
                                         e.preventDefault()
                                         e.stopPropagation()
-                                        setSearchQuery('')
+                                        // Force clear and navigate immediately
+                                        const params = new URLSearchParams(window.location.search)
+                                        params.delete('q')
+                                        params.set('page', '1')
+                                        window.location.href = `/products?${params.toString()}`
                                     }}
                                     className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
                                 >

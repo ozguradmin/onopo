@@ -246,5 +246,60 @@ export async function sendCustomEmail(to: string | string[], subject: string, ht
     }
 }
 
+// 2FA Email Template
+export const twoFactorTemplate = (code: string) => ({
+    subject: '🔐 Giriş Doğrulama Kodu - Onopo Store',
+    html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #1e293b, #334155); padding: 30px; text-align: center;">
+                <h1 style="color: white; margin: 0;">Giriş Doğrulama 🔐</h1>
+            </div>
+            <div style="padding: 30px; background: #f8fafc;">
+                <p style="font-size: 16px; color: #334155;">Merhaba,</p>
+                <p style="font-size: 16px; color: #334155;">
+                    Onopo Store yönetim paneline giriş yapmak için doğrulama kodunuz:
+                </p>
+                
+                <div style="background: white; border-radius: 12px; padding: 30px; margin: 20px 0; border: 1px solid #e2e8f0; text-align: center;">
+                    <p style="font-size: 48px; font-weight: bold; color: #6366f1; margin: 0; letter-spacing: 8px;">
+                        ${code}
+                    </p>
+                </div>
+                
+                <p style="font-size: 14px; color: #64748b; text-align: center;">
+                    ⏰ Bu kod <strong>60 saniye</strong> içinde geçerliliğini yitirecektir.
+                </p>
+                
+                <p style="font-size: 14px; color: #94a3b8; margin-top: 30px;">
+                    Bu giriş denemesini siz yapmadıysanız, lütfen bu e-postayı dikkate almayın.
+                </p>
+            </div>
+            <div style="background: #1e293b; padding: 20px; text-align: center;">
+                <p style="color: #94a3b8; margin: 0; font-size: 14px;">
+                    Onopo Store Güvenlik
+                </p>
+            </div>
+        </div>
+    `
+})
+
+// Send 2FA verification code
+export async function send2FACode(code: string, toEmail: string) {
+    try {
+        const template = twoFactorTemplate(code)
+        await resend.emails.send({
+            from: FROM_EMAIL,
+            to: toEmail,
+            subject: template.subject,
+            html: template.html
+        })
+        console.log('2FA code email sent to:', toEmail)
+        return { success: true }
+    } catch (error) {
+        console.error('Failed to send 2FA code:', error)
+        return { success: false, error }
+    }
+}
+
 // Get Resend instance for direct use
 export { resend }

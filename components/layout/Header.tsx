@@ -179,13 +179,17 @@ export function Header() {
                                             className="bg-transparent border-none outline-none text-sm w-full text-slate-900 placeholder-slate-400"
                                         />
                                         <button type="button" onClick={() => {
-                                            setSearchOpen(false);
-                                            setSearchQuery("");
-                                            // Clear URL param if exists
-                                            const url = new URL(window.location.href);
-                                            if (url.searchParams.has('q')) {
-                                                url.searchParams.delete('q');
-                                                window.location.href = url.toString();
+                                            // Force navigate to clear search
+                                            const currentPath = window.location.pathname
+                                            if (currentPath.includes('/products') && window.location.search.includes('q=')) {
+                                                // On products page with search - clear the q param
+                                                const params = new URLSearchParams(window.location.search)
+                                                params.delete('q')
+                                                window.location.href = `/products${params.toString() ? '?' + params.toString() : ''}`
+                                            } else {
+                                                // Just close the search bar
+                                                setSearchOpen(false)
+                                                setSearchQuery("")
                                             }
                                         }} className="ml-2">
                                             <X className="w-4 h-4 text-slate-500 hover:text-slate-900" />

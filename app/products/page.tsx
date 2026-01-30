@@ -66,8 +66,17 @@ async function getProducts(category?: string, query?: string) {
     }
 
     if (query) {
-        sql += ` AND (name LIKE ? OR description LIKE ?)`
-        params.push(`%${query}%`, `%${query}%`)
+        // Sanitize query: Remove problematic characters and limit length
+        let sanitizedQuery = query
+            .replace(/[%_\\'"]/g, ' ')  // Remove SQL wildcards and quotes
+            .replace(/\s+/g, ' ')        // Normalize whitespace
+            .trim()
+            .slice(0, 100)               // Limit query length
+
+        if (sanitizedQuery.length > 0) {
+            sql += ` AND (name LIKE ? OR description LIKE ?)`
+            params.push(`%${sanitizedQuery}%`, `%${sanitizedQuery}%`)
+        }
     }
 
     sql += ` ORDER BY id DESC`
