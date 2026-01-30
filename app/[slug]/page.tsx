@@ -44,47 +44,72 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     return { title: 'ONOPO' }
 }
 
-// Helper to find similar slug
+// Helper to find similar slug using fuzzy matching
 async function findSimilarProduct(db: any, slug: string): Promise<string | null> {
-    // Try variations:
-    // 1. Add "onopo-" prefix if missing
-    // 2. Remove "onopo-" prefix if present
-    // 3. Search for partial match
+    // 1. Try simple variations first (fastest)
+    const exactVariations = []
+    if (!slug.startsWith('onopo-')) exactVariations.push('onopo-' + slug)
+    if (slug.startsWith('onopo-')) exactVariations.push(slug.substring(6))
 
-    const variations = []
-
-    // If slug doesn't start with "onopo-", try adding it
-    if (!slug.startsWith('onopo-')) {
-        variations.push('onopo-' + slug)
-    }
-
-    // If slug starts with "onopo-", try removing it
-    if (slug.startsWith('onopo-')) {
-        variations.push(slug.substring(6))
-    }
-
-    // Try each variation
-    for (const variant of variations) {
+    for (const variant of exactVariations) {
         const { results } = await db.prepare(
             `SELECT slug FROM products WHERE slug = ? AND is_active = 1 LIMIT 1`
         ).bind(variant).all()
+        if (results && results.length > 0) return (results[0] as any).slug
+    }
 
-        if (results && results.length > 0) {
-            return (results[0] as any).slug
+    // 2. Fuzzy Search Strategy
+    // Clean the slug: remove 'onopo-', split by dashes, remove common words
+    const cleanSlug = slug.replace('onopo-', '').toLowerCase()
+    const words = cleanSlug.split('-').filter(w => w.length > 2)
+
+    if (words.length === 0) return null
+
+    // Build values for bound parameters
+    // We search for products that match AT LEAST ONE of the significant words
+    // We limit to 50 candidates to process in JS
+    const conditions = words.map(() => `slug LIKE ?`).join(' OR ')
+    const bindValues = words.map(w => `%${w}%`)
+
+    try {
+        const query = `SELECT slug FROM products WHERE is_active = 1 AND (${conditions}) LIMIT 50`
+        const { results: candidates } = await db.prepare(query).bind(...bindValues).all()
+
+        if (!candidates || candidates.length === 0) return null
+
+        // 3. Find Best Match in JS using Token Overlap Score
+        let bestMatch = null
+        let maxScore = 0
+
+        for (const candidate of candidates) {
+            const cSlug = (candidate as any).slug
+            const cClean = cSlug.replace('onopo-', '').toLowerCase()
+            const cWords = cClean.split('-') // Keep all words for candidate
+
+            // Calculate overlap score
+            let matchCount = 0
+            for (const w of words) {
+                // Check if search word is ANYWHERE in candidate token (handles 2.4a vs 24a)
+                if (cWords.some((cw: string) => cw.includes(w) || w.includes(cw))) {
+                    matchCount++
+                }
+            }
+
+            // Jaccard-like score: matches / distinct total words
+            // Emphasize match count
+            const score = matchCount
+
+            if (score > maxScore && score >= Math.min(2, words.length)) { // At least 2 matches or all if short
+                maxScore = score
+                bestMatch = cSlug
+            }
         }
+
+        return bestMatch
+    } catch (err) {
+        console.error('Fuzzy search error:', err)
+        return null
     }
-
-    // Try partial match (slug contains or is contained)
-    const searchTerm = slug.replace('onopo-', '').substring(0, 20)
-    const { results } = await db.prepare(
-        `SELECT slug FROM products WHERE slug LIKE ? AND is_active = 1 LIMIT 1`
-    ).bind(`%${searchTerm}%`).all()
-
-    if (results && results.length > 0) {
-        return (results[0] as any).slug
-    }
-
-    return null
 }
 
 export default async function Page(props: { params: Promise<{ slug: string }> }) {
