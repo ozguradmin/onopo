@@ -265,7 +265,7 @@ export default function ProductClient({ id }: { id: string }) {
                                                         %{Math.round((1 - product.price / product.original_price) * 100)} İndirim
                                                     </Badge>
                                                 )}
-                                                {product.free_shipping === 1 && (
+                                                {(!!product.free_shipping) && (
                                                     <Badge className="bg-blue-600 text-white text-sm px-3 py-1 flex items-center gap-1">
                                                         <Truck className="w-3 h-3" /> Kargo Bedava
                                                     </Badge>
@@ -440,7 +440,7 @@ export default function ProductClient({ id }: { id: string }) {
                                         </Button>
                                     </div>
 
-                                    {product.whatsapp_order_enabled && (
+                                    {!!product.whatsapp_order_enabled && (
                                         <a
                                             href={`https://wa.me/${product.whatsapp_number}?text=${encodeURIComponent(`Merhaba, ${product.name} (Kod: ${product.product_code || '-'}) siparişi vermek istiyorum.`)}`}
                                             target="_blank"

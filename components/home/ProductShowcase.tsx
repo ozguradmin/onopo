@@ -56,20 +56,23 @@ export default function ProductShowcase({ title = "Trend Ürünler", description
         <section className="py-12 bg-slate-50">
             <div className="container mx-auto px-4 mb-8">
                 <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between gap-4">
-                        <h2 className="text-xl md:text-3xl font-bold font-heading text-slate-900 tracking-tight">
-                            {title}
-                        </h2>
+                    <h2 className="text-xl md:text-3xl font-bold font-heading text-slate-900 tracking-tight">
+                        {title}
+                    </h2>
+                    <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                        <p className="text-slate-500 text-sm md:text-lg max-w-2xl">
+                            {description || "Bu sezonun en popüler teknoloji ve aksesuar ürünlerini keşfedin."}
+                        </p>
+
+                        <div className="hidden md:block w-px h-4 bg-slate-300"></div>
+
                         <a
                             href={category ? `/products?category=${encodeURIComponent(category)}` : '/products'}
-                            className="flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors shrink-0"
+                            className="flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors shrink-0 md:ml-0 ml-auto"
                         >
                             Tümünü Gör <ArrowRight className="w-4 h-4" />
                         </a>
                     </div>
-                    <p className="text-slate-500 text-sm md:text-lg max-w-2xl">
-                        {description || "Bu sezonun en popüler teknoloji ve aksesuar ürünlerini keşfedin."}
-                    </p>
                 </div>
             </div>
 
