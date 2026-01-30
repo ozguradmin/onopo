@@ -80,10 +80,13 @@ export class PaytrProvider implements PaymentProvider {
     }
 
     private getCredentials() {
+        // merchant_id = merchant_id
+        // api_key = merchant_key (PayTR's merchant password)
+        // merchant_salt = merchant_salt (PayTR's secret salt)
         return {
             merchant_id: this.settings.merchant_id,
-            merchant_key: this.settings.api_key, // Mapping api_key to merchant_key
-            merchant_salt: this.settings.secret_key // Mapping secret_key to merchant_salt
+            merchant_key: this.settings.api_key,
+            merchant_salt: (this.settings as any).merchant_salt || this.settings.secret_key
         }
     }
 }

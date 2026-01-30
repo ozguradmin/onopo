@@ -364,63 +364,28 @@ export default function CheckoutPage() {
                                 </div>
 
                                 <div className="space-y-3">
-                                    {/* Card Payment Option */}
-                                    {paymentSettings?.is_active && paymentSettings?.provider !== 'offline' && (
-                                        <label
-                                            className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'card'
-                                                    ? 'border-purple-500 bg-purple-50'
-                                                    : 'border-slate-200 hover:border-slate-300'
-                                                }`}
-                                        >
-                                            <input
-                                                type="radio"
-                                                name="paymentMethod"
-                                                value="card"
-                                                checked={paymentMethod === 'card'}
-                                                onChange={() => setPaymentMethod('card')}
-                                                className="w-5 h-5 text-purple-600"
-                                            />
+                                    {/* Card Payment - Always shown when PayTR is active */}
+                                    {paymentSettings?.is_active && paymentSettings?.provider !== 'offline' ? (
+                                        <div className="flex items-center gap-4 p-4 rounded-xl border-2 border-purple-500 bg-purple-50">
+                                            <div className="w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center">
+                                                <Check className="w-3 h-3 text-white" />
+                                            </div>
                                             <div className="flex-1">
                                                 <p className="font-semibold text-slate-900">Kredi / Banka Kartı</p>
                                                 <p className="text-sm text-slate-500">
-                                                    {paymentSettings.provider === 'paytr' ? 'PayTR' : 'Iyzico'} güvenli ödeme
+                                                    {paymentSettings.provider === 'paytr' ? 'PayTR' : 'Iyzico'} güvenli ödeme ile ödeyin
                                                 </p>
                                             </div>
-                                            <CreditCard className="w-6 h-6 text-slate-400" />
-                                        </label>
-                                    )}
-
-                                    {/* Bank Transfer Option */}
-                                    <label
-                                        className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'transfer'
-                                                ? 'border-purple-500 bg-purple-50'
-                                                : 'border-slate-200 hover:border-slate-300'
-                                            }`}
-                                    >
-                                        <input
-                                            type="radio"
-                                            name="paymentMethod"
-                                            value="transfer"
-                                            checked={paymentMethod === 'transfer'}
-                                            onChange={() => setPaymentMethod('transfer')}
-                                            className="w-5 h-5 text-purple-600"
-                                        />
-                                        <div className="flex-1">
-                                            <p className="font-semibold text-slate-900">Havale / EFT</p>
-                                            <p className="text-sm text-slate-500">Banka havalesi ile ödeme</p>
+                                            <CreditCard className="w-6 h-6 text-purple-600" />
                                         </div>
-                                        <Building2 className="w-6 h-6 text-slate-400" />
-                                    </label>
+                                    ) : (
+                                        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+                                            <p className="text-sm text-amber-800">
+                                                <strong>Ödeme sistemi henüz aktif değil.</strong> Lütfen daha sonra tekrar deneyin.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
-
-                                {paymentMethod === 'transfer' && (
-                                    <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
-                                        <p className="text-sm text-blue-800">
-                                            <strong>Not:</strong> Havale ile ödemede siparişiniz, ödeme onaylandıktan sonra hazırlanmaya başlayacaktır.
-                                            Havale bilgileri sipariş tamamlandıktan sonra gösterilecektir.
-                                        </p>
-                                    </div>
-                                )}
                             </div>
 
                             {error && (
