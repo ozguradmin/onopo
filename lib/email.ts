@@ -1,41 +1,66 @@
+
 import { Resend } from 'resend'
+import { getDB } from './db'
 
 // Initialize Resend with API key from environment
 const resend = new Resend(process.env.RESEND_API_KEY || 're_123456789')
 
-const FROM_EMAIL = 'Onopo Store <no-reply@onopostore.com>'
-const SITE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'
-const LOGO_URL = `${SITE_URL}/logo.png`
+// Helper to get site settings
+async function getEmailSettings() {
+    try {
+        const db = await getDB()
+        const { results } = await db.prepare('SELECT key, value FROM site_settings').all()
+        const settings: Record<string, string> = {}
+        for (const row of (results || [])) {
+            settings[(row as any).key] = (row as any).value
+        }
 
-// Common email header with logo
-const emailHeader = (title: string, emoji: string = '📦') => `
+        const siteUrl = settings.site_url || process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'
+        // Handle logo: check 'logo', 'site_logo', or fallback
+        const logoUrl = settings.logo || settings.site_logo || `${siteUrl}/logo.png`
+        const siteName = settings.site_name || 'Onopo Store'
+
+        return { siteUrl, logoUrl, siteName }
+    } catch (e) {
+        // Fallback if DB fails
+        return {
+            siteUrl: process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com',
+            logoUrl: 'https://onopostore.com/logo.png',
+            siteName: 'Onopo Store'
+        }
+    }
+}
+
+const FROM_EMAIL = 'Onopo Store <no-reply@onopostore.com>'
+
+// Dynamic header/footer
+const emailHeader = (title: string, settings: any, emoji: string = '📦') => `
     <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 30px; text-align: center;">
-        <a href="${SITE_URL}" style="text-decoration: none;">
-            <img src="${LOGO_URL}" alt="Onopo Store" style="height: 40px; margin-bottom: 15px;" />
+        <a href="${settings.siteUrl}" style="text-decoration: none;">
+            <img src="${settings.logoUrl}" alt="${settings.siteName}" style="height: 40px; margin-bottom: 15px; object-fit: contain;" />
         </a>
         <h1 style="color: white; margin: 0;">${title} ${emoji}</h1>
     </div>
 `
 
-// Common email footer with logo
-const emailFooter = () => `
+const emailFooter = (settings: any) => `
     <div style="background: #1e293b; padding: 20px; text-align: center;">
-        <a href="${SITE_URL}" style="text-decoration: none;">
-            <img src="${LOGO_URL}" alt="Onopo Store" style="height: 30px; margin-bottom: 10px; filter: brightness(0) invert(1);" />
+        <a href="${settings.siteUrl}" style="text-decoration: none;">
+            <img src="${settings.logoUrl}" alt="${settings.siteName}" style="height: 30px; margin-bottom: 10px; filter: brightness(0) invert(1); object-fit: contain;" />
         </a>
         <p style="color: #94a3b8; margin: 0; font-size: 14px;">
-            <a href="${SITE_URL}" style="color: #94a3b8; text-decoration: none;">onopostore.com</a>
+            <a href="${settings.siteUrl}" style="color: #94a3b8; text-decoration: none;">${new URL(settings.siteUrl).hostname}</a>
         </p>
     </div>
 `
 
 // Email templates
 export const emailTemplates = {
-    orderConfirmation: (order: any, items: any[]) => ({
+    orderConfirmation: (order: any, items: any[], settings: any) => ({
         subject: `Sipariş Onayı - #${order.id}`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                ${emailHeader('Siparişiniz Alındı!', '🎉')}
+                ${emailHeader('Siparişiniz Alındı!', settings, '🎉')}
                 <div style="padding: 30px; background: #f8fafc;">
                     <p style="font-size: 16px; color: #334155;">Merhaba,</p>
                     <p style="font-size: 16px; color: #334155;">
@@ -64,16 +89,16 @@ export const emailTemplates = {
                         Siparişinizin durumunu takip etmek için size bilgilendirme e-postaları göndereceğiz.
                     </p>
                 </div>
-                ${emailFooter()}
+                ${emailFooter(settings)}
             </div>
         `
     }),
 
-    trackingUpdate: (order: any, trackingNumber: string) => ({
+    trackingUpdate: (order: any, trackingNumber: string, settings: any) => ({
         subject: `Kargonuz Yola Çıktı! - #${order.id}`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                ${emailHeader('Kargonuz Yola Çıktı!', '📦')}
+                ${emailHeader('Kargonuz Yola Çıktı!', settings, '📦')}
                 <div style="padding: 30px; background: #f8fafc;">
                     <p style="font-size: 16px; color: #334155;">Merhaba,</p>
                     <p style="font-size: 16px; color: #334155;">
@@ -94,37 +119,37 @@ export const emailTemplates = {
                         </p>
                     </div>
                 </div>
-                ${emailFooter()}
+                ${emailFooter(settings)}
             </div>
         `
     }),
 
-    welcome: (email: string) => ({
-        subject: 'Onopo Store\'a Hoş Geldiniz! 🎊',
+    welcome: (email: string, settings: any) => ({
+        subject: `${settings.siteName}'a Hoş Geldiniz! 🎊`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                ${emailHeader('Hoş Geldiniz!', '🎊')}
+                ${emailHeader('Hoş Geldiniz!', settings, '🎊')}
                 <div style="padding: 30px; background: #f8fafc;">
                     <p style="font-size: 16px; color: #334155;">Merhaba,</p>
                     <p style="font-size: 16px; color: #334155;">
-                        <strong>Onopo Store</strong> ailesine katıldığınız için teşekkür ederiz!
+                        <strong>${settings.siteName}</strong> ailesine katıldığınız için teşekkür ederiz!
                     </p>
                     <p style="font-size: 16px; color: #334155;">
                         Kayıt işleminiz başarıyla tamamlandı. Artık alışverişe başlayabilirsiniz.
                     </p>
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="${SITE_URL}/products" 
+                        <a href="${settings.siteUrl}/products" 
                            style="background: #6366f1; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;">
                             Alışverişe Başla
                         </a>
                     </div>
                 </div>
-                ${emailFooter()}
+                ${emailFooter(settings)}
             </div>
         `
     }),
 
-    adminNewOrder: (order: any, items: any[], customerEmail: string) => ({
+    adminNewOrder: (order: any, items: any[], customerEmail: string, settings: any) => ({
         subject: `🔔 Yeni Sipariş! #${order.id} - ${order.total_amount?.toFixed(2) || order.total?.toFixed(2)} ₺`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -150,7 +175,7 @@ export const emailTemplates = {
                     </div>
                     
                     <div style="text-align: center; margin-top: 20px;">
-                        <a href="https://onopostore.com/admin/orders/${order.id}" 
+                        <a href="${settings.siteUrl}/admin/orders/${order.id}" 
                            style="background: #f59e0b; color: white; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold;">
                             Siparişi Görüntüle
                         </a>
@@ -164,7 +189,8 @@ export const emailTemplates = {
 // Send email functions
 export async function sendOrderConfirmation(order: any, items: any[], toEmail: string) {
     try {
-        const template = emailTemplates.orderConfirmation(order, items)
+        const settings = await getEmailSettings()
+        const template = emailTemplates.orderConfirmation(order, items, settings)
         await resend.emails.send({
             from: FROM_EMAIL,
             to: toEmail,
@@ -181,7 +207,8 @@ export async function sendOrderConfirmation(order: any, items: any[], toEmail: s
 
 export async function sendTrackingUpdate(order: any, trackingNumber: string, toEmail: string) {
     try {
-        const template = emailTemplates.trackingUpdate(order, trackingNumber)
+        const settings = await getEmailSettings()
+        const template = emailTemplates.trackingUpdate(order, trackingNumber, settings)
         await resend.emails.send({
             from: FROM_EMAIL,
             to: toEmail,
@@ -198,7 +225,8 @@ export async function sendTrackingUpdate(order: any, trackingNumber: string, toE
 
 export async function sendWelcomeEmail(toEmail: string) {
     try {
-        const template = emailTemplates.welcome(toEmail)
+        const settings = await getEmailSettings()
+        const template = emailTemplates.welcome(toEmail, settings)
         await resend.emails.send({
             from: FROM_EMAIL,
             to: toEmail,
@@ -215,7 +243,8 @@ export async function sendWelcomeEmail(toEmail: string) {
 
 export async function sendAdminNewOrderNotification(order: any, items: any[], customerEmail: string, adminEmail: string) {
     try {
-        const template = emailTemplates.adminNewOrder(order, items, customerEmail)
+        const settings = await getEmailSettings()
+        const template = emailTemplates.adminNewOrder(order, items, customerEmail, settings)
         await resend.emails.send({
             from: FROM_EMAIL,
             to: adminEmail,
