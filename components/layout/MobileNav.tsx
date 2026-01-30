@@ -18,9 +18,19 @@ export function MobileNav() {
         // Check if user is logged in
         fetch('/api/auth/me')
             .then(res => {
-                if (res.ok) setIsLoggedIn(true)
+                if (res.ok) {
+                    return res.json()
+                }
+                throw new Error('Not logged in')
             })
-            .catch(() => { })
+            .then(data => {
+                if (data?.user?.id) {
+                    setIsLoggedIn(true)
+                }
+            })
+            .catch(() => {
+                setIsLoggedIn(false)
+            })
     }, [])
 
     const cartItemCount = mounted ? totalItems() : 0

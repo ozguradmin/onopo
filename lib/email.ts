@@ -4,6 +4,30 @@ import { Resend } from 'resend'
 const resend = new Resend(process.env.RESEND_API_KEY || 're_123456789')
 
 const FROM_EMAIL = 'Onopo Store <no-reply@onopostore.com>'
+const SITE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'
+const LOGO_URL = `${SITE_URL}/logo.png`
+
+// Common email header with logo
+const emailHeader = (title: string, emoji: string = '📦') => `
+    <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 30px; text-align: center;">
+        <a href="${SITE_URL}" style="text-decoration: none;">
+            <img src="${LOGO_URL}" alt="Onopo Store" style="height: 40px; margin-bottom: 15px;" />
+        </a>
+        <h1 style="color: white; margin: 0;">${title} ${emoji}</h1>
+    </div>
+`
+
+// Common email footer with logo
+const emailFooter = () => `
+    <div style="background: #1e293b; padding: 20px; text-align: center;">
+        <a href="${SITE_URL}" style="text-decoration: none;">
+            <img src="${LOGO_URL}" alt="Onopo Store" style="height: 30px; margin-bottom: 10px; filter: brightness(0) invert(1);" />
+        </a>
+        <p style="color: #94a3b8; margin: 0; font-size: 14px;">
+            <a href="${SITE_URL}" style="color: #94a3b8; text-decoration: none;">onopostore.com</a>
+        </p>
+    </div>
+`
 
 // Email templates
 export const emailTemplates = {
@@ -11,9 +35,7 @@ export const emailTemplates = {
         subject: `Sipariş Onayı - #${order.id}`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 30px; text-align: center;">
-                    <h1 style="color: white; margin: 0;">Siparişiniz Alındı! 🎉</h1>
-                </div>
+                ${emailHeader('Siparişiniz Alındı!', '🎉')}
                 <div style="padding: 30px; background: #f8fafc;">
                     <p style="font-size: 16px; color: #334155;">Merhaba,</p>
                     <p style="font-size: 16px; color: #334155;">
@@ -42,11 +64,7 @@ export const emailTemplates = {
                         Siparişinizin durumunu takip etmek için size bilgilendirme e-postaları göndereceğiz.
                     </p>
                 </div>
-                <div style="background: #1e293b; padding: 20px; text-align: center;">
-                    <p style="color: #94a3b8; margin: 0; font-size: 14px;">
-                        Onopo Store | onopostore.com
-                    </p>
-                </div>
+                ${emailFooter()}
             </div>
         `
     }),
@@ -55,9 +73,7 @@ export const emailTemplates = {
         subject: `Kargonuz Yola Çıktı! - #${order.id}`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: linear-gradient(135deg, #8b5cf6, #a855f7); padding: 30px; text-align: center;">
-                    <h1 style="color: white; margin: 0;">Kargonuz Yola Çıktı! 📦</h1>
-                </div>
+                ${emailHeader('Kargonuz Yola Çıktı!', '📦')}
                 <div style="padding: 30px; background: #f8fafc;">
                     <p style="font-size: 16px; color: #334155;">Merhaba,</p>
                     <p style="font-size: 16px; color: #334155;">
@@ -74,15 +90,11 @@ export const emailTemplates = {
                             </a>
                         </p>
                         <p style="color: #64748b; font-size: 14px;">
-                            Yukarıdaki butona tıklayarak veya takip numarasını Aras Kargo sitesinde sorgulayarak kargonuzu takip edebilirsiniz.
+                            Yukarıdaki butona tıklayarak kargonuzu takip edebilirsiniz.
                         </p>
                     </div>
                 </div>
-                <div style="background: #1e293b; padding: 20px; text-align: center;">
-                    <p style="color: #94a3b8; margin: 0; font-size: 14px;">
-                        Onopo Store | onopostore.com
-                    </p>
-                </div>
+                ${emailFooter()}
             </div>
         `
     }),
@@ -91,9 +103,7 @@ export const emailTemplates = {
         subject: 'Onopo Store\'a Hoş Geldiniz! 🎊',
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: linear-gradient(135deg, #10b981, #14b8a6); padding: 30px; text-align: center;">
-                    <h1 style="color: white; margin: 0;">Hoş Geldiniz! 🎊</h1>
-                </div>
+                ${emailHeader('Hoş Geldiniz!', '🎊')}
                 <div style="padding: 30px; background: #f8fafc;">
                     <p style="font-size: 16px; color: #334155;">Merhaba,</p>
                     <p style="font-size: 16px; color: #334155;">
@@ -103,17 +113,13 @@ export const emailTemplates = {
                         Kayıt işleminiz başarıyla tamamlandı. Artık alışverişe başlayabilirsiniz.
                     </p>
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://onopostore.com/products" 
-                           style="background: #10b981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                        <a href="${SITE_URL}/products" 
+                           style="background: #6366f1; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;">
                             Alışverişe Başla
                         </a>
                     </div>
                 </div>
-                <div style="background: #1e293b; padding: 20px; text-align: center;">
-                    <p style="color: #94a3b8; margin: 0; font-size: 14px;">
-                        Onopo Store | onopostore.com
-                    </p>
-                </div>
+                ${emailFooter()}
             </div>
         `
     }),

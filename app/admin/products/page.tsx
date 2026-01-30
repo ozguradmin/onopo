@@ -82,81 +82,65 @@ export default function AdminProductsPage() {
                 const ws = wb.Sheets[wsname]
                 const data = XLSX.utils.sheet_to_json(ws)
 
-                // Transform data
+                // Transform data - support multiple column naming conventions
                 const formattedProducts = data.map((item: any) => {
-                    // Build rich description with proper HTML formatting
-                    let descParts: string[] = []
+                    // Get product name - try multiple column names
+                    const productName = item['Ürün Adı'] || item['Name'] || item['name'] || ''
 
-                    // Product title and short description
-                    const productName = item['Ürün Adı'] || item['Name'] || ''
+                    // Get price - support multiple formats: "Fiyat (₺)", "Satış Fiyatı", "Price"
+                    const priceRaw = item['Fiyat (₺)'] || item['Satış Fiyatı'] || item['Price'] || item['price'] || 0
+                    const price = parseFloat(String(priceRaw).replace(/[^\d.,]/g, '').replace(',', '.')) || 0
 
-                    // Short description at top with proper formatting
-                    if (item['Kısa Açıklama']) {
-                        descParts.push(`<h3 class="text-lg font-semibold text-slate-900 mb-3">Ürün Açıklaması</h3>`)
-                        descParts.push(`<p class="mb-4 text-slate-700 leading-relaxed">${item['Kısa Açıklama']}</p>`)
+                    // Get original price
+                    const origPriceRaw = item['Eski Fiyat (₺)'] || item['Liste Fiyatı'] || item['original_price'] || 0
+                    const originalPrice = parseFloat(String(origPriceRaw).replace(/[^\d.,]/g, '').replace(',', '.')) || 0
+
+                    // Get stock
+                    const stockRaw = item['Stok'] || item['Stok Adedi'] || item['stock'] || 100
+                    const stock = parseInt(String(stockRaw)) || 100
+
+                    // Get category
+                    const category = item['Kategori'] || item['Category'] || item['category'] || 'Genel'
+
+                    // Get product code
+                    const productCode = item['Ürün Kodu'] || item['Code'] || item['product_code'] || ''
+
+                    // Get description - support multiple column names
+                    let description = item['Açıklama'] || item['Detay'] || item['Description'] || ''
+
+                    // If description has "Ürün Açıklaması" text, format it nicely
+                    if (description && description.includes('Ürün Açıklaması')) {
+                        description = `<div class="product-description space-y-4">${description}</div>`
                     }
 
-                    // Long description with better formatting
-                    if (item['Uzun Detay (Metin)']) {
-                        const longDesc = String(item['Uzun Detay (Metin)'])
-                        // Split by sentences and format as list items if multiple sentences
-                        const sentences = longDesc.split(/[.]\s+/).filter(s => s.trim().length > 10)
-                        if (sentences.length > 2) {
-                            descParts.push(`<h3 class="text-lg font-semibold text-slate-900 mb-3 mt-4">Detaylı Bilgi</h3>`)
-                            descParts.push(`<ul class="list-disc list-inside space-y-2 text-slate-700 mb-4">`)
-                            sentences.forEach(s => {
-                                if (s.trim()) descParts.push(`<li>${s.trim()}.</li>`)
-                            })
-                            descParts.push(`</ul>`)
-                        } else {
-                            descParts.push(`<h3 class="text-lg font-semibold text-slate-900 mb-3 mt-4">Detaylı Bilgi</h3>`)
-                            descParts.push(`<p class="mb-4 text-slate-700 leading-relaxed">${longDesc}</p>`)
-                        }
-                    }
+                    // Get image URL - support multiple column names
+                    const imageUrl = item['Görsel URL'] || item['Resim 1'] || item['Resim'] || item['Image'] || item['image'] || ''
 
-                    // Specs table with proper formatting
-                    let tableRows: string[] = []
-                    if (item['Marka']) tableRows.push(`<tr><td class="p-3 border border-gray-200 font-semibold bg-slate-50 w-1/3">Marka</td><td class="p-3 border border-gray-200">${item['Marka']}</td></tr>`)
-                    if (item['Ürün Kodu']) tableRows.push(`<tr><td class="p-3 border border-gray-200 font-semibold bg-slate-50">Ürün Kodu</td><td class="p-3 border border-gray-200">${item['Ürün Kodu']}</td></tr>`)
-                    if (item['Barkod']) tableRows.push(`<tr><td class="p-3 border border-gray-200 font-semibold bg-slate-50">Barkod</td><td class="p-3 border border-gray-200">${item['Barkod']}</td></tr>`)
-                    if (item['Desi']) tableRows.push(`<tr><td class="p-3 border border-gray-200 font-semibold bg-slate-50">Desi</td><td class="p-3 border border-gray-200">${item['Desi']}</td></tr>`)
-                    if (item['Varyant Bilgisi']) tableRows.push(`<tr><td class="p-3 border border-gray-200 font-semibold bg-slate-50">Varyant</td><td class="p-3 border border-gray-200">${item['Varyant Bilgisi']}</td></tr>`)
-
-                    if (tableRows.length > 0) {
-                        descParts.push(`<h3 class="text-lg font-semibold text-slate-900 mb-3 mt-6">Teknik Özellikler</h3>`)
-                        descParts.push(`<table class="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden"><tbody>${tableRows.join('')}</tbody></table>`)
-                    }
-
-                    const description = descParts.length > 0 ? `<div class="product-description space-y-4">${descParts.join('')}</div>` : ''
-
-                    // Parse stock - check multiple column names
-                    const stockValue = item['Stok Adedi'] ?? item['Stok'] ?? 100
-                    const parsedStock = parseInt(String(stockValue)) || 100
+                    // Also check for multiple images
+                    const images: string[] = []
+                    if (imageUrl) images.push(imageUrl)
+                    if (item['Resim 2']) images.push(item['Resim 2'])
+                    if (item['Resim 3']) images.push(item['Resim 3'])
+                    if (item['Resim 4']) images.push(item['Resim 4'])
 
                     // Delivery info - standard for all bulk uploaded products
                     const deliveryInfo = `<div class="space-y-3">
                         <h4 class="font-semibold text-slate-900">TESLİMAT</h4>
                         <p class="text-slate-700">Ürünü sipariş verdiğiniz gün saat 18:00 ve öncesi ise siparişiniz aynı gün kargoya verilir ve ertesi gün teslim edilir.</p>
-                        <p class="text-slate-700">Eğer kargoyu saat 18:00'den sonra verdiyseniz ürününüzün stoklarda olması durumunda ertesi gün kargolama yapılmaktadır.</p>
                     </div>`
 
                     return {
                         name: productName,
-                        product_code: item['Ürün Kodu'] || item['Code'] || '',
-                        category: item['Kategori'] || 'Genel',
-                        price: parseFloat(String(item['Satış Fiyatı'] || item['Price'] || 0).replace(',', '.')),
-                        original_price: parseFloat(String(item['Liste Fiyatı'] || 0).replace(',', '.')),
-                        stock: parsedStock,
+                        product_code: productCode,
+                        category: category,
+                        price: price,
+                        original_price: originalPrice || null,
+                        stock: stock,
                         description: description,
                         delivery_info: deliveryInfo,
                         whatsapp_order_enabled: true,
                         whatsapp_number: '905058217547',
-                        images: [
-                            item['Resim 1'],
-                            item['Resim 2'],
-                            item['Resim 3'],
-                            item['Resim 4']
-                        ].filter(url => url && typeof url === 'string' && url.length > 10)
+                        images: images.filter(url => url && typeof url === 'string' && url.length > 10)
                     }
                 }).filter(p => p.name && !isNaN(p.price) && p.price > 0)
 
@@ -203,9 +187,9 @@ export default function AdminProductsPage() {
                 <div className="flex gap-2">
                     <Button
                         onClick={handleBulkDelete}
-                        variant="destructive"
+                        variant="outline"
                         disabled={products.length === 0}
-                        className="gap-2"
+                        className="gap-2 border-red-500 text-red-500 hover:bg-red-50"
                     >
                         <Trash className="w-4 h-4" /> Tümünü Sil
                     </Button>
