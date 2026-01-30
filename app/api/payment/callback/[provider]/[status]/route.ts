@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import crypto from 'crypto'
+import { sendOrderConfirmation, sendAdminNewOrderNotification } from '@/lib/email'
 // @ts-ignore
 import Iyzipay from 'iyzipay'
 
@@ -32,21 +33,47 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
             if (hash !== calculatedHash) return new NextResponse('FAIL') // Hash mismatch
 
             if (status === 'success') {
-                // Extract Order ID (removing random suffix)
-                // Assuming merchant_oid is "ORDERID" + random
-                // But wait, in PayTR impl we did: order.id + random
-                // We need to store paymentId in order or parse it. 
-                // Simple parsing if we know length? Or enable strict OID?
-                // Let's assume we stored payment_id in a separate column or just assume Order ID is the prefix.
-                // Actually, best practice: store merchant_oid in DB `payment_id` column.
-                // For now, let's try to parse: PayTR sends back exactly what we sent.
-                // Our format: `order_id` + random(6 digits).
-                const orderId = merchant_oid.slice(0, -6)
+                // Determine Order ID
+                // Format: SP{ID}T{TIMESTAMP} or just {ID} + random
+                let orderId = merchant_oid
+                if (merchant_oid.startsWith('SP') && merchant_oid.includes('T')) {
+                    orderId = merchant_oid.split('T')[0].substring(2)
+                } else if (merchant_oid.length > 6) {
+                    // Fallback to old logic just in case: slice last 6
+                    // But if new format is used, this else if might be skipped
+                    // Better to check if it matches existing ID
+                }
 
+                // Update Order Status
                 await db.prepare("UPDATE orders SET status = 'approved', payment_status = 'paid' WHERE id = ?").bind(orderId).run()
+
+                // Send Emails (Awaited)
+                try {
+                    const order = await db.prepare('SELECT * FROM orders WHERE id = ?').bind(orderId).first() as any
+                    if (order) {
+                        const orderItems = typeof order.items === 'string' ? JSON.parse(order.items) : order.items
+                        const customerEmail = order.guest_email
+
+                        // Send User Email
+                        await sendOrderConfirmation({ id: order.id, total_amount: order.total_amount }, orderItems, customerEmail)
+
+                        // Send Admin Email
+                        const siteSettings = await db.prepare('SELECT admin_email FROM site_settings LIMIT 1').first() as any
+                        if (siteSettings?.admin_email) {
+                            await sendAdminNewOrderNotification({ id: order.id, total_amount: order.total_amount }, orderItems, customerEmail, siteSettings.admin_email)
+                        }
+                    }
+                } catch (e) {
+                    console.error('Callback email error:', e)
+                }
+
                 return new NextResponse('OK')
             } else {
-                const orderId = merchant_oid.slice(0, -6)
+                // Payment Failed
+                let orderId = merchant_oid
+                if (merchant_oid.startsWith('SP') && merchant_oid.includes('T')) {
+                    orderId = merchant_oid.split('T')[0].substring(2)
+                }
                 await db.prepare("UPDATE orders SET payment_status = 'failed' WHERE id = ?").bind(orderId).run()
                 return new NextResponse('OK')
             }

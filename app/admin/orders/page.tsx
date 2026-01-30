@@ -126,7 +126,13 @@ function OrdersContent() {
     }
 
     const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleString('tr-TR', {
+        if (!dateStr) return '-'
+        // Ensure date is treated as UTC
+        const normalized = dateStr.replace(' ', 'T')
+        const utcDate = normalized.endsWith('Z') ? normalized : `${normalized}Z`
+
+        return new Date(utcDate).toLocaleString('tr-TR', {
+            timeZone: 'Europe/Istanbul',
             day: '2-digit',
             month: '2-digit',
             year: 'numeric',

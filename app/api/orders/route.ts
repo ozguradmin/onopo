@@ -136,18 +136,23 @@ export async function POST(req: NextRequest) {
         await db.prepare('UPDATE orders SET items = ? WHERE id = ?').bind(JSON.stringify(orderItems), orderId).run()
 
         // Send emails (awaited to ensure execution in Serverless/Edge)
-        try {
-            // Send customer confirmation email
-            await sendOrderConfirmation({ id: orderId, total_amount: totalAmount }, orderItems, customerInfo.email)
+        // Send emails (awaited)
+        // ONLY send now if payment is already complete (offline or direct).
+        // For PayTR (iframe), email will be sent in callback.
+        if (paymentResult.status === 'success' && !paymentResult.iframeUrl) {
+            try {
+                // Send customer confirmation email
+                await sendOrderConfirmation({ id: orderId, total_amount: totalAmount }, orderItems, customerInfo.email)
 
-            // Send admin notification
-            const siteSettings = await db.prepare('SELECT admin_email FROM site_settings LIMIT 1').first() as any
-            if (siteSettings?.admin_email) {
-                await sendAdminNewOrderNotification({ id: orderId, total_amount: totalAmount }, orderItems, customerInfo.email, siteSettings.admin_email)
+                // Send admin notification
+                const siteSettings = await db.prepare('SELECT admin_email FROM site_settings LIMIT 1').first() as any
+                if (siteSettings?.admin_email) {
+                    await sendAdminNewOrderNotification({ id: orderId, total_amount: totalAmount }, orderItems, customerInfo.email, siteSettings.admin_email)
+                }
+            } catch (emailErr) {
+                console.error('Email sending failed:', emailErr)
+                // Don't fail order for email issues
             }
-        } catch (emailErr) {
-            console.error('Email sending failed:', emailErr)
-            // Don't fail order for email issues
         }
 
         return NextResponse.json({
