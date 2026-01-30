@@ -297,6 +297,18 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
                     </div>
 
                     {(section.type === 'products' || section.type === 'new_products') && (
+                        <div>
+                            <label className="block text-sm font-medium mb-2">Açıklama (Opsiyonel)</label>
+                            <input
+                                value={config.description || ''}
+                                onChange={e => setConfig({ ...config, description: e.target.value })}
+                                className="w-full p-3 border border-slate-200 rounded-lg"
+                                placeholder="Bölüm için kısa açıklama..."
+                            />
+                        </div>
+                    )}
+
+                    {(section.type === 'products' || section.type === 'new_products') && (
                         <>
                             <div>
                                 <label className="block text-sm font-medium mb-2">Ürün Seçimi</label>

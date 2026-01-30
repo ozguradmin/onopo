@@ -1,3 +1,4 @@
+import * as React from 'react'
 import { getDB } from '@/lib/db'
 import { HeroSection } from '@/components/home/HeroSection'
 import ProductShowcase from '@/components/home/ProductShowcase'
@@ -82,50 +83,45 @@ export default async function Home() {
         </>
       )}
 
-      {sections && sections.map(async (section: any) => {
+      {sections && sections.map(async (section: any, index: number) => {
         const config = JSON.parse(section.config || '{}')
+        const isLast = index === sections.length - 1
+
+        let content = null
 
         if (section.type === 'hero') {
-          return <HeroSection key={section.id} />
-        }
-
-        if (section.type === 'new_products') {
-          // New products: sorted by ID desc (newest first) - already sorted from DB
+          content = <HeroSection key={section.id} />
+        } else if (section.type === 'new_products') {
           const products = getProductsForSection(section.config, false)
-          return (
+          content = (
             <ProductShowcase
               key={section.id}
               title={section.title}
+              description={config.description}
               products={products}
             />
           )
-        }
-
-        if (section.type === 'products') {
-          // Regular products: shuffled for variety
+        } else if (section.type === 'products') {
           const products = getProductsForSection(section.config, true)
-          return (
+          content = (
             <ProductShowcase
               key={section.id}
               title={section.title}
+              description={config.description}
               products={products}
               category={config.selection_type === 'category' ? config.category : undefined}
             />
           )
-        }
-
-        if (section.type === 'features') {
-          return (
+        } else if (section.type === 'features') {
+          content = (
             <FeaturesSection
               key={section.id}
               title={section.title}
               features={config.items}
             />
           )
-        }
-
-        if (section.type === 'image_card') {
-          return (
+        } else if (section.type === 'image_card') {
+          content = (
             <ImageCardSection
               key={section.id}
               title={section.title}
@@ -133,10 +129,8 @@ export default async function Home() {
               link_url={config.link_url}
             />
           )
-        }
-
-        if (section.type === 'categories') {
-          return (
+        } else if (section.type === 'categories') {
+          content = (
             <CategoriesSection
               key={section.id}
               title={section.title || 'Kategoriler'}
@@ -144,7 +138,18 @@ export default async function Home() {
           )
         }
 
-        return null
+        if (!content) return null
+
+        return (
+          <React.Fragment key={section.id}>
+            {content}
+            {!isLast && section.type !== 'hero' && (
+              <div className="container mx-auto px-4">
+                <hr className="border-slate-100" />
+              </div>
+            )}
+          </React.Fragment>
+        )
       })}
     </div>
   )

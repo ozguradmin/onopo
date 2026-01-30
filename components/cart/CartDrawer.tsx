@@ -4,6 +4,7 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import Link from 'next/link'
 import { useCartStore } from "@/store/cart-store"
 import { cn } from "@/lib/utils"
 import { formatPrice } from "@/lib/formatPrice"
@@ -94,20 +95,28 @@ export function CartDrawer() {
                                         className="flex gap-4 bg-white rounded-2xl p-4 border border-slate-100 shadow-sm"
                                     >
                                         {/* Clickable Image -> Product Page */}
-                                        <a href={`/product/${item.id}`} className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-xl border border-slate-100 hover:ring-2 ring-primary transition-all">
+                                        <Link
+                                            href={`/${item.slug || item.id}`}
+                                            onClick={closeCart}
+                                            className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-xl border border-slate-100 hover:ring-2 ring-primary transition-all"
+                                        >
                                             <img
                                                 src={item.image}
                                                 alt={item.name}
                                                 className="h-full w-full object-cover"
                                             />
-                                        </a>
+                                        </Link>
 
                                         <div className="flex flex-1 flex-col">
                                             {/* Clickable Name -> Product Page */}
                                             <div className="flex justify-between text-base font-bold text-slate-900">
-                                                <a href={`/product/${item.id}`} className="line-clamp-1 hover:text-primary transition-colors">
+                                                <Link
+                                                    href={`/${item.slug || item.id}`}
+                                                    onClick={closeCart}
+                                                    className="line-clamp-1 hover:text-primary transition-colors"
+                                                >
                                                     {item.name}
-                                                </a>
+                                                </Link>
                                                 <p className="ml-4 text-slate-900 font-bold">{(item.price * item.quantity).toFixed(2)} ₺</p>
                                             </div>
                                             <p className="mt-1 text-sm text-slate-500 line-clamp-1">{item.category}</p>

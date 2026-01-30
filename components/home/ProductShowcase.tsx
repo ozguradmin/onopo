@@ -10,11 +10,12 @@ import { formatPrice } from "@/lib/formatPrice"
 
 interface ProductShowcaseProps {
     title?: string
+    description?: string
     products?: any[]
     category?: string
 }
 
-export default function ProductShowcase({ title = "Trend Ürünler", products: initialProducts, category }: ProductShowcaseProps) {
+export default function ProductShowcase({ title = "Trend Ürünler", description, products: initialProducts, category }: ProductShowcaseProps) {
     const { addItem, openCart } = useCartStore()
     const [products, setProducts] = React.useState<any[]>(initialProducts || [])
     const [loading, setLoading] = React.useState(!initialProducts)
@@ -42,31 +43,36 @@ export default function ProductShowcase({ title = "Trend Ürünler", products: i
             } else {
                 container.scrollBy({ left: 300, behavior: 'smooth' })
             }
-        }, 7000) // Scroll every 7 seconds (slower)
+        }, 7000)
 
         return () => clearInterval(scrollInterval)
     }, [title, products])
 
     if (loading) {
-        return <div className="py-20 text-center">Yükleniyor...</div>
+        return <div className="py-12 text-center">Yükleniyor...</div>
     }
 
     return (
-        <section className="py-20 bg-slate-50">
-            <div className="container mx-auto px-4 mb-12 flex flex-col md:flex-row items-end justify-between gap-4">
-                <div>
-                    <h2 className="text-3xl md:text-4xl font-bold font-heading text-slate-900 tracking-tight mb-3">
-                        {title}
-                    </h2>
-                    <p className="text-slate-500 text-lg">
-                        Bu sezonun en popüler teknoloji ve aksesuar ürünlerini keşfedin.
-                    </p>
+        <section className="py-12 bg-slate-50">
+            <div className="container mx-auto px-4 mb-8">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div>
+                        <h2 className="text-3xl md:text-3xl font-bold font-heading text-slate-900 tracking-tight mb-2">
+                            {title}
+                        </h2>
+                        <p className="text-slate-500 text-base md:text-lg">
+                            {description || "Bu sezonun en popüler teknoloji ve aksesuar ürünlerini keşfedin."}
+                        </p>
+                    </div>
+
+                    {/* See All Button - Header Position for both Mobile and Desktop */}
+                    <a
+                        href={category ? `/products?category=${encodeURIComponent(category)}` : '/products'}
+                        className="flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors md:self-end self-start mt-2 md:mt-0"
+                    >
+                        Tümünü Gör <ArrowRight className="w-4 h-4" />
+                    </a>
                 </div>
-                <a href={category ? `/products?category=${encodeURIComponent(category)}` : '/products'}>
-                    <Button variant="outline" className="hidden md:flex rounded-full border-slate-300 px-6 hover:bg-white">
-                        Tümünü Gör <ArrowRight className="ml-2 w-4 h-4" />
-                    </Button>
-                </a>
             </div>
 
             {/* Carousel Layout for Desktop & Mobile */}
@@ -142,7 +148,8 @@ export default function ProductShowcase({ title = "Trend Ürünler", products: i
                                                     name: product.name,
                                                     price: product.price,
                                                     image: product.images && product.images.length > 0 ? product.images[0] : product.images,
-                                                    category: product.category
+                                                    category: product.category,
+                                                    slug: product.slug
                                                 });
                                                 openCart();
                                             }}
@@ -155,14 +162,6 @@ export default function ProductShowcase({ title = "Trend Ürünler", products: i
                         </div>
                     ))}
                 </div>
-            </div>
-
-            <div className="container mx-auto px-4 mt-8 md:hidden">
-                <a href={category ? `/products?category=${encodeURIComponent(category)}` : '/products'}>
-                    <Button variant="outline" className="w-full rounded-full border-slate-300 h-12 hover:bg-white">
-                        Tüm Ürünleri Gör
-                    </Button>
-                </a>
             </div>
         </section >
     )

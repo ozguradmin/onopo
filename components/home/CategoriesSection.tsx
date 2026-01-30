@@ -7,19 +7,26 @@ import {
     Shirt, Home, Camera, Headphones, Watch, Gift,
     ShoppingBag, Star, Tv, Phone, Tablet, Monitor,
     Printer, Speaker, Keyboard, Mouse, Coffee, Book,
-    Bike, Car, Plane, Music, Film, Palette, ChevronRight
+    Bike, Car, Plane, Music, Film, Palette, ChevronRight,
+    Calculator, Utensils, Armchair, Dumbbell, Dog, Flower2,
+    Briefcase, Hammer, Baby, Scissors, Anchor, Sun,
+    Moon, Cloud, Umbrella, Key, Lock, Map, Compass,
+    Globe, Award, Medal, Crown, Trophy, Jewel
 } from 'lucide-react'
 
 // Icon mapping for categories
+// Icon mapping for categories matches Admin Panel
 const iconMap: Record<string, any> = {
     laptop: Laptop,
     sparkles: Sparkles,
     gamepad: Gamepad2,
     package: Package,
     zap: Zap,
+    tool: Hammer,
     heart: Heart,
     shirt: Shirt,
     home: Home,
+    furniture: Armchair,
     camera: Camera,
     headphones: Headphones,
     watch: Watch,
@@ -35,6 +42,7 @@ const iconMap: Record<string, any> = {
     keyboard: Keyboard,
     mouse: Mouse,
     coffee: Coffee,
+    kitchen: Utensils,
     book: Book,
     bike: Bike,
     car: Car,
@@ -42,6 +50,21 @@ const iconMap: Record<string, any> = {
     music: Music,
     film: Film,
     palette: Palette,
+    office: Briefcase,
+    baby: Baby,
+    sport: Dumbbell,
+    pet: Dog,
+    garden: Flower2,
+    beauty: Scissors,
+    sea: Anchor,
+    sun: Sun,
+    moon: Moon,
+    weather: Cloud,
+    umbrella: Umbrella,
+    security: Lock,
+    map: Map,
+    global: Globe,
+    award: Award,
     // Default
     default: Package
 }
@@ -75,7 +98,7 @@ export function CategoriesSection({ title = "Kategoriler", categories: propCateg
         }
     }, [propCategories])
 
-    const displayCategories = categories.slice(0, 6)
+    const displayCategories = categories.filter(c => c.product_count && c.product_count > 0).slice(0, 6)
 
     return (
         <section className="py-16 bg-white">

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ArrowRight } from "lucide-react"
+import { ArrowRight, ArrowDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 export function HeroSection() {
@@ -75,8 +75,11 @@ export function HeroSection() {
                             backgroundImage: `url(${slide.image_url || slide.image})`,
                             backgroundPosition: 'center center'
                         }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent" />
+                    >
+                        {/* 20% black overlay as requested + gradient */}
+                        <div className="absolute inset-0 bg-black/20" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
+                    </div>
 
                     {/* Content */}
                     <div className="relative h-full container mx-auto px-4 flex flex-col justify-center items-start z-10">
@@ -105,24 +108,44 @@ export function HeroSection() {
                         </motion.div>
                     </div>
                 </motion.div>
-            </AnimatePresence>
+            </motion.div>
+        </AnimatePresence>
 
-            {/* Slider Controls */}
-            {slides.length > 1 && (
-                <div className="absolute bottom-10 left-0 right-0 z-20">
-                    <div className="container mx-auto px-4 flex justify-center gap-3">
-                        {slides.map((s, index) => (
-                            <button
-                                key={s.id || index}
-                                onClick={() => setCurrentSlide(index)}
-                                className={`h-1.5 rounded-full transition-all duration-300 shadow-sm ${index === currentSlide ? "w-12 bg-white" : "w-6 bg-white/40 hover:bg-white/60"
-                                    }`}
-                                aria-label={`Go to slide ${index + 1}`}
-                            />
-                        ))}
-                    </div>
+            {/* Scroll Indicator */ }
+    <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1, duration: 1 }}
+        className="absolute bottom-24 left-0 right-0 z-20 flex justify-center pointer-events-none"
+    >
+        <motion.div
+            animate={{ y: [0, 10, 0] }}
+            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+            className="flex flex-col items-center gap-2 text-white/50"
+        >
+            <span className="text-xs uppercase tracking-widest font-medium">Kaydır</span>
+            <ArrowDown className="w-6 h-6" />
+        </motion.div>
+    </motion.div>
+
+    {/* Slider Controls */ }
+    {
+        slides.length > 1 && (
+            <div className="absolute bottom-10 left-0 right-0 z-20">
+                <div className="container mx-auto px-4 flex justify-center gap-3">
+                    {slides.map((s, index) => (
+                        <button
+                            key={s.id || index}
+                            onClick={() => setCurrentSlide(index)}
+                            className={`h-1.5 rounded-full transition-all duration-300 shadow-sm ${index === currentSlide ? "w-12 bg-white" : "w-6 bg-white/40 hover:bg-white/60"
+                                }`}
+                            aria-label={`Go to slide ${index + 1}`}
+                        />
+                    ))}
                 </div>
-            )}
-        </section>
+            </div>
+        )
+    }
+        </section >
     )
 }
