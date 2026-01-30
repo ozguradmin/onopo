@@ -8,6 +8,7 @@ import { useCartStore } from "@/store/cart-store"
 import { Badge } from "@/components/ui/badge"
 import { formatPrice } from "@/lib/formatPrice"
 import Link from "next/link"
+import Image from "next/image"
 import ProductShowcase from "@/components/home/ProductShowcase"
 import { MarkdownRenderer } from "@/components/ui/MarkdownRenderer"
 
@@ -350,11 +351,13 @@ export default function ProductClient({ id }: { id: string }) {
                                                 }
                                             }}
                                         >
-                                            <img
+                                            <Image
                                                 src={allImages[selectedImage] || '/placeholder.svg'}
                                                 alt={product.name}
-                                                className="object-contain w-full h-full p-4"
-                                                loading="lazy"
+                                                fill
+                                                sizes="(max-width: 768px) 100vw, 50vw"
+                                                priority={selectedImage === 0}
+                                                className="object-contain p-4"
                                             />
                                             <div className="absolute top-4 left-4 flex flex-col gap-2">
                                                 {product.original_price && product.original_price > product.price && Math.round((1 - product.price / product.original_price) * 100) > 0 && (
@@ -407,7 +410,13 @@ export default function ProductClient({ id }: { id: string }) {
                                                         : 'border-slate-200 hover:border-slate-300'
                                                         }`}
                                                 >
-                                                    <img src={img} alt="" className="object-contain w-full h-full p-1" />
+                                                    <Image
+                                                        src={img}
+                                                        alt={`Thumbnail ${idx}`}
+                                                        fill
+                                                        sizes="80px"
+                                                        className="object-contain p-1"
+                                                    />
                                                     {selectedImage === idx && (
                                                         <div className="absolute inset-0 bg-slate-900/10" />
                                                     )}
