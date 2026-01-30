@@ -76,7 +76,15 @@ export default function OrderEditPage() {
     if (loading) return <div className="p-8 text-center">Yükleniyor...</div>
     if (!order) return <div className="p-8 text-center text-red-500">Sipariş bulunamadı</div>
 
-    const items = order.items ? JSON.parse(order.items) : []
+    const items = React.useMemo(() => {
+        if (!order?.items) return []
+        try {
+            return typeof order.items === 'string' ? JSON.parse(order.items) : order.items
+        } catch {
+            console.error('Failed to parse order items', order.items)
+            return []
+        }
+    }, [order?.items])
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">

@@ -20,7 +20,8 @@ import {
     Ticket,
     CreditCard,
     Image as ImageIcon,
-    Share2
+    Share2,
+    Mail
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -38,6 +39,7 @@ const navItems = [
     { href: '/admin/reviews', label: 'Yorumlar', icon: MessageSquare },
     { href: '/admin/coupons', label: 'Kuponlar', icon: Ticket },
     { href: '/admin/users', label: 'Kullanıcılar', icon: Users },
+    { href: '/admin/email', label: 'E-posta', icon: Mail },
     { href: '/admin/settings', label: 'Site Ayarları', icon: Settings },
     { href: '/admin/image-optimization', label: 'Görsel Optimizasyonu', icon: ImageIcon },
 ]

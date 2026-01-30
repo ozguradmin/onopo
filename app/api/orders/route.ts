@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
+import { sendOrderConfirmation, sendAdminNewOrderNotification } from '@/lib/email'
 
 // Create Order (Guest or User)
 export async function POST(req: NextRequest) {
@@ -126,6 +127,24 @@ export async function POST(req: NextRequest) {
                 await db.prepare('UPDATE orders SET status = ?, payment_status = ? WHERE id = ?').bind('cancelled', 'failed', orderId).run()
                 return NextResponse.json({ error: 'Ödeme başlatılamadı: ' + err.message }, { status: 400 })
             }
+        }
+
+        // Store items in order for later retrieval (as JSON)
+        await db.prepare('UPDATE orders SET items = ? WHERE id = ?').bind(JSON.stringify(orderItems), orderId).run()
+
+        // Send emails (async, don't block response)
+        try {
+            // Send customer confirmation email
+            sendOrderConfirmation({ id: orderId, total_amount: totalAmount }, orderItems, customerInfo.email)
+
+            // Send admin notification
+            const siteSettings = await db.prepare('SELECT admin_email FROM site_settings LIMIT 1').first() as any
+            if (siteSettings?.admin_email) {
+                sendAdminNewOrderNotification({ id: orderId, total_amount: totalAmount }, orderItems, customerInfo.email, siteSettings.admin_email)
+            }
+        } catch (emailErr) {
+            console.error('Email sending failed:', emailErr)
+            // Don't fail order for email issues
         }
 
         return NextResponse.json({

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
+import { sendTrackingUpdate } from '@/lib/email'
 
 // GET: Get single order
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -70,37 +71,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
         // Send email notification for tracking number
         if (send_notification && tracking_number && order.guest_email) {
-            // Try to send email notification
             try {
-                let address: any = {}
-                try { address = JSON.parse(order.shipping_address) } catch { }
-
-                await fetch('https://api.mailchannels.net/tx/v1/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        personalizations: [{ to: [{ email: order.guest_email, name: address.fullName || '' }] }],
-                        from: { email: 'no-reply@onopo-app.workers.dev', name: 'Onopo' },
-                        subject: `Siparişiniz Kargoya Verildi - #${order.id}`,
-                        content: [{
-                            type: 'text/html',
-                            value: `
-                                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                                    <h1 style="color: #1e293b;">Kargo Bilgisi</h1>
-                                    <p style="color: #475569;">Merhaba ${address.fullName || ''},</p>
-                                    <p style="color: #475569;">#${order.id} numaralı siparişiniz kargoya verildi.</p>
-                                    <div style="background: #f1f5f9; padding: 20px; border-radius: 8px; margin: 24px 0;">
-                                        <p style="margin: 0;"><strong>Kargo Takip Numarası:</strong></p>
-                                        <p style="margin: 8px 0 0 0; font-size: 18px; color: #1e293b;">${tracking_number}</p>
-                                    </div>
-                                    <p style="color: #64748b; font-size: 14px;">Takip numarası ile kargo firmasının web sitesinden siparişinizi takip edebilirsiniz.</p>
-                                </div>
-                            `
-                        }]
-                    })
-                })
+                await sendTrackingUpdate({ id: order.id }, tracking_number, order.guest_email)
             } catch (emailError) {
-                console.error('Email sending failed:', emailError)
+                console.error('Tracking email sending failed:', emailError)
             }
         }
 

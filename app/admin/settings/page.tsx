@@ -32,6 +32,9 @@ export default function AdminSettingsPage() {
     const [footerPhone, setFooterPhone] = React.useState('')
     const [footerAddress, setFooterAddress] = React.useState('')
 
+    // Admin Notification Email
+    const [adminEmail, setAdminEmail] = React.useState('')
+
     React.useEffect(() => {
         Promise.all([
             fetch('/api/auth/me').then(r => r.json()),
@@ -57,6 +60,7 @@ export default function AdminSettingsPage() {
                 setFooterEmail(settingsData.footer_email || '')
                 setFooterPhone(settingsData.footer_phone || '')
                 setFooterAddress(settingsData.footer_address || '')
+                setAdminEmail(settingsData.admin_email || '')
             }
             if (Array.isArray(categoriesData)) {
                 setAllCategories(categoriesData)
@@ -94,7 +98,8 @@ export default function AdminSettingsPage() {
                     footer_categories: JSON.stringify(footerCategories),
                     footer_email: footerEmail,
                     footer_phone: footerPhone,
-                    footer_address: footerAddress
+                    footer_address: footerAddress,
+                    admin_email: adminEmail
                 })
             })
 
@@ -314,6 +319,22 @@ export default function AdminSettingsPage() {
                                     onChange={e => setFooterAddress(e.target.value)}
                                     className="w-full p-2 border rounded-lg"
                                     placeholder="İstanbul, Türkiye"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Admin Notification Email */}
+                        <div className="border-t pt-4 mt-4">
+                            <h3 className="font-semibold mb-4 text-sm text-slate-500 uppercase tracking-wider">📧 Sipariş Bildirimleri</h3>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Admin Bildirim E-postası</label>
+                                <p className="text-xs text-slate-500 mb-2">Yeni siparişler bu adrese bildirilir</p>
+                                <input
+                                    type="email"
+                                    value={adminEmail}
+                                    onChange={e => setAdminEmail(e.target.value)}
+                                    className="w-full p-2 border rounded-lg"
+                                    placeholder="siparis@onopostore.com"
                                 />
                             </div>
                         </div>

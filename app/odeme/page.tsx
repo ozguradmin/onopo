@@ -26,6 +26,9 @@ export default function CheckoutPage() {
     const [verifying, setVerifying] = React.useState(false)
     const [couponError, setCouponError] = React.useState('')
 
+    // Payment Iframe State
+    const [iframeUrl, setIframeUrl] = React.useState<string | null>(null)
+
     // Calculations
     const calculateSubtotal = () => items.reduce((total, item) => total + (item.price || 0) * item.quantity, 0)
 
@@ -136,12 +139,24 @@ export default function CheckoutPage() {
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'Sipariş oluşturulamadı')
 
+            // Handle Payment
+            if (data.payment && data.payment.status === 'success' && data.payment.iframeUrl) {
+                // If payment required (PayTR), show iframe
+                setOrderId(data.orderId)
+                setIframeUrl(data.payment.iframeUrl)
+                window.scrollTo(0, 0)
+                return
+            }
+
+            // If offline payment or no payment required
             setOrderId(data.orderId)
             setOrderComplete(true)
             clearCart()
+            window.scrollTo(0, 0) // Scroll to top for success message
 
         } catch (err: any) {
             setError(err.message)
+            window.scrollTo(0, 0)
         } finally {
             setLoading(false)
         }
@@ -196,6 +211,26 @@ export default function CheckoutPage() {
                                 </Button>
                             </Link>
                         </div>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    // Payment Iframe (PayTR)
+    if (iframeUrl) {
+        return (
+            <div className="min-h-screen bg-slate-50 py-8">
+                <div className="container mx-auto px-4 max-w-4xl">
+                    <div className="mb-6">
+                        <p className="text-slate-500 mb-2 text-center">Ödeme İşlemi - Sipariş #{orderId}</p>
+                    </div>
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                        <iframe
+                            src={iframeUrl}
+                            className="w-full min-h-[600px] border-0"
+                            title="Ödeme Ekranı"
+                        ></iframe>
                     </div>
                 </div>
             </div>

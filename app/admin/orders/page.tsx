@@ -2,10 +2,7 @@
 
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
-import {
-    Package, Eye, Trash2, Truck, Check, X, Clock,
-    Mail, Phone, MapPin, AlertCircle, ChevronDown, ChevronUp
-} from 'lucide-react'
+import { ArrowUpRight, Search, Filter, MoreHorizontal, ChevronDown, ChevronUp, Package, Truck, Check, X, Mail, MapPin, Trash2, Clock } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 
 interface Order {
@@ -18,6 +15,7 @@ interface Order {
     tracking_number: string | null
     admin_notes: string | null
     created_at: string
+    items: string | any[] // JSON string or parsed array
 }
 
 const statusLabels: Record<string, { label: string; color: string; icon: any }> = {
@@ -242,6 +240,34 @@ function OrdersContent() {
                                                         <p className="mt-2 text-slate-500 italic">Not: {address.note}</p>
                                                     )}
                                                 </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Products */}
+                                        <div className="bg-white rounded-xl p-4 border border-slate-200">
+                                            <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                                                <Package className="w-4 h-4 text-slate-400" />
+                                                Sipariş Ürünleri
+                                            </h3>
+                                            <div className="space-y-3">
+                                                {order.items && (typeof order.items === 'string' ? JSON.parse(order.items) : order.items).map((item: any, idx: number) => (
+                                                    <div key={idx} className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg">
+                                                        {item.image ? (
+                                                            <img src={item.image} alt={item.name} className="w-12 h-12 rounded bg-white object-cover" />
+                                                        ) : (
+                                                            <div className="w-12 h-12 rounded bg-white flex items-center justify-center text-slate-300">
+                                                                <Package className="w-6 h-6" />
+                                                            </div>
+                                                        )}
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-medium text-slate-900 truncate">{item.name}</p>
+                                                            <p className="text-xs text-slate-500">Adet: {item.quantity} x {item.price.toFixed(2)} ₺</p>
+                                                        </div>
+                                                        <div className="font-semibold text-slate-900 text-sm">
+                                                            {(item.quantity * item.price).toFixed(2)} ₺
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
 

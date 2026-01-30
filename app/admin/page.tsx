@@ -185,34 +185,51 @@ export default function AdminDashboard() {
                         <thead className="bg-slate-50 border-b border-slate-200">
                             <tr>
                                 <th className="p-4 font-semibold text-slate-700">Sipariş No</th>
-                                <th className="p-4 font-semibold text-slate-700">Kullanıcı</th>
+                                <th className="p-4 font-semibold text-slate-700">Müşteri</th>
+                                <th className="p-4 font-semibold text-slate-700">Ürünler</th>
                                 <th className="p-4 font-semibold text-slate-700">Tutar</th>
                                 <th className="p-4 font-semibold text-slate-700">Durum</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {orders.slice(0, 5).map(order => (
-                                <tr
-                                    key={order.id}
-                                    className="hover:bg-slate-50 cursor-pointer"
-                                    onClick={() => router.push(`/admin/orders/${order.id}`)}
-                                >
-                                    <td className="p-4 font-mono font-medium text-slate-500">#{order.id}</td>
-                                    <td className="p-4 text-slate-900">{order.guest_email || 'Kayıtlı Üye'}</td>
-                                    <td className="p-4 font-bold text-slate-900">{order.total_amount?.toFixed(2)} ₺</td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase
-                                            ${order.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : ''}
-                                            ${order.status === 'completed' ? 'bg-green-100 text-green-700' : ''}
-                                            ${order.status === 'cancelled' ? 'bg-red-100 text-red-700' : ''}
-                                        `}>
-                                            {order.status}
-                                        </span>
-                                    </td>
-                                </tr>
-                            ))}
+                            {orders.slice(0, 5).map(order => {
+                                const statusLabels: Record<string, { label: string; bg: string }> = {
+                                    pending: { label: 'Beklemede', bg: 'bg-yellow-100 text-yellow-700' },
+                                    processing: { label: 'Hazırlanıyor', bg: 'bg-blue-100 text-blue-700' },
+                                    shipped: { label: 'Kargoda', bg: 'bg-purple-100 text-purple-700' },
+                                    delivered: { label: 'Teslim Edildi', bg: 'bg-green-100 text-green-700' },
+                                    completed: { label: 'Tamamlandı', bg: 'bg-green-100 text-green-700' },
+                                    cancelled: { label: 'İptal', bg: 'bg-red-100 text-red-700' }
+                                }
+                                const status = statusLabels[order.status] || { label: order.status, bg: 'bg-slate-100 text-slate-700' }
+                                const items = order.items ? (typeof order.items === 'string' ? JSON.parse(order.items) : order.items) : []
+                                return (
+                                    <tr
+                                        key={order.id}
+                                        className="hover:bg-slate-50 cursor-pointer"
+                                        onClick={() => router.push(`/admin/orders/${order.id}`)}
+                                    >
+                                        <td className="p-4 font-mono font-medium text-slate-500">#{order.id}</td>
+                                        <td className="p-4 text-slate-900">{order.guest_email || 'Kayıtlı Üye'}</td>
+                                        <td className="p-4 text-sm text-slate-600 max-w-xs">
+                                            {items.length > 0 ? (
+                                                <span className="truncate block">
+                                                    {items.slice(0, 2).map((i: any) => i.name).join(', ')}
+                                                    {items.length > 2 && ` +${items.length - 2}`}
+                                                </span>
+                                            ) : '-'}
+                                        </td>
+                                        <td className="p-4 font-bold text-slate-900">{order.total_amount?.toFixed(2)} ₺</td>
+                                        <td className="p-4">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${status.bg}`}>
+                                                {status.label}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
                             {orders.length === 0 && (
-                                <tr><td colSpan={4} className="p-8 text-center text-slate-500">Henüz sipariş yok.</td></tr>
+                                <tr><td colSpan={5} className="p-8 text-center text-slate-500">Henüz sipariş yok.</td></tr>
                             )}
                         </tbody>
                     </table>
