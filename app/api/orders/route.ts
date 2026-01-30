@@ -135,15 +135,15 @@ export async function POST(req: NextRequest) {
         // Store items in order for later retrieval (as JSON)
         await db.prepare('UPDATE orders SET items = ? WHERE id = ?').bind(JSON.stringify(orderItems), orderId).run()
 
-        // Send emails (async, don't block response)
+        // Send emails (awaited to ensure execution in Serverless/Edge)
         try {
             // Send customer confirmation email
-            sendOrderConfirmation({ id: orderId, total_amount: totalAmount }, orderItems, customerInfo.email)
+            await sendOrderConfirmation({ id: orderId, total_amount: totalAmount }, orderItems, customerInfo.email)
 
             // Send admin notification
             const siteSettings = await db.prepare('SELECT admin_email FROM site_settings LIMIT 1').first() as any
             if (siteSettings?.admin_email) {
-                sendAdminNewOrderNotification({ id: orderId, total_amount: totalAmount }, orderItems, customerInfo.email, siteSettings.admin_email)
+                await sendAdminNewOrderNotification({ id: orderId, total_amount: totalAmount }, orderItems, customerInfo.email, siteSettings.admin_email)
             }
         } catch (emailErr) {
             console.error('Email sending failed:', emailErr)

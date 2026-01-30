@@ -351,14 +351,22 @@ export default function ProductClient({ id }: { id: string }) {
                                                 }
                                             }}
                                         >
-                                            <Image
-                                                src={allImages[selectedImage] || '/placeholder.svg'}
-                                                alt={product.name}
-                                                fill
-                                                sizes="(max-width: 768px) 100vw, 50vw"
-                                                priority={selectedImage === 0}
-                                                className="object-contain p-4"
-                                            />
+                                            <div className="relative w-full h-full p-4">
+                                                <Image
+                                                    src={allImages[selectedImage] || '/placeholder.svg'}
+                                                    alt={product.name}
+                                                    fill
+                                                    sizes="(max-width: 768px) 100vw, 50vw"
+                                                    priority={selectedImage === 0}
+                                                    className="object-contain"
+                                                    onError={(e) => {
+                                                        // Fallback to unoptimized img if optimization fails
+                                                        const target = e.target as HTMLImageElement;
+                                                        target.srcset = ""
+                                                        target.src = allImages[selectedImage] || '/placeholder.svg'
+                                                    }}
+                                                />
+                                            </div>
                                             <div className="absolute top-4 left-4 flex flex-col gap-2">
                                                 {product.original_price && product.original_price > product.price && Math.round((1 - product.price / product.original_price) * 100) > 0 && (
                                                     <Badge className="bg-red-500 text-white text-sm px-3 py-1">
