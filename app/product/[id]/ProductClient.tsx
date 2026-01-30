@@ -36,7 +36,15 @@ function preprocessDescription(text: string): string {
 
     let formatted = text
 
-    // 1. First, handle mashed categories/sections
+    // 0. Strip common HTML wrapper tags that might be literal in the text
+    // Some descriptions come with literal <div> or <p> tags displayed as text
+    formatted = formatted.replace(/<div[^>]*>/g, '')
+    formatted = formatted.replace(/<\/div>/g, '')
+    formatted = formatted.replace(/<p[^>]*>/g, '\n')
+    formatted = formatted.replace(/<\/p>/g, '\n')
+    formatted = formatted.replace(/<br\s*\/?>/g, '\n')
+
+    // 1. Handle mashed categories/sections
     const sections = [
         "Ürün Açıklaması",
         "Detaylı Bilgi",
@@ -48,7 +56,7 @@ function preprocessDescription(text: string): string {
     sections.forEach(section => {
         // Find existing occurrences and ensure they have newlines
         // Match section name even if it's right after other text
-        const regex = new RegExp(`([^\\n])(${section})`, 'g')
+        const regex = new RegExp(`([^\\n#])(${section})`, 'g')
         formatted = formatted.replace(regex, '$1\n\n## $2\n\n')
 
         // Ensure even if at start or already has newline, it's formatted
@@ -56,22 +64,26 @@ function preprocessDescription(text: string): string {
         formatted = formatted.replace(regexStart, '## $1\n\n')
     })
 
-    // 2. Handle Key-Value pairs like "Marka: HUTT"
-    const keys = ["Marka", "Ürün Kodu", "Barkod", "Desi", "Model", "Renk", "Güç", "Kapasite", "Ağırlık"]
+    // 2. Handle Key-Value pairs even if mashed (e.g., MarkaOnopo)
+    const keys = ["Marka", "Ürün Kodu", "Barkod", "Desi", "Model", "Renk", "Güç", "Kapasite", "Ağırlık", "Garanti"]
     keys.forEach(key => {
-        // regex to find key followed by colon or space
-        const regex = new RegExp(`(${key})[\\s:]+`, 'g')
-        formatted = formatted.replace(regex, '\n- **$1:** ')
+        // If the key is found and NOT followed by a separator, split it
+        const regexMashed = new RegExp(`(${key})([^\\s:])`, 'g')
+        formatted = formatted.replace(regexMashed, '\n- **$1:** $2')
+
+        // Ensure existing key-value pairs are on their own line with bullet points
+        const regexExist = new RegExp(`([^\\n])(\\b${key}:?\\s*)`, 'g')
+        formatted = formatted.replace(regexExist, '$1\n- **$2**')
     })
 
     // 3. Special handling for Variant blocks [ - Renk: : Kahverengi ...]
-    // If we see [ - Renk, let's make it a bullet
     formatted = formatted.replace(/\[\s*-\s*/g, '\n- ')
     formatted = formatted.replace(/\]/g, '')
 
     // Clean up excessive newlines and spaces
     return formatted.replace(/\n{3,}/g, '\n\n').trim()
 }
+
 
 
 interface Review {

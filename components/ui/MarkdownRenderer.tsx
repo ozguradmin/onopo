@@ -11,7 +11,11 @@ export function MarkdownRenderer({ content }: { content: string }) {
     return (
         <div className="space-y-4 text-slate-600 leading-relaxed text-base">
             {lines.map((line, index) => {
-                const trimmedLine = line.trim()
+                let trimmedLine = line.trim()
+
+                // Final safety: Remove any literal HTML tags if they survived preprocessing
+                trimmedLine = trimmedLine.replace(/<[^>]*>?/gm, '')
+                if (!trimmedLine && line.trim() !== '') return null // Skip if line was just HTML
 
                 // Headings
                 if (trimmedLine.startsWith('### ')) {
@@ -26,7 +30,7 @@ export function MarkdownRenderer({ content }: { content: string }) {
 
                 // List items
                 if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
-                    const text = trimmedLine.substring(2)
+                    const text = trimmedLine.replace(/^[*|-]\s?/, '')
                     return (
                         <div key={index} className="flex gap-2 ml-4 my-1">
                             <span className="text-slate-900 mt-1.5 font-bold">•</span>
@@ -41,14 +45,13 @@ export function MarkdownRenderer({ content }: { content: string }) {
                 }
 
                 // Regular text (with bold support)
-                // If it looks like HTML, we still try to render it simply 
-                // but we don't want to break the whole thing.
                 return (
                     <p key={index} className="min-h-[1.5em] mb-2 last:mb-0">
-                        {parseBold(line)}
+                        {parseBold(trimmedLine)}
                     </p>
                 )
             })}
+
         </div>
     )
 }
