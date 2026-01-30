@@ -7,7 +7,7 @@ import { hashPassword, signJWT } from '@/lib/auth'
 export async function POST(req: NextRequest) {
     try {
         const db = await getDB()
-        const { email, password, fullName, phone } = await req.json()
+        const { email, password, name, phone } = await req.json()
 
         if (!email || !password) {
             return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
         const hashedPassword = await hashPassword(password)
         const runResult = await db.prepare(
             'INSERT INTO users (email, password_hash, full_name, phone, role) VALUES (?, ?, ?, ?, ?)'
-        ).bind(email, hashedPassword, fullName || '', phone || '', 'user').run()
+        ).bind(email, hashedPassword, name || '', phone || '', 'user').run()
 
         if (!runResult.success) {
             throw new Error('Failed to create user')
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
         // Sign Token
         const token = await signJWT({ email, role: 'user' })
 
-        const response = NextResponse.json({ success: true, user: { email, fullName, role: 'user' } })
+        const response = NextResponse.json({ success: true, user: { email, name, role: 'user' } })
 
         response.cookies.set('token', token, {
             httpOnly: true,

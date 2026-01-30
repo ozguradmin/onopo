@@ -126,10 +126,18 @@ export default function ProductClient({ id }: { id: string }) {
 
 
     const handleBuyNow = () => {
-        handleAddToCart()
-        setTimeout(() => {
-            window.location.href = '/odeme'
-        }, 100)
+        if (!product) return
+        for (let i = 0; i < quantity; i++) {
+            addItem({
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                image: product.images && product.images.length > 0 ? product.images[0] : product.image,
+                category: product.category
+            })
+        }
+        // Direct redirect without opening cart
+        window.location.href = '/odeme'
     }
 
     // Similar products state

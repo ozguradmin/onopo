@@ -59,8 +59,8 @@ export const useCartStore = create<CartState>()(
                     set({ items: [...items, { ...product, quantity: 1 }] })
                 }
 
-                // Auto open cart on add
-                set({ isOpen: true })
+                // Auto open cart on add removed to support 'Buy Now' without drawer
+                // set({ isOpen: true })
             },
 
             removeItem: (productId) => {

@@ -39,6 +39,7 @@ export default function AdminUsersPage() {
                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">ID</th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Ad Soyad</th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">E-posta</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Telefon</th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Rol</th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Kayıt Tarihi</th>
                         </tr>
@@ -55,6 +56,9 @@ export default function AdminUsersPage() {
                                         <Mail className="w-4 h-4 text-slate-400" />
                                         <span className="text-sm text-slate-600">{user.email}</span>
                                     </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                    <span className="text-sm text-slate-600">{user.phone || '-'}</span>
                                 </td>
                                 <td className="px-4 py-3">
                                     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${user.role === 'admin'
