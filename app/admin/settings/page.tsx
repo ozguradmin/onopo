@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, User, Lock, Save, Upload, X } from 'lucide-react'
+import { ArrowLeft, User, Lock, Save, Upload, X, Image } from 'lucide-react'
 
 export default function AdminSettingsPage() {
     const router = useRouter()
@@ -19,6 +19,7 @@ export default function AdminSettingsPage() {
     // Site Settings Form
     const [siteName, setSiteName] = React.useState('Onopo')
     const [logoUrl, setLogoUrl] = React.useState('')
+    const [faviconUrl, setFaviconUrl] = React.useState('')
     const [footerText, setFooterText] = React.useState('')
     const [siteDescription, setSiteDescription] = React.useState('')
 
@@ -44,6 +45,7 @@ export default function AdminSettingsPage() {
             if (settingsData) {
                 setSiteName(settingsData.site_name || 'Onopo')
                 setLogoUrl(settingsData.logo_url || '')
+                setFaviconUrl(settingsData.favicon_url || '')
                 setFooterText(settingsData.footer_text || '')
                 setSiteDescription(settingsData.site_description || '')
                 // Parse footer categories from JSON
@@ -86,6 +88,7 @@ export default function AdminSettingsPage() {
                 body: JSON.stringify({
                     site_name: siteName,
                     logo_url: logoUrl,
+                    favicon_url: faviconUrl,
                     footer_text: footerText,
                     site_description: siteDescription,
                     footer_categories: JSON.stringify(footerCategories),
@@ -176,6 +179,50 @@ export default function AdminSettingsPage() {
                                                 if (res.ok) {
                                                     const json = await res.json()
                                                     setLogoUrl(json.url)
+                                                }
+                                            } catch { }
+                                        }}
+                                    />
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Favicon Upload */}
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Favicon (Sekme İkonu)</label>
+                            <p className="text-xs text-slate-500 mb-2">Tarayıcı sekmesinde görünen küçük ikon (56x56 PNG önerilir)</p>
+                            <div className="flex items-center gap-4">
+                                {faviconUrl && (
+                                    <div className="relative group">
+                                        <img src={faviconUrl} className="h-14 w-14 object-contain border p-1 rounded bg-slate-50" />
+                                        <button
+                                            type="button"
+                                            onClick={() => setFaviconUrl('')}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                )}
+                                <label className="cursor-pointer">
+                                    <span className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 text-sm flex items-center gap-2">
+                                        <Image className="w-4 h-4" />
+                                        {faviconUrl ? 'Değiştir' : 'Favicon Yükle'}
+                                    </span>
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept="image/png,image/x-icon,image/ico"
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0]
+                                            if (!file) return
+                                            const data = new FormData()
+                                            data.append('file', file)
+                                            try {
+                                                const res = await fetch('/api/admin/upload', { method: 'POST', body: data })
+                                                if (res.ok) {
+                                                    const json = await res.json()
+                                                    setFaviconUrl(json.url)
                                                 }
                                             } catch { }
                                         }}
