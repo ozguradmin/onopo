@@ -69,16 +69,18 @@ export function HeroSection() {
                     className="absolute inset-0"
                 >
                     {/* Background Image with Overlay */}
-                    <div
-                        className="absolute inset-0 bg-cover bg-center"
-                        style={{
-                            backgroundImage: `url(${slide.image_url || slide.image})`,
-                            backgroundPosition: 'center center'
-                        }}
-                    >
+                    <div className="absolute inset-0">
+                        <div className="absolute inset-0 z-0">
+                            <img
+                                src={slide.image_url || slide.image}
+                                alt={slide.title || "Hero Image"}
+                                className="w-full h-full object-cover object-center"
+                                fetchPriority="high"
+                            />
+                        </div>
                         {/* 20% black overlay as requested + gradient */}
-                        <div className="absolute inset-0 bg-black/20" />
-                        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
+                        <div className="absolute inset-0 bg-black/20 z-0" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-0" />
                     </div>
 
                     {/* Content */}
