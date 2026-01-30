@@ -59,44 +59,74 @@ function preprocessDescription(text: string): string {
     formatted = formatted.replace(/<span[^>]*>/gi, '')
     formatted = formatted.replace(/<\/span>/gi, '')
 
-    // 3. Handle Sections/Headers
-    const sections = ["Ürün Açıklaması", "Detaylı Bilgi", "Teknik Özellikler", "Özellikleri", "Kutu İçeriği", "Ürün Özellikleri"]
+    // 3. Handle Sections/Headers (only match as full words, not partial like "özellikleri" in middle of sentence)
+    const sections = ["Ürün Açıklaması", "Detaylı Bilgi", "Teknik Özellikler", "Kutu İçeriği", "Ürün Özellikleri"]
     sections.forEach(section => {
-        const regex = new RegExp(`([^\\n#])(${section})`, 'gi')
-        formatted = formatted.replace(regex, '$1\n\n## $2\n\n')
-        const regexStart = new RegExp(`^(${section})`, 'gi')
-        formatted = formatted.replace(regexStart, '## $1\n\n')
+        // Match section titles that appear after a newline or at start, possibly after whitespace
+        const regex = new RegExp(`(^|\\n)\\s*(${section})\\s*(?=\\n|$)`, 'gim')
+        formatted = formatted.replace(regex, '\n\n## $2\n\n')
     })
 
-    // 4. Split mashed sentences in "Detaylı Bilgi" or long blocks
-    // Look for period followed by capital letter with no space or just one space
-    formatted = formatted.replace(/([a-z0-9])\.([A-Z])/g, '$1.\n$2')
-    formatted = formatted.replace(/([a-z0-9])\. ([A-Z])/g, '$1.\n$2')
+    // 4. Split mashed sentences - include Turkish characters
+    // Period followed by capital letter (including Turkish İÜÖÇŞĞ) or checkmark
+    formatted = formatted.replace(/([a-zA-ZğüşıöçĞÜŞİÖÇ0-9])\.([A-ZİÜÖÇŞĞ])/g, '$1.\n\n$2')
+    formatted = formatted.replace(/([a-zA-ZğüşıöçĞÜŞİÖÇ0-9])\.\s+([A-ZİÜÖÇŞĞ])/g, '$1.\n\n$2')
 
-    // 5. Precise Key-Value pairs
-    const keys = ["Marka", "Ürün Kodu", "Barkod", "Desi", "Model", "Renk", "Güç", "Kapasite", "Ağırlık", "Garanti", "Pil", "Uyumluluk", "Bağlantı"]
-    keys.forEach(key => {
-        // Mashed keys: "MarkaOnopo" -> "\n- **Marka:** Onopo"
-        const regexMashed = new RegExp(`(\\b${key})([^\\s:]{2,})`, 'gi')
-        formatted = formatted.replace(regexMashed, '\n- **$1:** $2')
+    // 4a. Handle checkmarks - split them to new lines and convert to bullet points
+    // First, add newline before checkmarks that are stuck to previous text
+    formatted = formatted.replace(/([^\n\s])([✔✓])/g, '$1\n$2')
+    // Convert checkmarks at start of line to bullet points
+    formatted = formatted.replace(/^[✔✓]\s*/gm, '- ✔ ')
+    // Also handle mid-text checkmarks that are now on their own lines
+    formatted = formatted.replace(/\n[✔✓]\s*/g, '\n- ✔ ')
 
-        // Clean existing keys: "Marka: Onopo" -> "\n- **Marka:** Onopo"
-        const regexClean = new RegExp(`(?:^|\\n|\\s)(?:•|\\*|-)?\\s*(${key})\\s*[:：]\\s*`, 'gi')
-        formatted = formatted.replace(regexClean, '\n- **$1:** ')
+    // 5. Handle mashed technical specs like "X1Barkod6242235178367Desi1"
+    // Split Barkod and Desi from mashed strings
+    formatted = formatted.replace(/([A-Za-z0-9]+)(Barkod)(\d+)(Desi)(\d+)/gi, '$1\n- **$2:** $3\n- **$4:** $5')
+    // Handle just BarkodXXX or DesiX patterns
+    formatted = formatted.replace(/([^-*\n])(Barkod)(\d{6,})/gi, '$1\n- **$2:** $3')
+    formatted = formatted.replace(/([^-*\n])(Desi)(\d+)/gi, '$1\n- **$2:** $3')
+
+    // 6. Precise Key-Value pairs for line-start only (avoid mid-sentence false positives)
+    // These should only become bullets if they're at the START of a line or after a bullet marker
+    const lineStartKeys = ["Marka", "Ürün Kodu"]
+    lineStartKeys.forEach(key => {
+        // Mashed keys at start: "MarkaOnopo" -> "- **Marka:** Onopo"
+        const regexMashed = new RegExp(`(^|\\n)(${key})([^\\s:]{2,})`, 'gim')
+        formatted = formatted.replace(regexMashed, '$1- **$2:** $3')
+        // Clean existing keys at line start: "Marka: Onopo" -> "- **Marka:** Onopo"
+        const regexClean = new RegExp(`(^|\\n)\\s*(?:•|\\*|-)?\\s*(${key})\\s*[:：]\\s*`, 'gim')
+        formatted = formatted.replace(regexClean, '$1- **$2:** ')
     })
 
-    // 6. Handle Variant blocks and bullets
+    // 7. Handle mid-sentence keywords - DON'T convert these to bullets, but clean up bad formatting
+    // Words like "model:", "garanti:", "pil:", "güç:" often appear mid-sentence
+    const midSentenceKeys = ["model", "garanti", "pil", "güç", "renk", "kapasite", "uyumluluk", "bağlantı"]
+    midSentenceKeys.forEach(key => {
+        // Remove accidental bullet formatting for these mid-sentence keys
+        // Pattern: "• model:" or "- garanti:" at line start when followed by content that looks like mid-sentence
+        const regexBadBullet = new RegExp(`^\\s*[-•]\\s*(${key}):\\s*([a-zğüşıöç])`, 'gim')
+        formatted = formatted.replace(regexBadBullet, '\n$1: $2')
+    })
+
+    // 8. Handle Variant blocks and bullets
     formatted = formatted.replace(/\[\s*-\s*/g, '\n- ')
     formatted = formatted.replace(/\]/g, '')
     // Replace dots/bullets with clean markdown bullets if they are at start of semantic line
-    formatted = formatted.replace(/^\s*[•·]\s*/gm, '- ')
+    formatted = formatted.replace(/^\s*[•·]\s+/gm, '- ')
 
-    // 7. Final Cleanup
+    // 9. Clean up "İthalatçı" which often appears randomly
+    formatted = formatted.replace(/\.İthalatçı\s*/gi, '.\n\n')
+    formatted = formatted.replace(/İthalatçı\s*$/gim, '')
+
+    // 10. Final Cleanup
     // Remove empty bullets or broken bold markers
     formatted = formatted.replace(/^\s*[-*]\s*$/gm, '')
     formatted = formatted.replace(/\*\*\s*\*\*/g, '')
+    // Remove double periods
+    formatted = formatted.replace(/\.{2,}/g, '.')
 
-    // Normalize newlines
+    // Normalize newlines (max 2 consecutive)
     return formatted.replace(/\n{3,}/g, '\n\n').trim()
 }
 
