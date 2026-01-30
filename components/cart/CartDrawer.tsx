@@ -10,10 +10,19 @@ import { cn } from "@/lib/utils"
 import { formatPrice } from "@/lib/formatPrice"
 
 export function CartDrawer() {
+    const [mounted, setMounted] = React.useState(false)
     const { isOpen, closeCart, items, removeItem, updateQuantity, totalPrice, coupon, applyCoupon, removeCoupon } = useCartStore()
     const [couponCode, setCouponCode] = React.useState('')
     const [verifying, setVerifying] = React.useState(false)
     const [couponError, setCouponError] = React.useState('')
+
+    // Prevent hydration mismatch by only rendering after mount
+    React.useEffect(() => {
+        setMounted(true)
+    }, [])
+
+    // Don't render anything during SSR to prevent hydration errors
+    if (!mounted) return null
 
     const handleApplyCoupon = async () => {
         if (!couponCode) return

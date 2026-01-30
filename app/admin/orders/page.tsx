@@ -252,15 +252,19 @@ function OrdersContent() {
                                             <div className="space-y-3">
                                                 {order.items && (typeof order.items === 'string' ? JSON.parse(order.items) : order.items).map((item: any, idx: number) => (
                                                     <div key={idx} className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg">
-                                                        {item.image ? (
-                                                            <img src={item.image} alt={item.name} className="w-12 h-12 rounded bg-white object-cover" />
-                                                        ) : (
-                                                            <div className="w-12 h-12 rounded bg-white flex items-center justify-center text-slate-300">
-                                                                <Package className="w-6 h-6" />
-                                                            </div>
-                                                        )}
+                                                        <a href={`/admin/products/${item.id}/edit`} className="shrink-0 hover:opacity-80 transition-opacity">
+                                                            {item.image ? (
+                                                                <img src={item.image} alt={item.name} className="w-12 h-12 rounded bg-white object-cover" />
+                                                            ) : (
+                                                                <div className="w-12 h-12 rounded bg-white flex items-center justify-center text-slate-300">
+                                                                    <Package className="w-6 h-6" />
+                                                                </div>
+                                                            )}
+                                                        </a>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="text-sm font-medium text-slate-900 truncate">{item.name}</p>
+                                                            <a href={`/admin/products/${item.id}/edit`} className="text-sm font-medium text-slate-900 truncate block hover:text-blue-600 transition-colors">
+                                                                {item.name}
+                                                            </a>
                                                             <p className="text-xs text-slate-500">Adet: {item.quantity} x {item.price.toFixed(2)} ₺</p>
                                                         </div>
                                                         <div className="font-semibold text-slate-900 text-sm">
@@ -277,6 +281,20 @@ function OrdersContent() {
                                                 <Truck className="w-4 h-4 text-slate-400" />
                                                 Kargo Takip
                                             </h3>
+                                            {/* Display existing tracking number as clickable link */}
+                                            {order.tracking_number && (
+                                                <div className="mb-3 p-3 bg-green-50 border border-green-100 rounded-lg">
+                                                    <p className="text-sm text-green-700 mb-1">Mevcut Takip Kodu:</p>
+                                                    <a
+                                                        href={`https://kargotakip.araskargo.com.tr/mainpage.aspx?code=${order.tracking_number}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-blue-600 hover:text-blue-800 font-mono font-bold text-lg underline"
+                                                    >
+                                                        {order.tracking_number} ↗
+                                                    </a>
+                                                </div>
+                                            )}
                                             <div className="flex gap-3">
                                                 <input
                                                     type="text"

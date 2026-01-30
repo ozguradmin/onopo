@@ -30,11 +30,11 @@ export async function POST(req: NextRequest) {
         let recipients: string[] = []
 
         if (recipientType === 'single') {
-            // Frontend sends emails array for single type too
-            if (emails && Array.isArray(emails) && emails.length > 0) {
+            // Check email field first (single email string), then emails array
+            if (email && typeof email === 'string' && email.trim()) {
+                recipients = [email.trim()]
+            } else if (emails && Array.isArray(emails) && emails.length > 0) {
                 recipients = emails
-            } else if (email) {
-                recipients = [email]
             } else {
                 return NextResponse.json({ error: 'E-posta adresi zorunludur' }, { status: 400 })
             }

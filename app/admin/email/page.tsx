@@ -131,6 +131,7 @@ export default function AdminEmailPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    email: recipientType === 'single' ? formData.email : undefined,
                     emails,
                     subject: formData.subject,
                     message: formData.message,
