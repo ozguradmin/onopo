@@ -36,7 +36,7 @@ function preprocessDescription(text: string): string {
 
     let formatted = text
 
-    // Add headers and newlines before key sections
+    // 1. First, handle mashed categories/sections
     const sections = [
         "Ürün Açıklaması",
         "Detaylı Bilgi",
@@ -46,30 +46,31 @@ function preprocessDescription(text: string): string {
     ]
 
     sections.forEach(section => {
-        // Replace "SectionName" with "\n\n## SectionName\n"
-        // Handle cases where it's mashed like "TextSectionName"
+        // Find existing occurrences and ensure they have newlines
+        // Match section name even if it's right after other text
         const regex = new RegExp(`([^\\n])(${section})`, 'g')
-        formatted = formatted.replace(regex, '$1\n\n## $2\n')
+        formatted = formatted.replace(regex, '$1\n\n## $2\n\n')
 
-        // Also handle if it's at start or already has space
-        const regex2 = new RegExp(`^(${section})`, 'g')
-        formatted = formatted.replace(regex2, '## $1\n')
+        // Ensure even if at start or already has newline, it's formatted
+        const regexStart = new RegExp(`^(${section})`, 'g')
+        formatted = formatted.replace(regexStart, '## $1\n\n')
     })
 
-    // Format Key-Value pairs like "Marka: HUTT" or "MarkaHUTT"
+    // 2. Handle Key-Value pairs like "Marka: HUTT"
     const keys = ["Marka", "Ürün Kodu", "Barkod", "Desi", "Model", "Renk", "Güç", "Kapasite", "Ağırlık"]
     keys.forEach(key => {
-        // Case 1: "Key: Value" -> "**Key:** Value"
-        // Case 2: "KeyValue" -> "**Key:** Value" (Harder to guess value start, assuming CamelCase or just text)
-        // Let's stick to simple newline insertion for readability
-
-        const regex = new RegExp(`(${key})`, 'g')
-        // Ensure it starts on new line
+        // regex to find key followed by colon or space
+        const regex = new RegExp(`(${key})[\\s:]+`, 'g')
         formatted = formatted.replace(regex, '\n- **$1:** ')
     })
 
-    // Clean up excessive newlines
-    return formatted.replace(/\n{3,}/g, '\n\n')
+    // 3. Special handling for Variant blocks [ - Renk: : Kahverengi ...]
+    // If we see [ - Renk, let's make it a bullet
+    formatted = formatted.replace(/\[\s*-\s*/g, '\n- ')
+    formatted = formatted.replace(/\]/g, '')
+
+    // Clean up excessive newlines and spaces
+    return formatted.replace(/\n{3,}/g, '\n\n').trim()
 }
 
 

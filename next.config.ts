@@ -1,3 +1,4 @@
+```typescript
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -6,6 +7,9 @@ const nextConfig: NextConfig = {
   },
   typescript: {
     ignoreBuildErrors: true,
+  },
+  images: {
+    unoptimized: true,
   },
 };
 

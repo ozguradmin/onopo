@@ -3,53 +3,48 @@ import React from 'react'
 export function MarkdownRenderer({ content }: { content: string }) {
     if (!content) return null
 
-    // Check if content contains HTML tags - render as HTML
-    if (content.includes('<div') || content.includes('<table') || content.includes('<p ') || content.includes('<p>')) {
-        return (
-            <div
-                className="prose prose-slate max-w-none [&_table]:w-full [&_td]:p-2 [&_td]:border [&_td]:border-gray-200 [&_.bg-slate-50]:bg-slate-50"
-                dangerouslySetInnerHTML={{ __html: content }}
-            />
-        )
-    }
-
     // Split by new lines for markdown parsing
-    const lines = content.split('\n')
+    // Normalize newlines and split
+    const normalizedContent = content.replace(/\r\n/g, '\n')
+    const lines = normalizedContent.split('\n')
 
     return (
-        <div className="space-y-2 text-slate-600 leading-relaxed">
+        <div className="space-y-4 text-slate-600 leading-relaxed text-base">
             {lines.map((line, index) => {
+                const trimmedLine = line.trim()
+
                 // Headings
-                if (line.startsWith('### ')) {
-                    return <h3 key={index} className="text-lg font-bold text-slate-900 mt-4 mb-2">{line.replace('### ', '')}</h3>
+                if (trimmedLine.startsWith('### ')) {
+                    return <h3 key={index} className="text-lg font-bold text-slate-900 mt-6 mb-2">{trimmedLine.replace('### ', '')}</h3>
                 }
-                if (line.startsWith('## ')) {
-                    return <h2 key={index} className="text-xl font-bold text-slate-900 mt-6 mb-3 border-b border-slate-100 pb-2">{line.replace('## ', '')}</h2>
+                if (trimmedLine.startsWith('## ')) {
+                    return <h2 key={index} className="text-xl font-bold text-slate-900 mt-8 mb-4 border-b border-slate-100 pb-2 block w-full">{trimmedLine.replace('## ', '')}</h2>
                 }
-                if (line.startsWith('# ')) {
-                    return <h1 key={index} className="text-2xl font-bold text-slate-900 mt-8 mb-4">{line.replace('# ', '')}</h1>
+                if (trimmedLine.startsWith('# ')) {
+                    return <h1 key={index} className="text-2xl font-bold text-slate-900 mt-10 mb-6">{trimmedLine.replace('# ', '')}</h1>
                 }
 
                 // List items
-                if (line.trim().startsWith('* ') || line.trim().startsWith('- ')) {
-                    const text = line.trim().substring(2)
-                    // Check for bold inside list
+                if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
+                    const text = trimmedLine.substring(2)
                     return (
-                        <div key={index} className="flex gap-2 ml-4">
-                            <span className="text-slate-900 mt-1.5">•</span>
-                            <span>{parseBold(text)}</span>
+                        <div key={index} className="flex gap-2 ml-4 my-1">
+                            <span className="text-slate-900 mt-1.5 font-bold">•</span>
+                            <span className="flex-1">{parseBold(text)}</span>
                         </div>
                     )
                 }
 
                 // Empty lines
-                if (line.trim() === '') {
-                    return <br key={index} />
+                if (trimmedLine === '') {
+                    return <div key={index} className="h-2" />
                 }
 
                 // Regular text (with bold support)
+                // If it looks like HTML, we still try to render it simply 
+                // but we don't want to break the whole thing.
                 return (
-                    <p key={index} className="min-h-[1em]">
+                    <p key={index} className="min-h-[1.5em] mb-2 last:mb-0">
                         {parseBold(line)}
                     </p>
                 )
