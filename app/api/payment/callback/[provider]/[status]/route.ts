@@ -58,9 +58,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
                         await sendOrderConfirmation({ id: order.id, total_amount: order.total_amount }, orderItems, customerEmail)
 
                         // Send Admin Email
-                        const siteSettings = await db.prepare('SELECT admin_email FROM site_settings LIMIT 1').first() as any
-                        if (siteSettings?.admin_email) {
-                            await sendAdminNewOrderNotification({ id: order.id, total_amount: order.total_amount }, orderItems, customerEmail, siteSettings.admin_email)
+                        const adminEmailSetting = await db.prepare("SELECT value FROM site_settings WHERE key = 'admin_email'").first() as any
+                        if (adminEmailSetting?.value) {
+                            await sendAdminNewOrderNotification({ id: order.id, total_amount: order.total_amount }, orderItems, customerEmail, adminEmailSetting.value)
                         }
                     }
                 } catch (e) {

@@ -146,9 +146,9 @@ export async function POST(req: NextRequest) {
                 await sendOrderConfirmation({ id: orderId, total_amount: totalAmount }, orderItems, customerInfo.email)
 
                 // Send admin notification
-                const siteSettings = await db.prepare('SELECT admin_email FROM site_settings LIMIT 1').first() as any
-                if (siteSettings?.admin_email) {
-                    await sendAdminNewOrderNotification({ id: orderId, total_amount: totalAmount }, orderItems, customerInfo.email, siteSettings.admin_email)
+                const adminEmailSetting = await db.prepare("SELECT value FROM site_settings WHERE key = 'admin_email'").first() as any
+                if (adminEmailSetting?.value) {
+                    await sendAdminNewOrderNotification({ id: orderId, total_amount: totalAmount }, orderItems, customerInfo.email, adminEmailSetting.value)
                 }
             } catch (emailErr) {
                 console.error('Email sending failed:', emailErr)
