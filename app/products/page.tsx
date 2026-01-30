@@ -74,10 +74,19 @@ async function getProducts(category?: string, query?: string) {
 
     const { results } = await db.prepare(sql).bind(...params).all()
 
-    return (results || []).map((p: any) => ({
-        ...p,
-        images: typeof p.images === 'string' ? JSON.parse(p.images) : p.images || []
-    }))
+    return (results || []).map((p: any) => {
+        let images = []
+        try {
+            images = typeof p.images === 'string' ? JSON.parse(p.images) : p.images || []
+        } catch (e) {
+            console.error('JSON parse error for product images:', p.id, e)
+            images = []
+        }
+        return {
+            ...p,
+            images
+        }
+    })
 }
 
 async function getCategories() {

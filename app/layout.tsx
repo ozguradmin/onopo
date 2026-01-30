@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import { LayoutProvider } from "@/components/layout/LayoutProvider";
 import { DynamicFavicon } from "@/components/layout/DynamicFavicon";
+import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 import { Toaster } from 'sonner';
 import "./globals.css";
 
@@ -131,11 +132,13 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} antialiased selection:bg-accent selection:text-white pb-16 md:pb-0`}
       >
-        <LayoutProvider>
-          <DynamicFavicon />
-          {children}
-        </LayoutProvider>
-        <Toaster />
+        <GlobalErrorBoundary>
+          <LayoutProvider>
+            <DynamicFavicon />
+            {children}
+          </LayoutProvider>
+          <Toaster />
+        </GlobalErrorBoundary>
       </body>
     </html>
   );

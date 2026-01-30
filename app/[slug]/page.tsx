@@ -59,57 +59,92 @@ async function findSimilarProduct(db: any, slug: string): Promise<string | null>
     }
 
     // 2. Fuzzy Search Strategy
-    // Clean the slug: remove 'onopo-', split by dashes, remove common words
+    // Clean the slug: remove 'onopo-', split by dashes
     const cleanSlug = slug.replace('onopo-', '').toLowerCase()
-    const stopWords = ['ve', 'ile', 'icin', 'cok', 'daha', 'en', 'hizli', 'guclu', 'sarj', 'kablo', 'usb', 'type', 'to']
-    const words = cleanSlug.split('-').filter(w => w.length > 2 && !stopWords.includes(w))
 
-    if (words.length === 0) return null
+    // Stop words to ignore during search
+    const stopWords = ['ve', 'ile', 'icin', 'cok', 'daha', 'en', 'hizli', 'guclu', 'sarj', 'kablo', 'usb', 'type', 'to', 'adaptoru', 'cihazi', 'arada', 'li', 'lu', 'u', 'in', 'katlanabilir', 'fonksiyonlu', 'guvenli', 'guvenlik']
 
-    // Build values for bound parameters
-    // We search for products that match AT LEAST ONE of the significant words
-    const conditions = words.map(() => `slug LIKE ?`).join(' OR ')
-    const bindValues = words.map(w => `%${w}%`)
+    // Split into tokens
+    const tokens = cleanSlug.split('-').filter(w => w.length > 1 && !stopWords.includes(w))
+
+    if (tokens.length === 0) return null
+
+    // Separate "Model Numbers" (tokens with digits) from regular words
+    const modelTokens = tokens.filter(t => /\d/.test(t)) // e.g., '20000pa', '12w', '2.4a'
+    const wordTokens = tokens.filter(t => !/\d/.test(t)) // e.g., 'supurge', 'siyah'
+
+    // Build query conditions
+    // We want to find candidates that match ANY of our important tokens
+    const searchTokens = [...modelTokens, ...wordTokens]
+    if (searchTokens.length === 0) return null
+
+    const conditions = searchTokens.map(() => `slug LIKE ?`).join(' OR ')
+    const bindValues = searchTokens.map(w => `%${w}%`)
 
     try {
-        const query = `SELECT slug FROM products WHERE is_active = 1 AND (${conditions}) LIMIT 50`
+        const query = `SELECT slug FROM products WHERE is_active = 1 AND (${conditions}) LIMIT 70`
         const { results: candidates } = await db.prepare(query).bind(...bindValues).all()
 
         if (!candidates || candidates.length === 0) return null
 
-        // 3. Find Best Match in JS using Token Overlap Score
+        // 3. Find Best Match in JS using Weighted Scoring
         let bestMatch = null
         let maxScore = 0
 
         for (const candidate of candidates) {
             const cSlug = (candidate as any).slug
             const cClean = cSlug.replace('onopo-', '').toLowerCase()
-            const cWords = cClean.split('-') // Keep all words for candidate
+            const cTokens = cClean.split('-')
 
-            // Calculate overlap score
-            let matchCount = 0
-            for (const w of words) {
-                // Check if search word is ANYWHERE in candidate token (handles 2.4a vs 24a)
-                if (cWords.some((cw: string) => cw.includes(w) || w.includes(cw))) {
-                    matchCount++
+            let score = 0
+
+            // Check Model Token Matches (High Value +10)
+            let matchedModels = 0
+            for (const mt of modelTokens) {
+                // Approximate match for model numbers (e.g. 2.4a vs 24a)
+                // Remove dots for comparison
+                const mtSimple = mt.replace('.', '')
+
+                const found = cTokens.some((ct: string) => {
+                    const ctSimple = ct.replace('.', '')
+                    return ct.includes(mt) || mt.includes(ct) || ctSimple === mtSimple
+                })
+
+                if (found) {
+                    score += 15
+                    matchedModels++
                 }
             }
 
-            // Calculate score purely based on number of matched significant words
-            // Penalize candidates that are too long if they don't match many words? No.
-            // Just prioritize highest match count.
+            // Check Word Token Matches (Low Value +2)
+            for (const wt of wordTokens) {
+                if (cTokens.some((ct: string) => ct.includes(wt) || wt.includes(ct))) {
+                    score += 2
+                }
+            }
 
-            if (matchCount > maxScore) {
-                maxScore = matchCount
+            // Penalize if candidate is missing model numbers that we searched for
+            // If user searched for '20000pa', and candidate doesn't have it, it's a weak match
+            // score logic handles this implicitly by not adding points
+
+            // Boost if candidate starts with same word (excluding onopo)
+            if (cClean.startsWith(cleanSlug.substring(0, 4))) {
+                score += 3
+            }
+
+            if (score > maxScore) {
+                maxScore = score
                 bestMatch = cSlug
             }
         }
 
-        // Strict threshold: Must match at least 50% of significant words if we have many, or all if distinct
-        // Example: '20000pa' (1 word). Match count 1.
-        // Example: '20000pa-supurge' (2 words).
+        // Threshold: Must have at least one strong match (15) or multiple weak matches
+        // If we searched for a model number, we expect a high score
+        const threshold = modelTokens.length > 0 ? 10 : 3
 
-        if (maxScore > 0) return bestMatch
+        if (maxScore >= threshold) return bestMatch
+
         return null
     } catch (err) {
         console.error('Fuzzy search error:', err)
