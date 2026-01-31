@@ -20,7 +20,31 @@ async function getEmailSettings() {
         const siteUrl = settings.site_url || 'https://onopostore.com'
 
         // Handle logo: check 'logo_url' (used in admin panel), 'logo', 'site_logo', or fallback
-        const logoUrl = settings.logo_url || settings.logo || settings.site_logo || `${siteUrl}/logo.png`
+        let rawLogoUrl = settings.logo_url || settings.logo || settings.site_logo || ''
+
+        // Ensure logo URL is an absolute URL
+        let logoUrl = ''
+        if (rawLogoUrl) {
+            // If it starts with http/https, use as-is (unless it's a broken google proxy URL)
+            if (rawLogoUrl.startsWith('http://') || rawLogoUrl.startsWith('https://')) {
+                // Check for broken Google proxy URLs
+                if (rawLogoUrl.includes('googleusercontent.com') || rawLogoUrl.includes('ci3.google')) {
+                    // This is a broken cached URL, try to extract original or use fallback
+                    logoUrl = `${siteUrl}/logo.png`
+                } else {
+                    logoUrl = rawLogoUrl
+                }
+            } else if (rawLogoUrl.startsWith('/')) {
+                // Relative URL - prepend site URL
+                logoUrl = `${siteUrl}${rawLogoUrl}`
+            } else {
+                // Some other format - try prepending site URL
+                logoUrl = `${siteUrl}/${rawLogoUrl}`
+            }
+        } else {
+            logoUrl = `${siteUrl}/logo.png`
+        }
+
         const siteName = settings.site_name || 'Onopo Store'
 
         return { siteUrl, logoUrl, siteName }

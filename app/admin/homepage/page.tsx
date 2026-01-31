@@ -37,7 +37,7 @@ const sectionTypes = [
     { type: 'categories', label: 'Kategoriler', icon: Package },
     { type: 'features', label: 'Özellikler', icon: Star },
     { type: 'image_card', label: 'Görsel Kart', icon: ImageIcon },
-    { type: 'custom_code', label: 'Özel HTML/CSS', icon: Code },
+    { type: 'custom_code', label: 'Özel HTML/CSS/JS', icon: Code },
 ]
 
 export default function AdminHomepagePage() {

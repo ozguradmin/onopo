@@ -249,7 +249,29 @@ export default function AdminEmailPage() {
 
     const applyTemplate = (template: typeof EMAIL_TEMPLATES[0]) => {
         // Replace logo placeholder with actual logo URL from settings
-        const logoUrl = siteSettings.logo_url || 'https://onopostore.com/logo.png'
+        const siteUrl = 'https://onopostore.com'
+        let rawLogoUrl = siteSettings.logo_url || ''
+        let logoUrl = ''
+
+        if (rawLogoUrl) {
+            // If it starts with http/https, check if valid
+            if (rawLogoUrl.startsWith('http://') || rawLogoUrl.startsWith('https://')) {
+                // Check for broken Google proxy URLs
+                if (rawLogoUrl.includes('googleusercontent.com') || rawLogoUrl.includes('ci3.google')) {
+                    logoUrl = `${siteUrl}/logo.png`
+                } else {
+                    logoUrl = rawLogoUrl
+                }
+            } else if (rawLogoUrl.startsWith('/')) {
+                // Relative URL - prepend site URL
+                logoUrl = `${siteUrl}${rawLogoUrl}`
+            } else {
+                logoUrl = `${siteUrl}/${rawLogoUrl}`
+            }
+        } else {
+            logoUrl = `${siteUrl}/logo.png`
+        }
+
         const messageWithLogo = template.message.replace(/\{\{LOGO_URL\}\}/g, logoUrl)
 
         setFormData({
