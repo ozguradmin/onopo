@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save, Package, Truck, Check, X, Clock, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Save, Package, Truck, Check, X, Clock, ExternalLink, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -22,6 +22,7 @@ export default function OrderEditPage() {
 
     const [loading, setLoading] = React.useState(true)
     const [saving, setSaving] = React.useState(false)
+    const [deleting, setDeleting] = React.useState(false)
     const [order, setOrder] = React.useState<any>(null)
     const [formData, setFormData] = React.useState({
         status: 'pending',
@@ -85,6 +86,28 @@ export default function OrderEditPage() {
         }
     }
 
+    const handleDelete = async () => {
+        if (!confirm('Bu siparişi silmek istediğinize emin misiniz? Bu işlem geri alınamaz!')) return
+
+        setDeleting(true)
+        try {
+            const res = await fetch(`/api/orders/${orderId}`, {
+                method: 'DELETE'
+            })
+            if (res.ok) {
+                alert('Sipariş silindi!')
+                router.push('/admin/orders')
+            } else {
+                alert('Silme işlemi başarısız')
+            }
+        } catch (error) {
+            console.error(error)
+            alert('Hata oluştu')
+        } finally {
+            setDeleting(false)
+        }
+    }
+
     const items = React.useMemo(() => {
         if (!order?.items) return []
         try {
@@ -112,6 +135,17 @@ export default function OrderEditPage() {
                     <p className="text-slate-500">
                         {new Date(order.created_at).toLocaleString('tr-TR')}
                     </p>
+                </div>
+                <div className="ml-auto flex gap-2">
+                    <Button
+                        variant="outline"
+                        className="text-red-600 hover:bg-red-50 border-red-200"
+                        onClick={handleDelete}
+                        disabled={deleting}
+                    >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        {deleting ? 'Siliniyor...' : 'Siparişi Sil'}
+                    </Button>
                 </div>
             </div>
 
