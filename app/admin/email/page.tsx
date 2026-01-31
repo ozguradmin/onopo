@@ -5,67 +5,149 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Mail, Send, Users, User, CheckCircle, AlertCircle, Eye, Plus, Trash2, FileText } from 'lucide-react'
 
-// Pre-defined email templates
+// Pre-defined email templates with premium styling
+// Note: {{LOGO_URL}} will be replaced with actual logo from settings
 const EMAIL_TEMPLATES = [
     {
         id: 'welcome',
         name: 'Hoş Geldin',
-        subject: 'Onopo Store\'a Hoş Geldiniz!',
-        message: `<div style="font-family: Arial, sans-serif;">
-    <h2>Merhaba!</h2>
-    <p>Onopo Store ailesine hoş geldiniz! 🎉</p>
-    <p>Sizlere en kaliteli ürünleri sunmak için buradayız. Sitemizde binlerce ürün arasından seçim yapabilir, özel indirimlerden yararlanabilirsiniz.</p>
-    <p>Herhangi bir sorunuz olursa bize ulaşmaktan çekinmeyin.</p>
-    <br>
-    <p><strong>Onopo Store Ekibi</strong></p>
+        subject: 'Onopo Store\'a Hoş Geldiniz! 🎉',
+        message: `<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+    <!-- Header with Logo -->
+    <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
+        <img src="{{LOGO_URL}}" alt="Onopo Store" style="height: 40px; filter: brightness(0) invert(1);" onerror="this.style.display='none'">
+        <h1 style="color: #ffffff; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">Hoş Geldiniz!</h1>
+    </div>
+    
+    <!-- Content -->
+    <div style="padding: 30px; background: #ffffff;">
+        <p style="font-size: 16px; color: #334155; margin-bottom: 20px;">Merhaba,</p>
+        <p style="font-size: 16px; color: #334155; line-height: 1.6;">Onopo Store ailesine hoş geldiniz! 🎉</p>
+        <p style="font-size: 16px; color: #334155; line-height: 1.6;">Sizlere en kaliteli ürünleri sunmak için buradayız. Sitemizde binlerce ürün arasından seçim yapabilir, özel indirimlerden yararlanabilirsiniz.</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="https://onopostore.com/products" style="display: inline-block; background: linear-gradient(135deg, #1e293b 0%, #475569 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">Alışverişe Başla →</a>
+        </div>
+        
+        <p style="font-size: 14px; color: #64748b;">Herhangi bir sorunuz olursa bize ulaşmaktan çekinmeyin.</p>
+    </div>
+    
+    <!-- Footer -->
+    <div style="background: #f8fafc; padding: 20px; text-align: center; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0;">
+        <p style="margin: 0; font-size: 14px; color: #64748b;"><strong>Onopo Store Ekibi</strong></p>
+        <p style="margin: 10px 0 0 0; font-size: 12px; color: #94a3b8;">© 2026 Onopo Store. Tüm hakları saklıdır.</p>
+    </div>
 </div>`
     },
     {
         id: 'promo',
         name: 'Promosyon / İndirim',
-        subject: '🔥 Özel İndirim Fırsatı!',
-        message: `<div style="font-family: Arial, sans-serif;">
-    <h2>Kaçırılmayacak Fırsat! 🔥</h2>
-    <p>Değerli müşterimiz,</p>
-    <p>Sizin için özel bir indirim hazırladık! <strong>%20 indirim</strong> kodunuz: <code style="background: #f0f0f0; padding: 4px 8px; border-radius: 4px;">OZEL20</code></p>
-    <p>Bu kod tüm ürünlerde geçerlidir ve 7 gün süreyle aktiftir.</p>
-    <br>
-    <p><a href="https://onopostore.com" style="background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px;">Alışverişe Başla</a></p>
-    <br>
-    <p>İyi alışverişler!<br><strong>Onopo Store</strong></p>
+        subject: '🔥 Özel İndirim Fırsatı - Kaçırmayın!',
+        message: `<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+    <!-- Header with gradient -->
+    <div style="background: linear-gradient(135deg, #dc2626 0%, #f97316 100%); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
+        <img src="{{LOGO_URL}}" alt="Onopo Store" style="height: 40px; filter: brightness(0) invert(1);" onerror="this.style.display='none'">
+        <h1 style="color: #ffffff; margin: 15px 0 0 0; font-size: 28px; font-weight: 700;">🔥 ÖZEL İNDİRİM</h1>
+    </div>
+    
+    <!-- Content -->
+    <div style="padding: 30px; background: #ffffff; text-align: center;">
+        <p style="font-size: 18px; color: #334155;">Değerli Müşterimiz,</p>
+        <p style="font-size: 16px; color: #334155; line-height: 1.6;">Sizin için özel bir indirim hazırladık!</p>
+        
+        <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 20px; border-radius: 12px; margin: 25px 0; border: 2px dashed #f59e0b;">
+            <p style="font-size: 14px; color: #92400e; margin: 0 0 10px 0;">İNDİRİM KODUNUZ</p>
+            <p style="font-size: 32px; font-weight: 700; color: #dc2626; margin: 0; letter-spacing: 4px;">OZEL20</p>
+            <p style="font-size: 24px; font-weight: 700; color: #334155; margin: 10px 0 0 0;">%20 İNDİRİM</p>
+        </div>
+        
+        <p style="font-size: 14px; color: #64748b;">Bu kod tüm ürünlerde geçerlidir ve 7 gün süreyle aktiftir.</p>
+        
+        <div style="margin: 30px 0;">
+            <a href="https://onopostore.com/products" style="display: inline-block; background: linear-gradient(135deg, #dc2626 0%, #f97316 100%); color: #ffffff; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px;">ALIŞVERİŞE BAŞLA →</a>
+        </div>
+    </div>
+    
+    <!-- Footer -->
+    <div style="background: #f8fafc; padding: 20px; text-align: center; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0;">
+        <p style="margin: 0; font-size: 14px; color: #64748b;">İyi alışverişler! • <strong>Onopo Store</strong></p>
+    </div>
 </div>`
     },
     {
         id: 'order_update',
         name: 'Sipariş Güncellemesi',
-        subject: 'Siparişiniz Hakkında Bilgilendirme',
-        message: `<div style="font-family: Arial, sans-serif;">
-    <h2>Sipariş Güncellemesi</h2>
-    <p>Merhaba,</p>
-    <p>Siparişiniz ile ilgili bir güncelleme var:</p>
-    <p>[Buraya güncelleme detaylarını yazın]</p>
-    <p>Siparişinizi takip etmek için hesabınıza giriş yapabilirsiniz.</p>
-    <br>
-    <p>Saygılarımızla,<br><strong>Onopo Store</strong></p>
+        subject: '📦 Siparişiniz Hakkında Bilgilendirme',
+        message: `<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
+        <img src="{{LOGO_URL}}" alt="Onopo Store" style="height: 40px; filter: brightness(0) invert(1);" onerror="this.style.display='none'">
+        <h1 style="color: #ffffff; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">📦 Sipariş Güncellemesi</h1>
+    </div>
+    
+    <!-- Content -->
+    <div style="padding: 30px; background: #ffffff;">
+        <p style="font-size: 16px; color: #334155; margin-bottom: 20px;">Merhaba,</p>
+        <p style="font-size: 16px; color: #334155; line-height: 1.6;">Siparişiniz ile ilgili bir güncelleme var:</p>
+        
+        <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #0284c7;">
+            <p style="font-size: 16px; color: #0c4a6e; margin: 0;">[Buraya güncelleme detaylarını yazın]</p>
+        </div>
+        
+        <p style="font-size: 16px; color: #334155; line-height: 1.6;">Siparişinizi takip etmek için hesabınıza giriş yapabilirsiniz.</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="https://onopostore.com/orders" style="display: inline-block; background: #0284c7; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600;">Siparişi Takip Et</a>
+        </div>
+    </div>
+    
+    <!-- Footer -->
+    <div style="background: #f8fafc; padding: 20px; text-align: center; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0;">
+        <p style="margin: 0; font-size: 14px; color: #64748b;">Saygılarımızla, <strong>Onopo Store</strong></p>
+    </div>
 </div>`
     },
     {
         id: 'newsletter',
         name: 'Bülten / Haber',
-        subject: 'Onopo Store\'dan Haberler',
-        message: `<div style="font-family: Arial, sans-serif;">
-    <h2>Bu Haftanın Haberleri 📰</h2>
-    <p>Merhaba,</p>
-    <p>Bu hafta sizin için hazırladığımız yenilikler:</p>
-    <ul>
-        <li>Yeni ürünler eklendi</li>
-        <li>Özel kampanyalar başladı</li>
-        <li>Ücretsiz kargo fırsatları</li>
-    </ul>
-    <br>
-    <p><a href="https://onopostore.com" style="background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px;">Sitemizi Ziyaret Edin</a></p>
-    <br>
-    <p><strong>Onopo Store</strong></p>
+        subject: '📰 Onopo Store\'dan Haberler',
+        message: `<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
+        <img src="{{LOGO_URL}}" alt="Onopo Store" style="height: 40px; filter: brightness(0) invert(1);" onerror="this.style.display='none'">
+        <h1 style="color: #ffffff; margin: 15px 0 0 0; font-size: 24px; font-weight: 600;">📰 Bu Haftanın Haberleri</h1>
+    </div>
+    
+    <!-- Content -->
+    <div style="padding: 30px; background: #ffffff;">
+        <p style="font-size: 16px; color: #334155; margin-bottom: 20px;">Merhaba,</p>
+        <p style="font-size: 16px; color: #334155; line-height: 1.6;">Bu hafta sizin için hazırladığımız yenilikler:</p>
+        
+        <div style="margin: 25px 0;">
+            <div style="display: flex; align-items: center; padding: 12px; background: #faf5ff; border-radius: 8px; margin-bottom: 10px;">
+                <span style="font-size: 20px; margin-right: 12px;">✨</span>
+                <span style="color: #334155;">Yeni ürünler eklendi</span>
+            </div>
+            <div style="display: flex; align-items: center; padding: 12px; background: #faf5ff; border-radius: 8px; margin-bottom: 10px;">
+                <span style="font-size: 20px; margin-right: 12px;">🎁</span>
+                <span style="color: #334155;">Özel kampanyalar başladı</span>
+            </div>
+            <div style="display: flex; align-items: center; padding: 12px; background: #faf5ff; border-radius: 8px;">
+                <span style="font-size: 20px; margin-right: 12px;">🚚</span>
+                <span style="color: #334155;">Ücretsiz kargo fırsatları</span>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="https://onopostore.com" style="display: inline-block; background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600;">Sitemizi Ziyaret Edin →</a>
+        </div>
+    </div>
+    
+    <!-- Footer -->
+    <div style="background: #f8fafc; padding: 20px; text-align: center; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0;">
+        <p style="margin: 0; font-size: 14px; color: #64748b;"><strong>Onopo Store</strong></p>
+        <p style="margin: 10px 0 0 0; font-size: 12px; color: #94a3b8;">Bu e-postayı almak istemiyorsanız ayarlarınızı güncelleyebilirsiniz.</p>
+    </div>
 </div>`
     }
 ]
@@ -89,6 +171,17 @@ export default function AdminEmailPage() {
         subject: '',
         message: ''
     })
+
+    // Site settings for logo
+    const [siteSettings, setSiteSettings] = React.useState<{ logo_url?: string }>({})
+
+    // Fetch site settings for logo
+    React.useEffect(() => {
+        fetch('/api/site-settings')
+            .then(res => res.json())
+            .then(data => setSiteSettings(data))
+            .catch(() => { })
+    }, [])
 
     // Fetch users when needed
     React.useEffect(() => {
@@ -155,10 +248,14 @@ export default function AdminEmailPage() {
     }
 
     const applyTemplate = (template: typeof EMAIL_TEMPLATES[0]) => {
+        // Replace logo placeholder with actual logo URL from settings
+        const logoUrl = siteSettings.logo_url || 'https://onopostore.com/logo.png'
+        const messageWithLogo = template.message.replace(/\{\{LOGO_URL\}\}/g, logoUrl)
+
         setFormData({
             ...formData,
             subject: template.subject,
-            message: template.message
+            message: messageWithLogo
         })
     }
 

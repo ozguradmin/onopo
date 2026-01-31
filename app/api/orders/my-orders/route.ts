@@ -22,8 +22,15 @@ export async function GET(req: NextRequest) {
 
         const db = await getDB()
 
+        // Get userId with fallback (different JWT implementations may use different field names)
+        const userId = payload.userId || payload.sub || payload.id
+
+        if (!userId) {
+            return NextResponse.json({ error: 'User ID not found in token' }, { status: 401 })
+        }
+
         // Get orders for this user, both by user_id and by guest_email
-        const userResult = await db.prepare('SELECT email FROM users WHERE id = ?').bind(payload.userId).first() as any
+        const userResult = await db.prepare('SELECT email FROM users WHERE id = ?').bind(userId).first() as any
         const userEmail = userResult?.email
 
         // Query orders by user_id OR guest_email
@@ -34,14 +41,14 @@ export async function GET(req: NextRequest) {
                 SELECT * FROM orders 
                 WHERE user_id = ? OR guest_email = ? 
                 ORDER BY created_at DESC
-            `).bind(payload.userId, userEmail).all()
+            `).bind(userId, userEmail).all()
             orders = result.results || []
         } else {
             const result = await db.prepare(`
                 SELECT * FROM orders 
                 WHERE user_id = ? 
                 ORDER BY created_at DESC
-            `).bind(payload.userId).all()
+            `).bind(userId).all()
             orders = result.results || []
         }
 

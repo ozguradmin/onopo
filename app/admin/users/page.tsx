@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Users, Mail, Calendar, Shield } from 'lucide-react'
+import { Users, Mail, Calendar, Shield, MapPin } from 'lucide-react'
 
 export default function AdminUsersPage() {
     const [users, setUsers] = React.useState<any[]>([])
@@ -40,6 +40,7 @@ export default function AdminUsersPage() {
                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Ad Soyad</th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">E-posta</th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Telefon</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Adres</th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Rol</th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Kayıt Tarihi</th>
                         </tr>
@@ -61,6 +62,18 @@ export default function AdminUsersPage() {
                                     <span className="text-sm text-slate-600">{user.phone || '-'}</span>
                                 </td>
                                 <td className="px-4 py-3">
+                                    {user.address ? (
+                                        <div className="flex items-start gap-1 max-w-xs">
+                                            <MapPin className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
+                                            <span className="text-sm text-slate-600 truncate" title={user.address}>
+                                                {user.address.length > 40 ? user.address.substring(0, 40) + '...' : user.address}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <span className="text-sm text-slate-400">-</span>
+                                    )}
+                                </td>
+                                <td className="px-4 py-3">
                                     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${user.role === 'admin'
                                         ? 'bg-purple-100 text-purple-700'
                                         : 'bg-slate-100 text-slate-600'
@@ -79,7 +92,7 @@ export default function AdminUsersPage() {
                         ))}
                         {users.length === 0 && (
                             <tr>
-                                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                                     Henüz kullanıcı yok
                                 </td>
                             </tr>

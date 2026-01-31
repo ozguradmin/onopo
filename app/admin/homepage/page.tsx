@@ -454,25 +454,37 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
 
                     {section.type === 'custom_code' && (
                         <div className="space-y-3">
-                            <label className="block text-sm font-medium">HTML/CSS İçeriği</label>
-                            <p className="text-xs text-slate-500">HTML, CSS ve inline JavaScript kodlarını buraya yapıştırabilirsiniz.</p>
+                            <label className="block text-sm font-medium">HTML/CSS/JavaScript İçeriği</label>
+                            <p className="text-xs text-slate-500">HTML, CSS (style etiketi ile) ve JavaScript (script etiketi ile) kodlarını buraya ekleyebilirsiniz.</p>
                             <textarea
                                 value={config.html_content || ''}
                                 onChange={e => setConfig({ ...config, html_content: e.target.value })}
-                                rows={12}
+                                rows={14}
                                 className="w-full p-3 border border-slate-200 rounded-lg font-mono text-sm"
-                                placeholder="<div class='custom-section'>
+                                placeholder={`<div class="custom-banner">
   <style>
-    .custom-section { padding: 40px; background: #f8f9fa; }
+    .custom-banner { 
+      padding: 40px; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-align: center;
+      border-radius: 12px;
+    }
+    .custom-banner h2 { font-size: 24px; margin-bottom: 10px; }
   </style>
+  
   <h2>Özel Başlık</h2>
-  <p>İçerik buraya...</p>
-</div>"
+  <p id="dynamic-text">İçerik buraya...</p>
+  
+  <script>
+    document.getElementById('dynamic-text').textContent = 'JavaScript ile dinamik içerik!';
+  </script>
+</div>`}
                             />
                             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                                 <p className="text-xs text-amber-800">
-                                    ⚠️ <strong>Dikkat:</strong> Buraya eklenen kod doğrudan sayfada çalıştırılır.
-                                    Güvenilir kaynaklardan kod kullanın.
+                                    ⚠️ <strong>Dikkat:</strong> Buraya eklenen HTML, CSS ve JavaScript kodu doğrudan sayfada çalıştırılır.
+                                    Sadece güvenilir kaynaklardan kod kullanın.
                                 </p>
                             </div>
                         </div>
