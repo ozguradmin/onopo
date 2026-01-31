@@ -18,6 +18,7 @@ export default function AdminSettingsPage() {
 
     // Site Settings Form
     const [siteName, setSiteName] = React.useState('Onopo')
+    const [siteUrl, setSiteUrl] = React.useState('')
     const [logoUrl, setLogoUrl] = React.useState('')
     const [faviconUrl, setFaviconUrl] = React.useState('')
     const [footerText, setFooterText] = React.useState('')
@@ -47,6 +48,7 @@ export default function AdminSettingsPage() {
             }
             if (settingsData) {
                 setSiteName(settingsData.site_name || 'Onopo')
+                setSiteUrl(settingsData.site_url || '')
                 setLogoUrl(settingsData.logo_url || '')
                 setFaviconUrl(settingsData.favicon_url || '')
                 setFooterText(settingsData.footer_text || '')
@@ -91,6 +93,7 @@ export default function AdminSettingsPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     site_name: siteName,
+                    site_url: siteUrl,
                     logo_url: logoUrl,
                     favicon_url: faviconUrl,
                     footer_text: footerText,
@@ -146,6 +149,18 @@ export default function AdminSettingsPage() {
                                 value={siteName}
                                 onChange={e => setSiteName(e.target.value)}
                                 className="w-full p-2 border rounded-lg"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Site URL (Linkler için)</label>
+                            <p className="text-xs text-slate-500 mb-2">Örn: https://onopostore.com (Sonunda / işareti olmayacak)</p>
+                            <input
+                                type="url"
+                                value={siteUrl}
+                                onChange={e => setSiteUrl(e.target.value)}
+                                className="w-full p-2 border rounded-lg"
+                                placeholder="https://onopostore.com"
                             />
                         </div>
 

@@ -15,9 +15,12 @@ async function getEmailSettings() {
             settings[(row as any).key] = (row as any).value
         }
 
-        const siteUrl = settings.site_url || process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'
-        // Handle logo: check 'logo', 'site_logo', or fallback
-        const logoUrl = settings.logo || settings.site_logo || `${siteUrl}/logo.png`
+        // Prioritize DB setting, then hardcoded domain. Ignore NEXT_PUBLIC_BASE_URL if it's a dev URL
+        // User wants onopostore.com
+        const siteUrl = settings.site_url || 'https://onopostore.com'
+
+        // Handle logo: check 'logo_url' (used in admin panel), 'logo', 'site_logo', or fallback
+        const logoUrl = settings.logo_url || settings.logo || settings.site_logo || `${siteUrl}/logo.png`
         const siteName = settings.site_name || 'Onopo Store'
 
         return { siteUrl, logoUrl, siteName }
