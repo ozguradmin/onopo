@@ -93,7 +93,7 @@ export default function CategoriesPage() {
                         return (
                             <Link
                                 key={category.id}
-                                href={`/${category.slug}`}
+                                href={`/products?category=${encodeURIComponent(category.name)}`}
                                 className="group bg-white rounded-2xl p-6 flex flex-col items-center text-center shadow-sm border border-slate-100 hover:shadow-lg hover:border-slate-200 hover:-translate-y-1 transition-all duration-200"
                             >
                                 <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center mb-4 group-hover:from-slate-200 group-hover:to-slate-300 transition-colors">

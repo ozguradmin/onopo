@@ -93,7 +93,7 @@ export function Footer() {
                         <ul className="space-y-2 text-sm">
                             <FooterLink href="/products">Tüm Ürünler</FooterLink>
                             {categories.map(cat => (
-                                <FooterLink key={cat.id} href={`/${cat.slug}`}>{cat.name}</FooterLink>
+                                <FooterLink key={cat.id} href={`/products?category=${encodeURIComponent(cat.name)}`}>{cat.name}</FooterLink>
                             ))}
                         </ul>
                     </div>
