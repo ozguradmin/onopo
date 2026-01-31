@@ -55,13 +55,24 @@ export default function OrderEditPage() {
     const handleSave = async () => {
         setSaving(true)
         try {
+            // Check if tracking number was added or changed
+            const trackingChanged = formData.tracking_number && formData.tracking_number !== (order?.tracking_number || '')
+
             const res = await fetch(`/api/orders/${orderId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify({
+                    ...formData,
+                    // Send notification if tracking number was added or changed
+                    send_notification: trackingChanged
+                })
             })
             if (res.ok) {
-                alert('Sipariş güncellendi!')
+                if (trackingChanged) {
+                    alert('Sipariş güncellendi ve kargo bildirimi gönderildi!')
+                } else {
+                    alert('Sipariş güncellendi!')
+                }
                 router.push('/admin/orders')
             } else {
                 alert('Hata oluştu')

@@ -2,8 +2,8 @@
 
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
-import { ArrowUpRight, Search, Filter, MoreHorizontal, ChevronDown, ChevronUp, Package, Truck, Check, X, Mail, MapPin, Trash2, Clock } from 'lucide-react'
-import { useSearchParams } from 'next/navigation'
+import { ArrowUpRight, Search, Filter, MoreHorizontal, ChevronDown, ChevronUp, Package, Truck, Check, X, Mail, MapPin, Trash2, Clock, ExternalLink } from 'lucide-react'
+import { useSearchParams, useRouter } from 'next/navigation'
 
 interface Order {
     id: number
@@ -36,6 +36,7 @@ export default function AdminOrdersPage() {
 
 function OrdersContent() {
     const searchParams = useSearchParams()
+    const router = useRouter()
     const highlightId = searchParams.get('id')
 
     const [orders, setOrders] = React.useState<Order[]>([])
@@ -175,7 +176,7 @@ function OrdersContent() {
                                 {/* Order Header */}
                                 <div
                                     className="p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50"
-                                    onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
+                                    onClick={() => router.push(`/admin/orders/${order.id}`)}
                                 >
                                     <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-4 items-center">
                                         <div>
@@ -202,7 +203,7 @@ function OrdersContent() {
                                         </div>
                                     </div>
                                     <div>
-                                        {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+                                        <ExternalLink className="w-5 h-5 text-slate-400" />
                                     </div>
                                 </div>
 
