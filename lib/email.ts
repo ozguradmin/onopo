@@ -36,26 +36,40 @@ async function getEmailSettings() {
 
 const FROM_EMAIL = 'Onopo Store <no-reply@onopostore.com>'
 
-// Dynamic header/footer
-const emailHeader = (title: string, settings: any, emoji: string = '📦') => `
+// Dynamic header/footer - only show logo if URL is valid
+const emailHeader = (title: string, settings: any, emoji: string = '📦') => {
+    const hasValidLogo = settings.logoUrl && !settings.logoUrl.endsWith('/logo.png')
+    const logoHtml = hasValidLogo
+        ? `<img src="${settings.logoUrl}" alt="${settings.siteName}" style="height: 40px; margin-bottom: 15px; object-fit: contain;" />`
+        : `<span style="font-size: 24px; font-weight: bold; color: white;">${settings.siteName}</span>`
+
+    return `
     <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 30px; text-align: center;">
-        <a href="${settings.siteUrl}" style="text-decoration: none;">
-            <img src="${settings.logoUrl}" alt="${settings.siteName}" style="height: 40px; margin-bottom: 15px; object-fit: contain;" />
+        <a href="${settings.siteUrl}" style="text-decoration: none; display: block; margin-bottom: 15px;">
+            ${logoHtml}
         </a>
         <h1 style="color: white; margin: 0;">${title} ${emoji}</h1>
     </div>
 `
+}
 
-const emailFooter = (settings: any) => `
+const emailFooter = (settings: any) => {
+    const hasValidLogo = settings.logoUrl && !settings.logoUrl.endsWith('/logo.png')
+    const logoHtml = hasValidLogo
+        ? `<img src="${settings.logoUrl}" alt="${settings.siteName}" style="height: 30px; margin-bottom: 10px; filter: brightness(0) invert(1); object-fit: contain;" />`
+        : `<span style="font-size: 18px; font-weight: bold; color: white;">${settings.siteName}</span>`
+
+    return `
     <div style="background: #1e293b; padding: 20px; text-align: center;">
-        <a href="${settings.siteUrl}" style="text-decoration: none;">
-            <img src="${settings.logoUrl}" alt="${settings.siteName}" style="height: 30px; margin-bottom: 10px; filter: brightness(0) invert(1); object-fit: contain;" />
+        <a href="${settings.siteUrl}" style="text-decoration: none; display: block; margin-bottom: 10px;">
+            ${logoHtml}
         </a>
         <p style="color: #94a3b8; margin: 0; font-size: 14px;">
             <a href="${settings.siteUrl}" style="color: #94a3b8; text-decoration: none;">${new URL(settings.siteUrl).hostname}</a>
         </p>
     </div>
 `
+}
 
 // Email templates
 export const emailTemplates = {

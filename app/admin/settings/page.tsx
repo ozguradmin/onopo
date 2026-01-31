@@ -36,6 +36,9 @@ export default function AdminSettingsPage() {
     // Admin Notification Email
     const [adminEmail, setAdminEmail] = React.useState('')
 
+    // Products Per Page
+    const [productsPerPage, setProductsPerPage] = React.useState('40')
+
     React.useEffect(() => {
         Promise.all([
             fetch('/api/auth/me').then(r => r.json()),
@@ -63,6 +66,7 @@ export default function AdminSettingsPage() {
                 setFooterPhone(settingsData.footer_phone || '')
                 setFooterAddress(settingsData.footer_address || '')
                 setAdminEmail(settingsData.admin_email || '')
+                setProductsPerPage(settingsData.products_per_page || '40')
             }
             if (Array.isArray(categoriesData)) {
                 setAllCategories(categoriesData)
@@ -102,7 +106,8 @@ export default function AdminSettingsPage() {
                     footer_email: footerEmail,
                     footer_phone: footerPhone,
                     footer_address: footerAddress,
-                    admin_email: adminEmail
+                    admin_email: adminEmail,
+                    products_per_page: productsPerPage
                 })
             })
 
@@ -351,6 +356,25 @@ export default function AdminSettingsPage() {
                                     className="w-full p-2 border rounded-lg"
                                     placeholder="siparis@onopostore.com"
                                 />
+                            </div>
+                        </div>
+
+                        {/* Products Per Page Setting */}
+                        <div className="border-t pt-4 mt-4">
+                            <h3 className="font-semibold mb-4 text-sm text-slate-500 uppercase tracking-wider">🛒 Ürün Listesi Ayarları</h3>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Sayfa Başına Ürün Sayısı</label>
+                                <p className="text-xs text-slate-500 mb-2">Ürünler sayfasında kaç ürün gösterilsin</p>
+                                <select
+                                    value={productsPerPage}
+                                    onChange={e => setProductsPerPage(e.target.value)}
+                                    className="w-full p-2 border rounded-lg"
+                                >
+                                    <option value="10">10 ürün</option>
+                                    <option value="20">20 ürün</option>
+                                    <option value="40">40 ürün</option>
+                                    <option value="80">80 ürün</option>
+                                </select>
                             </div>
                         </div>
                     </div>

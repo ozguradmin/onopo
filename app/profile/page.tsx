@@ -3,7 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { User, Heart, Package, LogOut, ChevronRight, ShoppingBag } from 'lucide-react'
+import { User, Heart, Package, LogOut, ChevronRight, ShoppingBag, MapPin, Phone, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatPrice } from '@/lib/formatPrice'
 
@@ -15,6 +15,12 @@ export default function ProfilePage() {
     const [redirecting, setRedirecting] = React.useState(false)
     const [activeTab, setActiveTab] = React.useState<'profile' | 'favorites'>('profile')
 
+    // Profile edit state
+    const [phone, setPhone] = React.useState('')
+    const [address, setAddress] = React.useState('')
+    const [saving, setSaving] = React.useState(false)
+    const [saveSuccess, setSaveSuccess] = React.useState(false)
+
     React.useEffect(() => {
         // Check auth
         fetch('/api/auth/me')
@@ -24,6 +30,8 @@ export default function ProfilePage() {
             })
             .then(data => {
                 setUser(data.user)
+                setPhone(data.user.phone || '')
+                setAddress(data.user.address || '')
                 setLoading(false)
             })
             .catch(() => {
@@ -45,6 +53,28 @@ export default function ProfilePage() {
     const handleLogout = async () => {
         await fetch('/api/auth/logout', { method: 'POST' })
         router.push('/')
+    }
+
+    const handleSaveProfile = async () => {
+        setSaving(true)
+        setSaveSuccess(false)
+        try {
+            const res = await fetch('/api/user/update-profile', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone, address })
+            })
+            if (res.ok) {
+                const data = await res.json()
+                setUser(data.user)
+                setSaveSuccess(true)
+                setTimeout(() => setSaveSuccess(false), 3000)
+            }
+        } catch (err) {
+            console.error('Save error:', err)
+        } finally {
+            setSaving(false)
+        }
     }
 
     const removeFavorite = async (productId: number) => {
@@ -170,6 +200,45 @@ export default function ProfilePage() {
                             </div>
                             <ChevronRight className="w-5 h-5 text-slate-400" />
                         </Link>
+
+                        {/* Profile Edit Form */}
+                        <div className="border-t border-slate-100 p-4">
+                            <h3 className="font-semibold text-slate-900 mb-4">Bilgilerimi Düzenle</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1">
+                                        <Phone className="w-4 h-4" /> Telefon
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        value={phone}
+                                        onChange={(e) => setPhone(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                                        placeholder="05XX XXX XX XX"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1">
+                                        <MapPin className="w-4 h-4" /> Adres
+                                    </label>
+                                    <textarea
+                                        value={address}
+                                        onChange={(e) => setAddress(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10 resize-none"
+                                        rows={2}
+                                        placeholder="İl, İlçe, Mahalle, Sokak, No..."
+                                    />
+                                </div>
+                                <Button
+                                    onClick={handleSaveProfile}
+                                    disabled={saving}
+                                    className={`gap-2 w-full ${saveSuccess ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-900 hover:bg-slate-800'}`}
+                                >
+                                    <Save className="w-4 h-4" />
+                                    {saving ? 'Kaydediliyor...' : saveSuccess ? 'Kaydedildi!' : 'Değişiklikleri Kaydet'}
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 )}
 

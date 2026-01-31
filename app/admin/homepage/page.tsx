@@ -17,7 +17,8 @@ import {
     Save,
     ChevronDown,
     ChevronUp,
-    X
+    X,
+    Code
 } from 'lucide-react'
 
 interface Section {
@@ -36,6 +37,7 @@ const sectionTypes = [
     { type: 'categories', label: 'Kategoriler', icon: Package },
     { type: 'features', label: 'Özellikler', icon: Star },
     { type: 'image_card', label: 'Görsel Kart', icon: ImageIcon },
+    { type: 'custom_code', label: 'Özel HTML/CSS', icon: Code },
 ]
 
 export default function AdminHomepagePage() {
@@ -107,8 +109,8 @@ export default function AdminHomepagePage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 type,
-                title: type === 'products' ? 'Trend Ürünler' : type === 'new_products' ? 'Yeni Ürünler' : type === 'features' ? 'Özellikler' : 'Yeni Bölüm',
-                config: (type === 'products' || type === 'new_products') ? { selection_type: type === 'new_products' ? 'newest' : 'all', limit: 8 } : {}
+                title: type === 'products' ? 'Trend Ürünler' : type === 'new_products' ? 'Yeni Ürünler' : type === 'features' ? 'Özellikler' : type === 'custom_code' ? 'Özel Bölüm' : 'Yeni Bölüm',
+                config: (type === 'products' || type === 'new_products') ? { selection_type: type === 'new_products' ? 'newest' : 'all', limit: 8 } : type === 'custom_code' ? { html_content: '' } : {}
             })
         })
         if (res.ok) {
@@ -163,6 +165,7 @@ export default function AdminHomepagePage() {
                                 {section.type === 'new_products' && <Star className="w-5 h-5 text-orange-500" />}
                                 {section.type === 'features' && <Star className="w-5 h-5 text-yellow-500" />}
                                 {section.type === 'image_card' && <ImageIcon className="w-5 h-5 text-purple-500" />}
+                                {section.type === 'custom_code' && <Code className="w-5 h-5 text-pink-500" />}
                             </div>
 
                             <div className="flex-1">
@@ -447,6 +450,32 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
                                 />
                             </div>
                         </>
+                    )}
+
+                    {section.type === 'custom_code' && (
+                        <div className="space-y-3">
+                            <label className="block text-sm font-medium">HTML/CSS İçeriği</label>
+                            <p className="text-xs text-slate-500">HTML, CSS ve inline JavaScript kodlarını buraya yapıştırabilirsiniz.</p>
+                            <textarea
+                                value={config.html_content || ''}
+                                onChange={e => setConfig({ ...config, html_content: e.target.value })}
+                                rows={12}
+                                className="w-full p-3 border border-slate-200 rounded-lg font-mono text-sm"
+                                placeholder="<div class='custom-section'>
+  <style>
+    .custom-section { padding: 40px; background: #f8f9fa; }
+  </style>
+  <h2>Özel Başlık</h2>
+  <p>İçerik buraya...</p>
+</div>"
+                            />
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                <p className="text-xs text-amber-800">
+                                    ⚠️ <strong>Dikkat:</strong> Buraya eklenen kod doğrudan sayfada çalıştırılır.
+                                    Güvenilir kaynaklardan kod kullanın.
+                                </p>
+                            </div>
+                        </div>
                     )}
                 </div>
 

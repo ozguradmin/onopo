@@ -137,6 +137,16 @@ export default async function Home() {
               title={section.title || 'Kategoriler'}
             />
           )
+        } else if (section.type === 'custom_code') {
+          // Render custom HTML/CSS code
+          const htmlContent = config.html_content || ''
+          content = (
+            <div
+              key={section.id}
+              className="custom-code-section"
+              dangerouslySetInnerHTML={{ __html: htmlContent }}
+            />
+          )
         }
 
         if (!content) return null

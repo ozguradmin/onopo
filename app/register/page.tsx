@@ -11,6 +11,7 @@ export default function RegisterPage() {
     const [name, setName] = React.useState('')
     const [email, setEmail] = React.useState('')
     const [phone, setPhone] = React.useState('')
+    const [address, setAddress] = React.useState('')
     const [password, setPassword] = React.useState('')
     const [loading, setLoading] = React.useState(false)
     const [error, setError] = React.useState('')
@@ -25,7 +26,7 @@ export default function RegisterPage() {
             const registerRes = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, phone, password }),
+                body: JSON.stringify({ name, email, phone, address, password }),
             })
 
             const registerData = await registerRes.json()
@@ -133,6 +134,18 @@ export default function RegisterPage() {
                                     className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
                                     placeholder="En az 6 karakter"
                                     minLength={6}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    Adres <span className="text-slate-400 font-normal">(Opsiyonel)</span>
+                                </label>
+                                <textarea
+                                    value={address}
+                                    onChange={e => setAddress(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all resize-none"
+                                    placeholder="İl, İlçe, Mahalle, Sokak, No..."
+                                    rows={2}
                                 />
                             </div>
                         </div>

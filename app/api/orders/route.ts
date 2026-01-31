@@ -65,6 +65,12 @@ export async function POST(req: NextRequest) {
             district: customerInfo.district || '',
             postalCode: customerInfo.postalCode || '',
             note: customerInfo.note || '',
+            // Invoice/Billing fields
+            tcIdentity: customerInfo.tcIdentity || '',
+            wantsDifferentBillingAddress: customerInfo.wantsDifferentBillingAddress || false,
+            billingAddress: customerInfo.billingAddress || '',
+            billingCity: customerInfo.billingCity || '',
+            billingDistrict: customerInfo.billingDistrict || '',
             provider: settings?.provider || 'offline' // Store provider for filtering in Admin Panel
         })
 

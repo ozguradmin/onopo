@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Facebook, Instagram, Twitter, Linkedin } from "lucide-react"
+import { Facebook, Instagram, Twitter, Linkedin, DollarSign } from "lucide-react"
 
 interface Category {
     id: number
@@ -26,6 +26,7 @@ export function Footer() {
         linkedin_url: ''
     })
     const [categories, setCategories] = React.useState<Category[]>([])
+    const [exchangeRate, setExchangeRate] = React.useState<number | null>(null)
 
     React.useEffect(() => {
         // Track page view
@@ -63,6 +64,14 @@ export function Footer() {
             }
             setCategories(catsToShow)
         }).catch(() => { })
+
+        // Fetch exchange rate
+        fetch('/api/exchange-rate')
+            .then(r => r.json())
+            .then(data => {
+                if (data.rate) setExchangeRate(data.rate)
+            })
+            .catch(() => { })
     }, [])
 
     return (
@@ -131,7 +140,15 @@ export function Footer() {
 
                 <div className="border-t border-slate-800 mt-8 pt-6 flex flex-col md:flex-row justify-between items-center text-xs text-slate-500 gap-2">
                     <p>{settings.footer_text}</p>
-                    <p>Güvenli Ödeme & Hızlı Teslimat</p>
+                    <div className="flex items-center gap-4">
+                        {exchangeRate && (
+                            <span className="flex items-center gap-1 text-green-400">
+                                <DollarSign className="w-3 h-3" />
+                                1 USD = {exchangeRate.toFixed(2)} ₺
+                            </span>
+                        )}
+                        <p>Güvenli Ödeme & Hızlı Teslimat</p>
+                    </div>
                 </div>
             </div>
         </footer>

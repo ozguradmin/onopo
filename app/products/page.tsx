@@ -153,11 +153,29 @@ async function getBrands(products: any[]) {
     return brands.slice(0, 20) // Limit to 20 brands
 }
 
+async function getSiteSettings() {
+    try {
+        const db = await getDB()
+        const { results } = await db.prepare('SELECT key, value FROM site_settings').all()
+        const settings: Record<string, string> = {}
+        for (const row of (results || [])) {
+            settings[(row as any).key] = (row as any).value
+        }
+        return settings
+    } catch {
+        return {}
+    }
+}
+
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
     const resolvedParams = await searchParams
-    const products = await getProducts(resolvedParams.category, resolvedParams.q)
-    const categories = await getCategories()
+    const [products, categories, settings] = await Promise.all([
+        getProducts(resolvedParams.category, resolvedParams.q),
+        getCategories(),
+        getSiteSettings()
+    ])
     const brands = await getBrands(products)
+    const productsPerPage = parseInt(settings.products_per_page || '40', 10)
 
     return (
         <Suspense fallback={<div className="text-center py-20">Yükleniyor...</div>}>
@@ -166,6 +184,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                 initialCategories={categories as any}
                 initialBrands={brands}
                 searchParams={resolvedParams}
+                itemsPerPage={productsPerPage}
             />
         </Suspense>
     )

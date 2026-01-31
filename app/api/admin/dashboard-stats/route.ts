@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
             db.prepare('SELECT COUNT(*) as count FROM orders WHERE status = "cancelled"').first(),
             db.prepare('SELECT AVG(total_amount) as avg FROM orders WHERE status != "cancelled"').first(),
             db.prepare(`
-                SELECT p.name, SUM(oi.quantity) as sold_count, SUM(oi.quantity * oi.price) as total_revenue
+                SELECT p.name, SUM(oi.quantity) as sold_count, SUM(oi.quantity * oi.price_at_purchase) as total_revenue
                 FROM order_items oi
                 JOIN products p ON oi.product_id = p.id
                 JOIN orders o ON oi.order_id = o.id
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
                 LIMIT 10
             `).all(),
             db.prepare(`
-                SELECT p.category, COUNT(oi.id) as order_count, SUM(oi.quantity * oi.price) as total_sales
+                SELECT p.category, COUNT(oi.id) as order_count, SUM(oi.quantity * oi.price_at_purchase) as total_sales
                 FROM order_items oi
                 JOIN products p ON oi.product_id = p.id
                 JOIN orders o ON oi.order_id = o.id

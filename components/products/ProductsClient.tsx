@@ -24,15 +24,17 @@ interface ProductsClientProps {
     initialCategories: { name: string; slug: string; count: number }[]
     initialBrands: string[]
     searchParams: { category?: string; q?: string; page?: string; sort?: string; minPrice?: string; maxPrice?: string; brand?: string }
+    itemsPerPage?: number
 }
 
-const ITEMS_PER_PAGE = 40
+const DEFAULT_ITEMS_PER_PAGE = 40
 
 export default function ProductsClient({
     initialProducts,
     initialCategories,
     initialBrands,
-    searchParams
+    searchParams,
+    itemsPerPage = DEFAULT_ITEMS_PER_PAGE
 }: ProductsClientProps) {
     const { addItem, openCart } = useCartStore()
     const [showFilters, setShowFilters] = useState(false)
@@ -130,10 +132,10 @@ export default function ProductsClient({
     }, [initialProducts, minPrice, maxPrice, selectedBrand, sortBy])
 
     // Pagination
-    const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE)
+    const totalPages = Math.ceil(filteredProducts.length / itemsPerPage)
     const paginatedProducts = filteredProducts.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
     )
 
     const handleAddToCart = (product: Product, e: React.MouseEvent) => {

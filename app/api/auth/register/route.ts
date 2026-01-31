@@ -8,7 +8,7 @@ import { sendWelcomeEmail } from '@/lib/email'
 export async function POST(req: NextRequest) {
     try {
         const db = await getDB()
-        const { email, password, name, phone } = await req.json()
+        const { email, password, name, phone, address } = await req.json()
 
         if (!email || !password) {
             return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
         // Create user
         const hashedPassword = await hashPassword(password)
         const runResult = await db.prepare(
-            'INSERT INTO users (email, password_hash, full_name, phone, role) VALUES (?, ?, ?, ?, ?)'
-        ).bind(email, hashedPassword, name || '', phone || '', 'user').run()
+            'INSERT INTO users (email, password_hash, full_name, phone, address, role) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(email, hashedPassword, name || '', phone || '', address || '', 'user').run()
 
         if (!runResult.success) {
             throw new Error('Failed to create user')

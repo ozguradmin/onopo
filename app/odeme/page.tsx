@@ -71,7 +71,13 @@ export default function CheckoutPage() {
         city: '',
         district: '',
         postalCode: '',
-        note: ''
+        note: '',
+        // Invoice address fields
+        wantsDifferentBillingAddress: false,
+        billingAddress: '',
+        billingCity: '',
+        billingDistrict: '',
+        tcIdentity: ''
     })
 
     React.useEffect(() => {
@@ -81,11 +87,30 @@ export default function CheckoutPage() {
             .then(data => {
                 if (data?.user) {
                     setUser(data.user)
+                    // Parse user address if it's a JSON string or use directly
+                    let addressData = { address: '', city: '', district: '' }
+                    if (data.user.address) {
+                        try {
+                            // Try parsing as JSON (for structured address)
+                            const parsed = JSON.parse(data.user.address)
+                            addressData = {
+                                address: parsed.address || data.user.address,
+                                city: parsed.city || '',
+                                district: parsed.district || ''
+                            }
+                        } catch {
+                            // Plain text address
+                            addressData.address = data.user.address
+                        }
+                    }
                     setFormData(prev => ({
                         ...prev,
                         fullName: data.user.full_name || '',
                         email: data.user.email || '',
-                        phone: data.user.phone || ''
+                        phone: data.user.phone || '',
+                        address: addressData.address,
+                        city: addressData.city,
+                        district: addressData.district
                     }))
                 }
             })
@@ -441,6 +466,84 @@ export default function CheckoutPage() {
                                         />
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* Invoice Address Section */}
+                            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
+                                        <MapPin className="w-5 h-5 text-orange-600" />
+                                    </div>
+                                    <h2 className="text-lg font-bold text-slate-900">Fatura Bilgileri</h2>
+                                </div>
+
+                                {/* TC Identity */}
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                        TC Kimlik No <span className="text-slate-400 font-normal">(Opsiyonel)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="tcIdentity"
+                                        value={formData.tcIdentity}
+                                        onChange={handleInputChange}
+                                        className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
+                                        placeholder="Kurumsal fatura için zorunlu"
+                                        maxLength={11}
+                                    />
+                                </div>
+
+                                {/* Different Billing Address Checkbox */}
+                                <label className="flex items-center gap-3 cursor-pointer mb-4">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.wantsDifferentBillingAddress}
+                                        onChange={(e) => setFormData({ ...formData, wantsDifferentBillingAddress: e.target.checked })}
+                                        className="w-5 h-5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                                    />
+                                    <span className="text-sm text-slate-700">Fatura adresim teslimat adresinden farklı</span>
+                                </label>
+
+                                {/* Billing Address Fields (conditional) */}
+                                {formData.wantsDifferentBillingAddress && (
+                                    <div className="space-y-4 pt-4 border-t border-slate-100">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Fatura İl</label>
+                                                <input
+                                                    type="text"
+                                                    name="billingCity"
+                                                    value={formData.billingCity}
+                                                    onChange={handleInputChange}
+                                                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
+                                                    placeholder="İstanbul"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Fatura İlçe</label>
+                                                <input
+                                                    type="text"
+                                                    name="billingDistrict"
+                                                    value={formData.billingDistrict}
+                                                    onChange={handleInputChange}
+                                                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
+                                                    placeholder="Kadıköy"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Fatura Adresi</label>
+                                            <textarea
+                                                name="billingAddress"
+                                                value={formData.billingAddress}
+                                                onChange={handleInputChange}
+                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none resize-none"
+                                                rows={2}
+                                                placeholder="Mahalle, Sokak, Bina No, Daire..."
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Payment Method */}

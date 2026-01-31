@@ -145,6 +145,24 @@ export default function OrderEditPage() {
                                         )}
                                         {addr.postalCode && !addr.postalCode.includes('(') && <p>Posta Kodu: {addr.postalCode}</p>}
                                         {addr.note && <p className="mt-2 italic text-slate-500">Not: {addr.note}</p>}
+
+                                        {/* TC Identity */}
+                                        {addr.tcIdentity && (
+                                            <p className="mt-2 pt-2 border-t border-slate-100">
+                                                <span className="text-slate-500">TC Kimlik:</span> <span className="font-medium">{addr.tcIdentity}</span>
+                                            </p>
+                                        )}
+
+                                        {/* Billing Address (if different) */}
+                                        {addr.wantsDifferentBillingAddress && addr.billingAddress && (
+                                            <div className="mt-3 pt-3 border-t border-slate-100">
+                                                <p className="font-semibold text-slate-700 mb-1">📄 Fatura Adresi</p>
+                                                <p>{addr.billingAddress}</p>
+                                                {(addr.billingDistrict || addr.billingCity) && (
+                                                    <p>{[addr.billingDistrict, addr.billingCity].filter(Boolean).join(', ')}</p>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 )
                             } catch {
