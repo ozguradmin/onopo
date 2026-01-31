@@ -5,6 +5,9 @@ import { getDB } from './db'
 // Initialize Resend with API key from environment
 const resend = new Resend(process.env.RESEND_API_KEY || 're_123456789')
 
+// Primary R2 logo URL for emails
+const PRIMARY_LOGO_URL = 'https://pub-84a4a4a7d990439cbfeb17aaa4c7677c.r2.dev/mobil-logo-6802cd9296723__1_-removebg-preview.png'
+
 // Helper to get site settings
 async function getEmailSettings() {
     try {
@@ -27,10 +30,9 @@ async function getEmailSettings() {
         if (rawLogoUrl) {
             // If it starts with http/https, use as-is (unless it's a broken google proxy URL)
             if (rawLogoUrl.startsWith('http://') || rawLogoUrl.startsWith('https://')) {
-                // Check for broken Google proxy URLs
                 if (rawLogoUrl.includes('googleusercontent.com') || rawLogoUrl.includes('ci3.google')) {
-                    // This is a broken cached URL, try to extract original or use fallback
-                    logoUrl = `${siteUrl}/logo.png`
+                    // This is a broken cached URL, use R2 logo
+                    logoUrl = PRIMARY_LOGO_URL
                 } else {
                     logoUrl = rawLogoUrl
                 }
@@ -42,7 +44,7 @@ async function getEmailSettings() {
                 logoUrl = `${siteUrl}/${rawLogoUrl}`
             }
         } else {
-            logoUrl = `${siteUrl}/logo.png`
+            logoUrl = PRIMARY_LOGO_URL
         }
 
         const siteName = settings.site_name || 'Onopo Store'
@@ -51,8 +53,8 @@ async function getEmailSettings() {
     } catch (e) {
         // Fallback if DB fails
         return {
-            siteUrl: process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com',
-            logoUrl: 'https://onopostore.com/logo.png',
+            siteUrl: 'https://onopostore.com',
+            logoUrl: PRIMARY_LOGO_URL,
             siteName: 'Onopo Store'
         }
     }

@@ -248,28 +248,24 @@ export default function AdminEmailPage() {
     }
 
     const applyTemplate = (template: typeof EMAIL_TEMPLATES[0]) => {
-        // Replace logo placeholder with actual logo URL from settings
-        const siteUrl = 'https://onopostore.com'
+        // Replace logo placeholder with actual logo URL - use R2 logo as primary
+        const primaryLogoUrl = 'https://pub-84a4a4a7d990439cbfeb17aaa4c7677c.r2.dev/mobil-logo-6802cd9296723__1_-removebg-preview.png'
         let rawLogoUrl = siteSettings.logo_url || ''
-        let logoUrl = ''
+        let logoUrl = primaryLogoUrl // Default to R2 logo
 
         if (rawLogoUrl) {
-            // If it starts with http/https, check if valid
-            if (rawLogoUrl.startsWith('http://') || rawLogoUrl.startsWith('https://')) {
-                // Check for broken Google proxy URLs
-                if (rawLogoUrl.includes('googleusercontent.com') || rawLogoUrl.includes('ci3.google')) {
-                    logoUrl = `${siteUrl}/logo.png`
-                } else {
-                    logoUrl = rawLogoUrl
-                }
-            } else if (rawLogoUrl.startsWith('/')) {
-                // Relative URL - prepend site URL
-                logoUrl = `${siteUrl}${rawLogoUrl}`
-            } else {
-                logoUrl = `${siteUrl}/${rawLogoUrl}`
+            // If it's an R2 URL, use it
+            if (rawLogoUrl.includes('r2.dev') || rawLogoUrl.includes('r2.cloudflarestorage')) {
+                logoUrl = rawLogoUrl
             }
-        } else {
-            logoUrl = `${siteUrl}/logo.png`
+            // If it's a broken Google proxy URL, use R2 logo
+            else if (rawLogoUrl.includes('googleusercontent.com') || rawLogoUrl.includes('ci3.google')) {
+                logoUrl = primaryLogoUrl
+            }
+            // If it's a valid https URL, use it
+            else if (rawLogoUrl.startsWith('https://')) {
+                logoUrl = rawLogoUrl
+            }
         }
 
         const messageWithLogo = template.message.replace(/\{\{LOGO_URL\}\}/g, logoUrl)
