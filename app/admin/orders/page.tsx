@@ -45,6 +45,14 @@ function OrdersContent() {
     const [trackingCode, setTrackingCode] = React.useState<Record<number, string>>({})
     const [sendingEmail, setSendingEmail] = React.useState<number | null>(null)
 
+    // Search and Filter state
+    const [searchQuery, setSearchQuery] = React.useState('')
+    const [statusFilter, setStatusFilter] = React.useState('')
+
+    // Pagination state
+    const [currentPage, setCurrentPage] = React.useState(1)
+    const [pageSize, setPageSize] = React.useState(10)
+
     const fetchOrders = async () => {
         setLoading(true)
         try {
@@ -73,6 +81,32 @@ function OrdersContent() {
     React.useEffect(() => {
         fetchOrders()
     }, [])
+
+    // Filtered orders
+    const filteredOrders = React.useMemo(() => {
+        return orders.filter(order => {
+            const matchesSearch = searchQuery === '' ||
+                order.id.toString().includes(searchQuery) ||
+                order.guest_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                order.tracking_number?.toLowerCase().includes(searchQuery.toLowerCase())
+            const matchesStatus = statusFilter === '' || order.status === statusFilter
+            return matchesSearch && matchesStatus
+        })
+    }, [orders, searchQuery, statusFilter])
+
+    // Paginated orders
+    const paginatedOrders = React.useMemo(() => {
+        if (pageSize === 0) return filteredOrders // 0 means "all"
+        const start = (currentPage - 1) * pageSize
+        return filteredOrders.slice(start, start + pageSize)
+    }, [filteredOrders, currentPage, pageSize])
+
+    const totalPages = pageSize === 0 ? 1 : Math.ceil(filteredOrders.length / pageSize)
+
+    // Reset to page 1 when filters change
+    React.useEffect(() => {
+        setCurrentPage(1)
+    }, [searchQuery, statusFilter, pageSize])
 
     const handleStatusChange = async (orderId: number, newStatus: string) => {
         try {
@@ -154,18 +188,70 @@ function OrdersContent() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-slate-900">Siparişler</h1>
-                <span className="text-slate-500">{orders.length} sipariş</span>
+                <span className="text-slate-500">{filteredOrders.length} sipariş</span>
             </div>
 
-            {orders.length === 0 ? (
+            {/* Search and Filter Bar */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                        type="text"
+                        placeholder="Sipariş no, e-posta veya takip kodu ile ara..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                    />
+                </div>
+                <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent min-w-[160px]"
+                >
+                    <option value="">Tüm Durumlar</option>
+                    <option value="pending">Beklemede</option>
+                    <option value="processing">Hazırlanıyor</option>
+                    <option value="shipped">Kargoda</option>
+                    <option value="delivered">Teslim Edildi</option>
+                    <option value="cancelled">İptal</option>
+                </select>
+                <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                >
+                    <option value={10}>10 / sayfa</option>
+                    <option value={20}>20 / sayfa</option>
+                    <option value={40}>40 / sayfa</option>
+                    <option value={80}>80 / sayfa</option>
+                    <option value={0}>Tümü</option>
+                </select>
+                {(searchQuery || statusFilter) && (
+                    <Button
+                        variant="ghost"
+                        onClick={() => { setSearchQuery(''); setStatusFilter(''); }}
+                        className="text-slate-500"
+                    >
+                        Temizle
+                    </Button>
+                )}
+            </div>
+
+            {/* Results info */}
+            <p className="text-sm text-slate-500">
+                {filteredOrders.length} sipariş bulundu
+                {pageSize > 0 && ` (Sayfa ${currentPage}/${totalPages})`}
+            </p>
+
+            {paginatedOrders.length === 0 ? (
                 <div className="bg-white rounded-2xl p-12 text-center border border-slate-100">
                     <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                    <h2 className="text-lg font-semibold text-slate-900 mb-2">Henüz sipariş yok</h2>
-                    <p className="text-slate-500">Siparişler burada görünecek</p>
+                    <h2 className="text-lg font-semibold text-slate-900 mb-2">Sipariş bulunamadı</h2>
+                    <p className="text-slate-500">Arama kriterlerinize uygun sipariş yok</p>
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {orders.map(order => {
+                    {paginatedOrders.map(order => {
                         const address = parseAddress(order.shipping_address)
                         const statusInfo = statusLabels[order.status] || statusLabels.pending
                         const StatusIcon = statusInfo.icon
@@ -347,6 +433,50 @@ function OrdersContent() {
                             </div>
                         )
                     })}
+                </div>
+            )}
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-4">
+                    <Button
+                        variant="outline"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                    >
+                        Önceki
+                    </Button>
+                    <div className="flex gap-1">
+                        {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                            let page: number
+                            if (totalPages <= 5) {
+                                page = i + 1
+                            } else if (currentPage <= 3) {
+                                page = i + 1
+                            } else if (currentPage >= totalPages - 2) {
+                                page = totalPages - 4 + i
+                            } else {
+                                page = currentPage - 2 + i
+                            }
+                            return (
+                                <Button
+                                    key={page}
+                                    variant={currentPage === page ? undefined : 'outline'}
+                                    onClick={() => setCurrentPage(page)}
+                                    className="w-10"
+                                >
+                                    {page}
+                                </Button>
+                            )
+                        })}
+                    </div>
+                    <Button
+                        variant="outline"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                    >
+                        Sonraki
+                    </Button>
                 </div>
             )}
         </div>

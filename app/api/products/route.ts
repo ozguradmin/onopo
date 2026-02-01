@@ -12,8 +12,16 @@ export async function GET(req: NextRequest) {
         const db = await getDB()
         const { searchParams } = new URL(req.url)
         const category = searchParams.get('category')
+        const includeAll = searchParams.get('includeAll') === 'true' // Admin flag to include out-of-stock
 
+        // Base query - only active products, and for customers, hide out-of-stock items
         let sql = 'SELECT id, name, slug, price, original_price, stock, images, category FROM products WHERE is_active = 1'
+
+        // For customer-facing pages, only show in-stock products
+        if (!includeAll) {
+            sql += ' AND stock > 0'
+        }
+
         const params: any[] = []
 
         if (category) {

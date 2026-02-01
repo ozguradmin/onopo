@@ -18,9 +18,13 @@ export default function AdminProductsPage() {
     const [searchQuery, setSearchQuery] = React.useState('')
     const [selectedCategory, setSelectedCategory] = React.useState('')
 
+    // Pagination state
+    const [currentPage, setCurrentPage] = React.useState(1)
+    const [pageSize, setPageSize] = React.useState(10)
+
     React.useEffect(() => {
         Promise.all([
-            fetch('/api/products').then(r => r.json()),
+            fetch('/api/products?includeAll=true').then(r => r.json()),
             fetch('/api/categories').then(r => r.json())
         ]).then(([prods, cats]) => {
             setProducts(prods || [])
@@ -40,6 +44,20 @@ export default function AdminProductsPage() {
             return matchesSearch && matchesCategory
         })
     }, [products, searchQuery, selectedCategory])
+
+    // Paginated products
+    const paginatedProducts = React.useMemo(() => {
+        if (pageSize === 0) return filteredProducts // 0 means "all"
+        const start = (currentPage - 1) * pageSize
+        return filteredProducts.slice(start, start + pageSize)
+    }, [filteredProducts, currentPage, pageSize])
+
+    const totalPages = pageSize === 0 ? 1 : Math.ceil(filteredProducts.length / pageSize)
+
+    // Reset to page 1 when filters change
+    React.useEffect(() => {
+        setCurrentPage(1)
+    }, [searchQuery, selectedCategory, pageSize])
 
     const handleDelete = async (id: number) => {
         if (!confirm('Bu ürünü silmek istediğinize emin misiniz?')) return
@@ -246,14 +264,24 @@ export default function AdminProductsPage() {
                         Temizle
                     </Button>
                 )}
+                <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                >
+                    <option value={10}>10 / sayfa</option>
+                    <option value={20}>20 / sayfa</option>
+                    <option value={40}>40 / sayfa</option>
+                    <option value={80}>80 / sayfa</option>
+                    <option value={0}>Tümü</option>
+                </select>
             </div>
 
             {/* Results count */}
-            {(searchQuery || selectedCategory) && (
-                <p className="text-sm text-slate-500 mb-2">
-                    {filteredProducts.length} ürün bulundu
-                </p>
-            )}
+            <p className="text-sm text-slate-500 mb-2">
+                {filteredProducts.length} ürün bulundu
+                {pageSize > 0 && ` (Sayfa ${currentPage}/${totalPages})`}
+            </p>
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
@@ -269,7 +297,7 @@ export default function AdminProductsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {filteredProducts.map(product => (
+                            {paginatedProducts.map(product => (
                                 <tr key={product.id} className="hover:bg-slate-50">
                                     <td className="p-4">
                                         <img
@@ -301,13 +329,57 @@ export default function AdminProductsPage() {
                                     </td>
                                 </tr>
                             ))}
-                            {filteredProducts.length === 0 && (
+                            {paginatedProducts.length === 0 && (
                                 <tr><td colSpan={6} className="p-8 text-center text-slate-500">Henüz ürün yok.</td></tr>
                             )}
                         </tbody>
                     </table>
                 </div>
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-4">
+                    <Button
+                        variant="outline"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                    >
+                        Önceki
+                    </Button>
+                    <div className="flex gap-1">
+                        {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                            let page: number
+                            if (totalPages <= 5) {
+                                page = i + 1
+                            } else if (currentPage <= 3) {
+                                page = i + 1
+                            } else if (currentPage >= totalPages - 2) {
+                                page = totalPages - 4 + i
+                            } else {
+                                page = currentPage - 2 + i
+                            }
+                            return (
+                                <Button
+                                    key={page}
+                                    variant={currentPage === page ? undefined : 'outline'}
+                                    onClick={() => setCurrentPage(page)}
+                                    className="w-10"
+                                >
+                                    {page}
+                                </Button>
+                            )
+                        })}
+                    </div>
+                    <Button
+                        variant="outline"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                    >
+                        Sonraki
+                    </Button>
+                </div>
+            )}
         </div>
     )
 }
