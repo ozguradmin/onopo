@@ -39,12 +39,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Ad soyad zorunlu' }, { status: 400 })
         }
 
-        // Calculate total
-        let totalAmount = 0
+        // Calculate items total
+        let itemsTotal = 0
         const orderItems = []
 
         for (const item of items) {
-            totalAmount += item.price * item.quantity
+            itemsTotal += item.price * item.quantity
             orderItems.push({
                 product_id: item.id,
                 quantity: item.quantity,
@@ -52,6 +52,25 @@ export async function POST(req: NextRequest) {
                 name: item.name
             })
         }
+
+        // Fetch shipping settings
+        const shippingSettings = await db.prepare('SELECT free_shipping_threshold, shipping_cost FROM shipping_settings LIMIT 1').first()
+        const freeThreshold = shippingSettings ? parseFloat(shippingSettings.free_shipping_threshold) : 500.00
+        const shippingCostDef = shippingSettings ? parseFloat(shippingSettings.shipping_cost) : 100.00
+
+        let shippingCost = 0
+        // Check if ANY item is not free shipping (logic assumption: if order total < threshold, charge shipping. 
+        // If we had per-product free shipping overrides, we'd check that, but standard is total based)
+        // User's XML logic used 'product.free_shipping' override. Let's assume site-wide threshold for now unless item specific is needed.
+        // The implementation plan mainly focused on threshold.
+        // XML implementation had: if (!product.free_shipping) { if (price < threshold) ... }
+        // For cart: usually if subtotal >= threshold => free.
+
+        if (itemsTotal < freeThreshold) {
+            shippingCost = shippingCostDef
+        }
+
+        const totalAmount = itemsTotal + shippingCost
 
         // Get Payment Settings EARLY to store provider in shipping_address
         const settings = await db.prepare('SELECT * FROM payment_settings WHERE is_active = 1 LIMIT 1').first() as any
@@ -71,7 +90,8 @@ export async function POST(req: NextRequest) {
             billingAddress: customerInfo.billingAddress || '',
             billingCity: customerInfo.billingCity || '',
             billingDistrict: customerInfo.billingDistrict || '',
-            provider: settings?.provider || 'offline' // Store provider for filtering in Admin Panel
+            provider: settings?.provider || 'offline', // Store provider for filtering in Admin Panel
+            shipping_cost: shippingCost // Record shipping cost
         })
 
         const orderResult = await db.prepare(

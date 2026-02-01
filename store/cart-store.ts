@@ -141,7 +141,10 @@ export const useCartStore = create<CartState>()(
         {
             name: 'onopo-cart-storage',
             skipHydration: true,
-            version: 2 // Increment version to force refresh if needed
+            version: 2, // Increment version to force refresh if needed
+            migrate: (persistedState: any, version: number) => {
+                return persistedState as CartState
+            }
         }
     )
 )

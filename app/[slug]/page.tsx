@@ -212,7 +212,14 @@ export default async function Page(props: { params: Promise<{ slug: string }> })
 
         if (results && results.length > 0) {
             const product = results[0] as any
-            return <ProductClient id={String(product.id)} />
+
+            // Fetch Shipping Settings
+            const shippingSettings = await db.prepare(
+                `SELECT free_shipping_threshold FROM shipping_settings LIMIT 1`
+            ).first()
+            const threshold = shippingSettings ? parseFloat(shippingSettings.free_shipping_threshold) : 500.00
+
+            return <ProductClient id={String(product.id)} freeShippingThreshold={threshold} />
         }
 
         // Product not found - try to find similar slug and redirect

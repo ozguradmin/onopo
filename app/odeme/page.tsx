@@ -696,7 +696,7 @@ export default function CheckoutPage() {
                                 )}
                                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-100">
                                     <span className="text-slate-900">Toplam</span>
-                                    <span className="text-slate-900">{formatPrice(totalPrice())}</span>
+                                    <span className="text-slate-900">{formatPrice(finalTotal)}</span>
                                 </div>
                             </div>
                         </div>

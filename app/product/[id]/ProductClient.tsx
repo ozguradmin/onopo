@@ -136,7 +136,7 @@ interface Review {
     created_at: string
 }
 
-export default function ProductClient({ id }: { id: string }) {
+export default function ProductClient({ id, freeShippingThreshold = 500 }: { id: string, freeShippingThreshold?: number }) {
     const { addItem, openCart } = useCartStore()
     const [product, setProduct] = React.useState<any>(null)
     const [loading, setLoading] = React.useState(true)
@@ -373,7 +373,7 @@ export default function ProductClient({ id }: { id: string }) {
                                                         %{Math.round((1 - product.price / product.original_price) * 100)} İndirim
                                                     </Badge>
                                                 )}
-                                                {(!!product.free_shipping) && (
+                                                {(!!product.free_shipping || product.price >= freeShippingThreshold) && (
                                                     <Badge className="bg-blue-600 text-white text-sm px-3 py-1 flex items-center gap-1">
                                                         <Truck className="w-3 h-3" /> Kargo Bedava
                                                     </Badge>
@@ -639,8 +639,10 @@ export default function ProductClient({ id }: { id: string }) {
                                 {/* Shipping & Guarantee */}
                                 <div className="grid grid-cols-3 gap-3 pt-6 border-t border-slate-100">
                                     <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-slate-50 text-center">
-                                        <Truck className="w-5 h-5 text-blue-600" />
-                                        <span className="text-xs font-medium text-slate-700">Ücretsiz Kargo</span>
+                                        <Truck className={`w-5 h-5 ${!!product.free_shipping || product.price >= freeShippingThreshold ? 'text-blue-600' : 'text-slate-400'}`} />
+                                        <span className="text-xs font-medium text-slate-700">
+                                            {!!product.free_shipping || product.price >= freeShippingThreshold ? 'Ücretsiz Kargo' : 'Hızlı Kargo'}
+                                        </span>
                                     </div>
                                     <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-slate-50 text-center">
                                         <ShieldCheck className="w-5 h-5 text-green-600" />
