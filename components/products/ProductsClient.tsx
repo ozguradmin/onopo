@@ -385,10 +385,23 @@ export default function ProductsClient({
                                                         alt={product.name}
                                                         className="w-full h-full object-cover"
                                                         loading="lazy"
+                                                        data-original-src={product.images[0]}
                                                         onError={(e) => {
                                                             const target = e.currentTarget
-                                                            target.onerror = null // Prevent infinite loop
-                                                            target.src = '/placeholder.svg'
+                                                            const retryCount = parseInt(target.dataset.retryCount || '0')
+                                                            const originalSrc = target.dataset.originalSrc || product.images[0]
+
+                                                            if (retryCount < 3) {
+                                                                // Retry loading with cache bust
+                                                                target.dataset.retryCount = String(retryCount + 1)
+                                                                setTimeout(() => {
+                                                                    target.src = `${originalSrc}${originalSrc.includes('?') ? '&' : '?'}retry=${retryCount + 1}&t=${Date.now()}`
+                                                                }, (retryCount + 1) * 500) // Exponential backoff: 500ms, 1000ms, 1500ms
+                                                            } else {
+                                                                // After 3 retries, show placeholder
+                                                                target.onerror = null
+                                                                target.src = '/placeholder.svg'
+                                                            }
                                                         }}
                                                     />
                                                 ) : (

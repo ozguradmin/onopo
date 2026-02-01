@@ -20,11 +20,12 @@ export default function IntegrationsPage() {
 
     const fetchStats = async () => {
         try {
-            const res = await fetch('/api/admin/products?limit=1')
+            // Use the public products API to get count
+            const res = await fetch('/api/products?includeAll=true')
             if (res.ok) {
                 const data = await res.json()
                 setFeedStats({
-                    productCount: data.total || 0,
+                    productCount: Array.isArray(data) ? data.length : 0,
                     lastUpdated: new Date().toLocaleString('tr-TR')
                 })
             }

@@ -216,10 +216,23 @@ export default function CategoryClient({ slug }: { slug: string }) {
                                         alt={product.name}
                                         className="object-cover w-full h-full transform group-hover:scale-105 transition-transform duration-500"
                                         loading="lazy"
+                                        data-original-src={product.images && product.images.length > 0 ? product.images[0] : product.image}
                                         onError={(e) => {
                                             const target = e.currentTarget
-                                            target.onerror = null
-                                            target.src = '/placeholder.svg'
+                                            const retryCount = parseInt(target.dataset.retryCount || '0')
+                                            const originalSrc = target.dataset.originalSrc
+
+                                            if (retryCount < 3 && originalSrc) {
+                                                // Retry loading with cache bust
+                                                target.dataset.retryCount = String(retryCount + 1)
+                                                setTimeout(() => {
+                                                    target.src = `${originalSrc}${originalSrc.includes('?') ? '&' : '?'}retry=${retryCount + 1}&t=${Date.now()}`
+                                                }, (retryCount + 1) * 500) // Exponential backoff: 500ms, 1000ms, 1500ms
+                                            } else {
+                                                // After 3 retries, show placeholder
+                                                target.onerror = null
+                                                target.src = '/placeholder.svg'
+                                            }
                                         }}
                                     />
                                     {product.original_price > product.price && (

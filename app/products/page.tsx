@@ -56,7 +56,7 @@ interface SearchParams {
 async function getProducts(category?: string, query?: string) {
     const db = await getDB()
     let sql = `SELECT id, name, slug, price, original_price, stock, category, images 
-               FROM products WHERE is_active = 1`
+               FROM products WHERE is_active = 1 AND stock > 0`
     const params: any[] = []
 
     if (category) {
