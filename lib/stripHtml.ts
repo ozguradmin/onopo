@@ -16,8 +16,15 @@ export function stripHtml(html: string | null | undefined, maxLength: number = 1
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
+        .replace(/&rsquo;/g, "'")
+        .replace(/&lsquo;/g, "'")
         .replace(/&mdash;/g, '—')
         .replace(/&ndash;/g, '–')
+        // Turkish characters
+        .replace(/&ouml;/g, 'ö').replace(/&Ouml;/g, 'Ö')
+        .replace(/&ccedil;/g, 'ç').replace(/&Ccedil;/g, 'Ç')
+        .replace(/&uuml;/g, 'ü').replace(/&Uuml;/g, 'Ü')
+        .replace(/&deg;/g, '°')
 
     // Normalize whitespace (multiple spaces/newlines to single space)
     text = text.replace(/\s+/g, ' ').trim()
