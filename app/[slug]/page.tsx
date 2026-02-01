@@ -7,6 +7,8 @@ export const dynamic = 'force-dynamic'
 
 const VALID_CATEGORIES = ['tech', 'gaming', 'beauty', 'products', 'new']
 
+import { stripHtml } from "@/lib/stripHtml"
+
 // Generate metadata for SEO
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
     const resolvedParams = await params
@@ -27,12 +29,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
             const product = results[0] as any
             const images = typeof product.images === 'string' ? JSON.parse(product.images) : product.images || []
 
+            // Clean HTML tags from description
+            const cleanDescription = stripHtml(product.description || `${product.name} en uygun fiyatlarla ONOPO'da!`)
+
             return {
                 title: `${product.name} - ONOPO`,
-                description: product.description?.substring(0, 160) || `${product.name} en uygun fiyatlarla ONOPO'da!`,
+                description: cleanDescription,
                 openGraph: {
                     title: product.name,
-                    description: product.description?.substring(0, 160) || `${product.name} en uygun fiyatlarla ONOPO'da!`,
+                    description: cleanDescription,
                     images: images[0] ? [images[0]] : [],
                 },
             }

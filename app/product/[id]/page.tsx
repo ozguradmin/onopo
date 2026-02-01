@@ -6,6 +6,7 @@
 import ProductClient from "./ProductClient"
 import { getDB } from "@/lib/db"
 import { Metadata } from "next"
+import { stripHtml } from "@/lib/stripHtml"
 
 // Dynamic Metadata for SEO
 export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -19,10 +20,11 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
 
     const images = JSON.parse(product.images || '[]')
     const mainImage = images[0] || '/placeholder.svg'
+    const cleanDescription = stripHtml(product.description || 'Ürün detayları')
 
     return {
         title: product.name,
-        description: product.description?.slice(0, 160) || 'Ürün detayları',
+        description: cleanDescription,
         openGraph: {
             images: [mainImage],
         }
@@ -40,13 +42,16 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
     const price = product.price
     const stock = Number(product.stock)
 
+    // Clean description for JSON-LD (Google Shopping/Schema also dislikes HTML)
+    const cleanJsonLdDescription = stripHtml(product.description || '', 500) // Allow longer for Schema
+
     // JSON-LD Structured Data (Google Shopping)
     const jsonLd = {
         '@context': 'https://schema.org',
         '@type': 'Product',
         name: product.name,
         image: images,
-        description: product.description,
+        description: cleanJsonLdDescription,
         sku: product.id,
         brand: {
             '@type': 'Brand',
