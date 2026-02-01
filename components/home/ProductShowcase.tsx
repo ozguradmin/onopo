@@ -109,12 +109,12 @@ export default function ProductShowcase({ title = "Trend Ürünler", description
                             <div className="relative bg-white rounded-2xl md:rounded-3xl p-3 md:p-4 shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 h-full flex flex-col group">
                                 {/* Image Area */}
                                 <a href={`/${product.slug}`} className="block relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-slate-100 mb-3 md:mb-4">
-                                    <div className="relative w-full h-full">
+                                    <div className="relative w-full h-full p-4 bg-white rounded-xl">
                                         <Image
                                             src={product.images && product.images.length > 0 ? product.images[0] : product.image}
                                             alt={product.name}
                                             fill
-                                            className="object-cover w-full h-full transform group-hover:scale-105 transition-transform duration-500"
+                                            className="object-contain w-full h-full transform group-hover:scale-105 transition-transform duration-500"
                                             sizes="(max-width: 768px) 160px, 280px"
                                         />
                                     </div>

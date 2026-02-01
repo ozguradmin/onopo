@@ -378,12 +378,12 @@ export default function ProductsClient({
                                 {paginatedProducts.map((product) => (
                                     <div key={product.id} className="group bg-white rounded-2xl overflow-hidden border border-slate-100 hover:shadow-lg transition-all">
                                         <Link href={`/${product.slug}`} className="block">
-                                            <div className="aspect-[4/5] relative bg-slate-100">
+                                            <div className="aspect-[4/5] relative bg-white p-4">
                                                 {product.images[0] ? (
                                                     <img
                                                         src={product.images[0]}
                                                         alt={product.name}
-                                                        className="w-full h-full object-cover"
+                                                        className="w-full h-full object-contain hover:scale-105 transition-transform duration-300"
                                                         loading="lazy"
                                                         data-original-src={product.images[0]}
                                                         onError={(e) => {

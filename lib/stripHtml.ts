@@ -5,8 +5,14 @@
 export function stripHtml(html: string | null | undefined, maxLength: number = 160): string {
     if (!html) return ''
 
-    // Remove HTML tags - replacing with space to prevent word concatenation (e.g. </h1>next)
-    let text = html.replace(/<[^>]*>?/gm, ' ')
+    let text = html
+
+    // 1. ADIM: Blok elementler bittiğinde (</div>, </p>) araya boşluk koy.
+    // Bu sayede kelimeler birbirine yapışmaz.
+    text = text.replace(/<\/(div|p|h[1-6]|li|ul|ol|br|table|tr|td)>/gi, ' ')
+
+    // 2. ADIM: Tüm HTML etiketlerini sil.
+    text = text.replace(/<[^>]*>?/gm, '')
 
     // Decode common HTML entities
     text = text
@@ -26,13 +32,17 @@ export function stripHtml(html: string | null | undefined, maxLength: number = 1
         .replace(/&uuml;/g, 'ü').replace(/&Uuml;/g, 'Ü')
         .replace(/&deg;/g, '°')
 
-    // Normalize whitespace (multiple spaces/newlines to single space)
+    // 3. ADIM: İstemediğin sabit kelimeleri metinden çıkar.
+    const unwantedWords = ["Ürün Açıklaması", "Detaylı Bilgi", "Teknik Özellikler", "Varyant", "Ürün Kodu", "Barkod", "Desi"]
+    unwantedWords.forEach(word => {
+        // Büyük/küçük harf duyarsız (gi) olarak sil
+        text = text.replace(new RegExp(word, "gi"), " ")
+    })
+
+    // 4. ADIM: Oluşan fazla boşlukları (çift boşlukları) teke indir.
     text = text.replace(/\s+/g, ' ').trim()
 
-    // Remove redundant "Ürün Açıklaması" prefix if present
-    text = text.replace(/^Ürün Açıklaması\s*/i, '')
-
-    // Truncate to max length (for SEO - Google typically shows ~155-160 chars)
+    // 5. ADIM: SEO için ideal uzunlukta kes (Default 160, ama parametre ile değişebilir)
     if (text.length > maxLength) {
         text = text.substring(0, maxLength - 3) + '...'
     }
