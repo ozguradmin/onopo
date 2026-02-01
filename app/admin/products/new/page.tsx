@@ -113,9 +113,10 @@ export default function AddProductPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...formData,
-                    price: parseFloat(formData.price) || 0,
-                    original_price: formData.original_price ? parseFloat(formData.original_price) : null,
-                    price_usd: formData.price_usd ? parseFloat(formData.price_usd) : null,
+                    // Convert Turkish comma format to dot for proper parsing
+                    price: parseFloat(String(formData.price).replace(',', '.')) || 0,
+                    original_price: formData.original_price ? parseFloat(String(formData.original_price).replace(',', '.')) : null,
+                    price_usd: formData.price_usd ? parseFloat(String(formData.price_usd).replace(',', '.')) : null,
                     stock: parseInt(formData.stock) || 0,
                     is_active: formData.is_active ? 1 : 0,
                     product_code: formData.product_code,
