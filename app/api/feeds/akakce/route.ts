@@ -28,16 +28,17 @@ interface Settings {
 function extractFromDescription(description: string) {
     const cleanDesc = description.replace(/<[^>]*>?/gm, ' ')
 
-    // Extract Brand
-    const brandMatch = cleanDesc.match(/Marka\s*[:\-\s]*([^{\n\r]+)/i)
+    // Extract Brand - Stop at known next fields or end of string
+    // Looks for "Marka" followed by text until "Ürün Kodu", "Barkod", "Desi", "Varyant" or end
+    const brandMatch = cleanDesc.match(/Marka\s*[:\-\s]*([^{\n\r]+?)(?=\s*(?:Ürün Kodu|Barkod|Desi|Varyant|$))/i)
     let brand = brandMatch ? brandMatch[1].trim() : ''
 
     // Extract Barcode
-    const barcodeMatch = cleanDesc.match(/Barkod\s*[:\-\s]*(\d+)/i)
+    const barcodeMatch = cleanDesc.match(/Barkod\s*[:\-\s]*([A-Z0-9]+)/i)
     const barcode = barcodeMatch ? barcodeMatch[1].trim() : ''
 
-    // Extract Product Code if not in DB column
-    const codeMatch = cleanDesc.match(/Ürün Kodu\s*[:\-\s]*([^{\n\r]+)/i)
+    // Extract Product Code
+    const codeMatch = cleanDesc.match(/Ürün Kodu\s*[:\-\s]*([^{\n\r]+?)(?=\s*(?:Barkod|Desi|Varyant|$))/i)
     const productCode = codeMatch ? codeMatch[1].trim() : ''
 
     return { brand, barcode, productCode }
