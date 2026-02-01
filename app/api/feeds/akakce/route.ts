@@ -24,6 +24,25 @@ interface Settings {
     site_url: string
 }
 
+// Helper to extract fields from description
+function extractFromDescription(description: string) {
+    const cleanDesc = description.replace(/<[^>]*>?/gm, ' ')
+
+    // Extract Brand
+    const brandMatch = cleanDesc.match(/Marka\s*[:\-\s]*([^{\n\r]+)/i)
+    let brand = brandMatch ? brandMatch[1].trim() : ''
+
+    // Extract Barcode
+    const barcodeMatch = cleanDesc.match(/Barkod\s*[:\-\s]*(\d+)/i)
+    const barcode = barcodeMatch ? barcodeMatch[1].trim() : ''
+
+    // Extract Product Code if not in DB column
+    const codeMatch = cleanDesc.match(/Ürün Kodu\s*[:\-\s]*([^{\n\r]+)/i)
+    const productCode = codeMatch ? codeMatch[1].trim() : ''
+
+    return { brand, barcode, productCode }
+}
+
 export async function GET() {
     try {
         const db = await getDB()
@@ -45,37 +64,65 @@ export async function GET() {
             }
         }
 
-        // Fetch all active products with slug
+        // Fetch all active products
         const { results: products } = await db.prepare(
             `SELECT id, name, slug, description, price, original_price, stock, images, category, is_active, free_shipping, product_code 
              FROM products WHERE is_active = 1 AND stock > 0`
         ).all() as { results: Product[] }
 
-        // Build Akakce XML feed
+        // Build XML items
         const xmlItems = products.map(product => {
             const images = product.images ? JSON.parse(product.images) : []
-            const imageUrl = images[0] || ''
-            // Use slug-based URL for proper SEO
-            const productUrl = `${settings.site_url}/${product.slug}`
-            const inStock = product.stock > 0 ? 'var' : 'yok'
+            const mainImage = images[0] || ''
 
-            // Clean description - remove HTML
-            const cleanDescription = stripHtml(product.description || '', 2000)
+            // Clean URL (trim whitespace)
+            const productUrl = `${settings.site_url}/${product.slug}`.trim()
+
+            // Extract metadata from description
+            const extracted = extractFromDescription(product.description || '')
+
+            // Determine Brand: Extracted > First Word of Name > Default 'Onopo'
+            let brand = extracted.brand
+            if (!brand && product.name) {
+                const firstWord = product.name.split(' ')[0]
+                if (firstWord && firstWord.length > 2) brand = firstWord
+            }
+            if (!brand) brand = 'Onopo'
+
+            // Determine Barcode/GTIN
+            const barcode = extracted.barcode || '' // Leave empty if not found
+
+            // Determine SKU/Product Code
+            const sku = product.product_code || extracted.productCode || product.id.toString()
+
+            // Description cleaning
+            const cleanDescription = stripHtml(product.description || '', 5000)
+
+            // Price logic
+            const currentPrice = product.price.toFixed(2)
+            const oldPrice = (product.original_price && product.original_price > product.price)
+                ? product.original_price.toFixed(2)
+                : ''
 
             return `  <urun>
     <id>${product.id}</id>
+    <sku>${escapeCDATA(sku)}</sku>
+    <barkod>${escapeCDATA(barcode)}</barkod>
     <isim><![CDATA[${escapeCDATA(product.name)}]]></isim>
     <aciklama><![CDATA[${escapeCDATA(cleanDescription)}]]></aciklama>
-    <link>${productUrl}</link>
-    <resim>${imageUrl}</resim>
-    <fiyat>${product.price.toFixed(2)}</fiyat>
-    ${product.original_price && product.original_price > product.price ? `<eski_fiyat>${product.original_price.toFixed(2)}</eski_fiyat>` : ''}
-    <stok>${inStock}</stok>
-    <stok_adedi>${product.stock}</stok_adedi>
+    <marka><![CDATA[${escapeCDATA(brand)}]]></marka>
     <kategori><![CDATA[${escapeCDATA(product.category || 'Genel')}]]></kategori>
-    ${product.product_code ? `<urun_kodu>${escapeXml(product.product_code)}</urun_kodu>` : ''}
-    ${product.free_shipping ? '<kargo_ucretsiz>evet</kargo_ucretsiz>' : '<kargo_ucretsiz>hayir</kargo_ucretsiz>'}
-    <marka><![CDATA[${escapeCDATA(settings.site_name)}]]></marka>
+    <link>${productUrl}</link>
+    <resim>${mainImage.trim()}</resim>
+    <resimler>
+      ${images.map((img: string) => `<resim>${img.trim()}</resim>`).join('\n      ')}
+    </resimler>
+    <fiyat>${currentPrice}</fiyat>
+    ${oldPrice ? `<piyasa_fiyati>${oldPrice}</piyasa_fiyati>` : ''}
+    <para_birimi>TRY</para_birimi>
+    <stok>${product.stock}</stok>
+    <kargo_ucreti>${product.free_shipping ? '0' : '29.90'}</kargo_ucreti>
+    <durum>Yeni</durum>
   </urun>`
         }).join('\n')
 
