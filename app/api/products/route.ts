@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
             description,
             price,
             original_price,
+            price_usd,
             stock,
             images,
             category,
@@ -122,18 +123,19 @@ export async function POST(req: NextRequest) {
         console.log('Generated slug:', slug)
 
         try {
-            // INSERT with slug included
+            // INSERT with slug and price_usd included
             const result = await db.prepare(
                 `INSERT INTO products (
-                        name, slug, description, price, original_price, stock, images, category, 
+                        name, slug, description, price, original_price, price_usd, stock, images, category, 
                         is_active, product_code, whatsapp_order_enabled, whatsapp_number
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
             ).bind(
                 name,
                 slug,
                 description || '',
                 numericPrice,
                 original_price || null,
+                price_usd || null,
                 stock || 0,
                 JSON.stringify(images || []),
                 category || '',
