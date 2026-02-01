@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic'
 interface Product {
     id: number
     name: string
+    slug: string
     description: string
     price: number
     original_price: number | null
@@ -43,17 +44,18 @@ export async function GET() {
             }
         }
 
-        // Fetch all active products
+        // Fetch all active products with slug
         const { results: products } = await db.prepare(
-            `SELECT id, name, description, price, original_price, stock, images, category, is_active, free_shipping, product_code 
-             FROM products WHERE is_active = 1`
+            `SELECT id, name, slug, description, price, original_price, stock, images, category, is_active, free_shipping, product_code 
+             FROM products WHERE is_active = 1 AND stock > 0`
         ).all() as { results: Product[] }
 
         // Build Akakce XML feed
         const xmlItems = products.map(product => {
             const images = product.images ? JSON.parse(product.images) : []
             const imageUrl = images[0] || ''
-            const productUrl = `${settings.site_url}/products/${product.id}`
+            // Use slug-based URL for proper SEO
+            const productUrl = `${settings.site_url}/${product.slug}`
             const inStock = product.stock > 0 ? 'var' : 'yok'
 
             // Clean description - remove HTML

@@ -23,13 +23,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             priority: route === '' ? 1 : 0.8,
         }))
 
-        // 2. Products - use id since slug column doesn't exist
+        // 2. Products - use slug for SEO-friendly URLs
         const { results: products } = await db.prepare(
-            'SELECT id, updated_at FROM products WHERE is_active = 1'
+            'SELECT id, slug, updated_at FROM products WHERE is_active = 1 AND stock > 0'
         ).all() as { results: any[] }
 
         const productUrls = (products || []).map((product: any) => ({
-            url: `${baseUrl}/product/${product.id}`,
+            url: `${baseUrl}/${product.slug}`,
             lastModified: new Date(product.updated_at || Date.now()),
             changeFrequency: 'weekly' as const,
             priority: 0.8,
