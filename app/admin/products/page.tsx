@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Edit, Trash2, Plus, Upload, Trash, Loader2, Search } from 'lucide-react'
 import { formatPrice } from '@/lib/formatPrice'
@@ -10,17 +10,40 @@ import { toast } from 'sonner'
 
 export default function AdminProductsPage() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+
     const [products, setProducts] = React.useState<any[]>([])
     const [categories, setCategories] = React.useState<{ id: number, name: string }[]>([])
     const [loading, setLoading] = React.useState(true)
 
-    // Search and Filter state
-    const [searchQuery, setSearchQuery] = React.useState('')
-    const [selectedCategory, setSelectedCategory] = React.useState('')
+    // Parse URL params for initial state
+    const initialPage = Number(searchParams.get('page')) || 1
+    const initialSearch = searchParams.get('q') || ''
+    const initialCategory = searchParams.get('cat') || ''
+    const initialPageSize = Number(searchParams.get('size')) || 10
 
-    // Pagination state
-    const [currentPage, setCurrentPage] = React.useState(1)
-    const [pageSize, setPageSize] = React.useState(10)
+    // Local state (synced with URL via effects/actions)
+    const [searchQuery, setSearchQuery] = React.useState(initialSearch)
+    const [selectedCategory, setSelectedCategory] = React.useState(initialCategory)
+    const [currentPage, setCurrentPage] = React.useState(initialPage)
+    const [pageSize, setPageSize] = React.useState(initialPageSize)
+
+    // Update URL helper
+    const updateUrl = (updates: any) => {
+        const params = new URLSearchParams(searchParams.toString())
+        if (updates.page) params.set('page', updates.page.toString())
+        if (updates.q !== undefined) {
+            if (updates.q) params.set('q', updates.q)
+            else params.delete('q')
+        }
+        if (updates.cat !== undefined) {
+            if (updates.cat) params.set('cat', updates.cat)
+            else params.delete('cat')
+        }
+        if (updates.size) params.set('size', updates.size.toString())
+
+        router.replace(`/admin/products?${params.toString()}`, { scroll: false })
+    }
 
     React.useEffect(() => {
         Promise.all([
@@ -32,6 +55,30 @@ export default function AdminProductsPage() {
             setLoading(false)
         }).catch(() => setLoading(false))
     }, [])
+
+    // Sync state changes to URL
+    const handleSearchChange = (val: string) => {
+        setSearchQuery(val)
+        setCurrentPage(1)
+        updateUrl({ q: val, page: 1 })
+    }
+
+    const handleCategoryChange = (val: string) => {
+        setSelectedCategory(val)
+        setCurrentPage(1)
+        updateUrl({ cat: val, page: 1 })
+    }
+
+    const handlePageChange = (newPage: number) => {
+        setCurrentPage(newPage)
+        updateUrl({ page: newPage })
+    }
+
+    const handlePageSizeChange = (newSize: number) => {
+        setPageSize(newSize)
+        setCurrentPage(1)
+        updateUrl({ size: newSize, page: 1 })
+    }
 
     // Filtered products
     const filteredProducts = React.useMemo(() => {
@@ -53,11 +100,6 @@ export default function AdminProductsPage() {
     }, [filteredProducts, currentPage, pageSize])
 
     const totalPages = pageSize === 0 ? 1 : Math.ceil(filteredProducts.length / pageSize)
-
-    // Reset to page 1 when filters change
-    React.useEffect(() => {
-        setCurrentPage(1)
-    }, [searchQuery, selectedCategory, pageSize])
 
     const handleDelete = async (id: number) => {
         if (!confirm('Bu ürünü silmek istediğinize emin misiniz?')) return
@@ -198,6 +240,16 @@ export default function AdminProductsPage() {
 
     if (loading) return <div className="text-center py-8">Yükleniyor...</div>
 
+    // Prepare query string for edit page return
+    const getReturnQuery = () => {
+        const params = new URLSearchParams()
+        if (currentPage > 1) params.set('returnPage', currentPage.toString())
+        if (searchQuery) params.set('returnQ', searchQuery)
+        if (selectedCategory) params.set('returnCat', selectedCategory)
+        if (pageSize !== 10) params.set('returnSize', pageSize.toString())
+        return params.toString()
+    }
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
@@ -241,13 +293,13 @@ export default function AdminProductsPage() {
                         type="text"
                         placeholder="Ürün adı veya kodu ile ara..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => handleSearchChange(e.target.value)}
                         className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
                     />
                 </div>
                 <select
                     value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    onChange={(e) => handleCategoryChange(e.target.value)}
                     className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent min-w-[200px]"
                 >
                     <option value="">Tüm Kategoriler</option>
@@ -258,7 +310,7 @@ export default function AdminProductsPage() {
                 {(searchQuery || selectedCategory) && (
                     <Button
                         variant="ghost"
-                        onClick={() => { setSearchQuery(''); setSelectedCategory(''); }}
+                        onClick={() => { setSearchQuery(''); setSelectedCategory(''); updateUrl({ q: '', cat: '', page: 1 }); }}
                         className="text-slate-500"
                     >
                         Temizle
@@ -266,7 +318,7 @@ export default function AdminProductsPage() {
                 )}
                 <select
                     value={pageSize}
-                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    onChange={(e) => handlePageSizeChange(Number(e.target.value))}
                     className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
                 >
                     <option value={10}>10 / sayfa</option>
@@ -314,7 +366,10 @@ export default function AdminProductsPage() {
                                             variant="ghost"
                                             size="icon"
                                             className="h-8 w-8 text-slate-500 hover:text-blue-600"
-                                            onClick={() => router.push(`/admin/products/${product.id}/edit`)}
+                                            onClick={() => {
+                                                const q = getReturnQuery()
+                                                router.push(`/admin/products/${product.id}/edit${q ? '?' + q : ''}`)
+                                            }}
                                         >
                                             <Edit className="w-4 h-4" />
                                         </Button>
@@ -342,7 +397,7 @@ export default function AdminProductsPage() {
                 <div className="flex items-center justify-center gap-2 mt-4">
                     <Button
                         variant="outline"
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                         disabled={currentPage === 1}
                     >
                         Önceki
@@ -363,7 +418,7 @@ export default function AdminProductsPage() {
                                 <Button
                                     key={page}
                                     variant={currentPage === page ? undefined : 'outline'}
-                                    onClick={() => setCurrentPage(page)}
+                                    onClick={() => handlePageChange(page)}
                                     className="w-10"
                                 >
                                     {page}
@@ -373,7 +428,7 @@ export default function AdminProductsPage() {
                     </div>
                     <Button
                         variant="outline"
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                         disabled={currentPage === totalPages}
                     >
                         Sonraki

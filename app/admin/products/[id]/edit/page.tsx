@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Upload, Loader2, X, Plus, ArrowRight } from 'lucide-react'
 import { CurrencyInput } from '@/components/ui/currency-input'
@@ -9,7 +9,25 @@ import { CurrencyInput } from '@/components/ui/currency-input'
 export default function EditProductPage() {
     const router = useRouter()
     const params = useParams()
+    const searchParams = useSearchParams()
     const productId = params.id as string
+
+    // Return logic
+    const getReturnUrl = () => {
+        const query = new URLSearchParams()
+        const page = searchParams.get('returnPage')
+        const q = searchParams.get('returnQ')
+        const cat = searchParams.get('returnCat')
+        const size = searchParams.get('returnSize')
+
+        if (page) query.set('page', page)
+        if (q) query.set('q', q)
+        if (cat) query.set('cat', cat)
+        if (size) query.set('size', size)
+
+        const qs = query.toString()
+        return `/admin/products${qs ? '?' + qs : ''}`
+    }
 
     const [loading, setLoading] = React.useState(true)
     const [saving, setSaving] = React.useState(false)
@@ -149,7 +167,7 @@ export default function EditProductPage() {
             })
 
             if (!res.ok) throw new Error('Failed to update')
-            router.push('/admin')
+            router.push(getReturnUrl())
         } catch (error) {
             alert('Güncelleme hatası')
         } finally {
@@ -166,7 +184,7 @@ export default function EditProductPage() {
         try {
             const res = await fetch(`/api/products/${productId}`, { method: 'DELETE' })
             if (!res.ok) throw new Error('Failed to delete')
-            router.push('/admin')
+            router.push(getReturnUrl())
         } catch {
             alert('Silme hatası')
         } finally {
@@ -185,7 +203,7 @@ export default function EditProductPage() {
     return (
         <div className="max-w-2xl mx-auto">
             <div className="mb-6 flex items-center gap-4">
-                <Button variant="ghost" onClick={() => router.back()}>
+                <Button variant="ghost" onClick={() => router.push(getReturnUrl())}>
                     <ArrowLeft className="w-4 h-4 mr-2" /> Geri
                 </Button>
                 <h1 className="text-2xl font-bold">Ürünü Düzenle</h1>

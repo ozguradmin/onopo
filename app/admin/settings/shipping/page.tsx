@@ -16,22 +16,45 @@ export default function ShippingSettings() {
         shipping_cost: 100
     })
 
+    const logError = (msg: string, details?: any) => {
+        console.error(msg, details)
+        fetch('/api/admin/log', {
+            method: 'POST',
+            body: JSON.stringify({ message: msg, level: 'ERROR', details })
+        }).catch(() => { })
+    }
+
     useEffect(() => {
         let mounted = true
         fetch('/api/shipping-settings')
-            .then(res => res.json())
+            .then(async res => {
+                if (!res.ok) {
+                    const txt = await res.text()
+                    throw new Error(`API Error: ${res.status} ${txt}`)
+                }
+                return res.json()
+            })
             .then(data => {
                 if (!mounted) return
                 if (data && !data.error) {
-                    setSettings({
-                        free_shipping_threshold: data.free_shipping_threshold ? parseFloat(data.free_shipping_threshold) : 500,
-                        shipping_cost: data.shipping_cost ? parseFloat(data.shipping_cost) : 100
-                    })
+                    try {
+                        setSettings({
+                            free_shipping_threshold: data.free_shipping_threshold ? parseFloat(data.free_shipping_threshold) : 500,
+                            shipping_cost: data.shipping_cost ? parseFloat(data.shipping_cost) : 100
+                        })
+                    } catch (e: any) {
+                        logError('Parsing error', { error: e.toString(), data })
+                    }
+                } else {
+                    if (data?.error) logError('Data error', data)
                 }
                 setLoading(false)
             })
-            .catch(() => {
-                if (mounted) setLoading(false)
+            .catch((err) => {
+                if (mounted) {
+                    logError('Fetch error', { error: err.toString() })
+                    setLoading(false)
+                }
             })
         return () => { mounted = false }
     }, [])
@@ -50,7 +73,8 @@ export default function ShippingSettings() {
             toast.success("Başarılı", {
                 description: "Kargo ayarları güncellendi.",
             })
-        } catch (error) {
+        } catch (error: any) {
+            logError('Save error', { error: error.toString() })
             toast.error("Hata", {
                 description: "Ayarlar kaydedilirken bir hata oluştu.",
             })
