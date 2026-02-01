@@ -10,10 +10,23 @@ import { ArrowLeft, ShoppingBag, Check, Truck, CreditCard, User, Mail, Phone, Ma
 
 export default function CheckoutPage() {
     const router = useRouter()
-    const { items, totalPrice, clearCart, coupon, applyCoupon, removeCoupon } = useCartStore()
+    const { items, totalPrice, clearCart, coupon, applyCoupon, removeCoupon, fetchShippingSettings, getShippingCost } = useCartStore()
+    const [hydrated, setHydrated] = React.useState(false)
     const [loading, setLoading] = React.useState(false)
     const [error, setError] = React.useState('')
     const [orderComplete, setOrderComplete] = React.useState(false)
+
+    // Calculate totals safe for render
+    // Use hydration check to avoid hydration mismatch
+    const subtotal = hydrated ? totalPrice() : 0
+    const shippingCost = hydrated ? getShippingCost() : 0
+    const finalTotal = subtotal + shippingCost
+
+    React.useEffect(() => {
+        useCartStore.persist.rehydrate()
+        setHydrated(true)
+        fetchShippingSettings()
+    }, [])
     const [orderId, setOrderId] = React.useState<number | null>(null)
     const [user, setUser] = React.useState<any>(null)
 
@@ -591,7 +604,7 @@ export default function CheckoutPage() {
                                 disabled={loading}
                                 className="w-full h-14 text-lg bg-slate-900 text-white hover:bg-slate-800 rounded-xl"
                             >
-                                {loading ? 'İşleniyor...' : `Siparişi Tamamla - ${formatPrice(totalPrice())}`}
+                                {loading ? 'İşleniyor...' : `Siparişi Tamamla - ${formatPrice(finalTotal)}`}
                             </Button>
                         </form>
                     </div>
@@ -665,11 +678,15 @@ export default function CheckoutPage() {
                             <div className="space-y-2">
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-500">Ara Toplam</span>
-                                    <span className="text-slate-900">{formatPrice(calculateSubtotal())}</span>
+                                    <span className="text-slate-900">{formatPrice(subtotal)}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-500">Kargo</span>
-                                    <span className="text-green-600">Ücretsiz</span>
+                                    {shippingCost === 0 ? (
+                                        <span className="text-green-600">Ücretsiz</span>
+                                    ) : (
+                                        <span className="text-slate-900">{formatPrice(shippingCost)}</span>
+                                    )}
                                 </div>
                                 {coupon && (
                                     <div className="flex justify-between text-sm text-green-600">

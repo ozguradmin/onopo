@@ -21,7 +21,8 @@ import {
     CreditCard,
     Image as ImageIcon,
     Share2,
-    Mail
+    Mail,
+    Truck
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -33,6 +34,7 @@ const navItems = [
     { href: '/admin/orders', label: 'Siparişler', icon: ShoppingCart },
     { href: '/admin/analytics', label: 'İstatistikler', icon: BarChart3 },
     { href: '/admin/settings/payment', label: 'Ödeme Ayarları', icon: CreditCard },
+    { href: '/admin/settings/shipping', label: 'Kargo Ayarları', icon: Truck },
     { href: '/admin/settings/integrations', label: 'Entegrasyonlar', icon: Share2 },
     { href: '/admin/pages', label: 'Sayfalar', icon: FileText },
     { href: '/admin/header', label: 'Menü Yönetimi', icon: Menu },

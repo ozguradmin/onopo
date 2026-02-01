@@ -48,39 +48,64 @@ export async function GET() {
             }
         }
 
+        // Fetch shipping settings
+        const shippingSettings = await db.prepare(
+            `SELECT free_shipping_threshold, shipping_cost FROM shipping_settings LIMIT 1`
+        ).first()
+
+        const freeThreshold = shippingSettings ? parseFloat(shippingSettings.free_shipping_threshold) : 500.00
+        const shippingCost = shippingSettings ? parseFloat(shippingSettings.shipping_cost) : 100.00
+
+        // Determine currency
+        let currency = 'TRY'
+        if (settingsResults.results) {
+            const currencySetting = (settingsResults.results as any[]).find(r => r.key === 'currency')
+            if (currencySetting) currency = currencySetting.value
+        }
+
         // Fetch all active products with slug
         const { results: products } = await db.prepare(
             `SELECT id, name, slug, description, price, original_price, stock, images, category, is_active, free_shipping, product_code 
              FROM products WHERE is_active = 1 AND stock > 0`
         ).all() as { results: Product[] }
 
-        // Build Google Merchant XML feed
-        const xmlItems = products.map(product => {
+        // Build XML items
+        const xmlItems = products.map((product: any) => {
             const images = product.images ? JSON.parse(product.images) : []
             const imageUrl = images[0] || ''
-            const availability = product.stock > 0 ? 'in_stock' : 'out_of_stock'
-            const condition = 'new'
-            // Use slug-based URL for proper SEO
             const productUrl = `${settings.site_url}/${product.slug}`
+            const availability = product.stock > 0 ? 'in_stock' : 'out_of_stock'
 
-            // Clean description - remove HTML and limit length
+            // Clean description
             const cleanDescription = stripHtml(product.description || '', 5000)
 
-            return `    <item>
-      <g:id>${product.id}</g:id>
-      <g:title><![CDATA[${escapeCDATA(product.name)}]]></g:title>
-      <g:description><![CDATA[${escapeCDATA(cleanDescription)}]]></g:description>
-      <g:link>${productUrl}</g:link>
-      <g:image_link>${imageUrl}</g:image_link>
-      <g:availability>${availability}</g:availability>
-      <g:price>${product.price.toFixed(2)} ${settings.currency}</g:price>
-      ${product.original_price && product.original_price > product.price ? `<g:sale_price>${product.price.toFixed(2)} ${settings.currency}</g:sale_price>` : ''}
-      <g:condition>${condition}</g:condition>
-      <g:brand><![CDATA[${escapeCDATA(settings.site_name)}]]></g:brand>
-      <g:product_type><![CDATA[${escapeCDATA(product.category || 'Genel')}]]></g:product_type>
-      ${product.product_code ? `<g:mpn>${escapeXml(product.product_code)}</g:mpn>` : ''}
-      ${product.free_shipping ? '<g:shipping><g:price>0 TRY</g:price></g:shipping>' : ''}
-    </item>`
+            // Shipping Logic
+            let shippingPriceValue = 0
+            if (!product.free_shipping) {
+                if (product.price < freeThreshold) {
+                    shippingPriceValue = shippingCost
+                }
+            }
+
+            return `  <item>
+    <g:id>${product.id}</g:id>
+    <g:title><![CDATA[${escapeCDATA(product.name)}]]></g:title>
+    <g:description><![CDATA[${escapeCDATA(cleanDescription)}]]></g:description>
+    <g:link>${productUrl}</g:link>
+    <g:image_link>${imageUrl}</g:image_link>
+    <g:brand><![CDATA[${escapeCDATA(settings.site_name)}]]></g:brand>
+    <g:condition>new</g:condition>
+    <g:availability>${availability}</g:availability>
+    <g:price>${product.price.toFixed(2)} ${currency}</g:price>
+    <g:shipping>
+      <g:country>TR</g:country>
+      <g:service>Standard</g:service>
+      <g:price>${shippingPriceValue.toFixed(2)} ${currency}</g:price>
+    </g:shipping>
+    ${product.original_price && product.original_price > product.price ? `<g:sale_price>${product.price.toFixed(2)} ${currency}</g:sale_price>` : ''}
+    ${product.product_code ? `<g:mpn>${escapeXml(product.product_code)}</g:mpn>` : ''}
+    <g:google_product_category>1</g:google_product_category>
+  </item>`
         }).join('\n')
 
         const xml = `<?xml version="1.0" encoding="UTF-8"?>

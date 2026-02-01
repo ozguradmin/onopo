@@ -31,13 +31,28 @@ export async function GET() {
              FROM products ORDER BY id DESC`
         ).all() as { results: Product[] }
 
+        // Fetch shipping settings
+        const shippingSettings = await db.prepare(
+            `SELECT free_shipping_threshold, shipping_cost FROM shipping_settings LIMIT 1`
+        ).first()
+
+        const freeThreshold = shippingSettings ? parseFloat(shippingSettings.free_shipping_threshold) : 500.00
+        const baseShippingCost = shippingSettings ? parseFloat(shippingSettings.shipping_cost) : 100.00
+
         // Prepare data for Excel
-        const data = products.map(product => {
+        const data = products.map((product: any) => {
             const images = product.images ? JSON.parse(product.images) : []
             const imageUrl = images[0] || ''
 
             // Clean description
-            const cleanDescription = stripHtml(product.description || '', 30000) // Excel supports long text, 32k limit
+            const cleanDescription = stripHtml(product.description || '', 30000)
+
+            let shippingPriceValue = 0
+            if (!product.free_shipping) {
+                if (product.price < freeThreshold) {
+                    shippingPriceValue = baseShippingCost
+                }
+            }
 
             return {
                 'ID': product.id,
@@ -49,6 +64,7 @@ export async function GET() {
                 'Kategori': product.category || '',
                 'Ürün Kodu': product.product_code || '',
                 'Ücretsiz Kargo': product.free_shipping ? 'Evet' : 'Hayır',
+                'Kargo Ücreti': shippingPriceValue.toFixed(2),
                 'Aktif': product.is_active ? 'Evet' : 'Hayır',
                 'Görsel URL': imageUrl,
                 'Oluşturma Tarihi': product.created_at || ''

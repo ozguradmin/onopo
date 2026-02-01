@@ -71,6 +71,14 @@ export async function GET() {
              FROM products WHERE is_active = 1 AND stock > 0`
         ).all() as { results: Product[] }
 
+        // Fetch shipping settings
+        const shippingSettings = await db.prepare(
+            `SELECT free_shipping_threshold, shipping_cost FROM shipping_settings LIMIT 1`
+        ).first()
+
+        const freeThreshold = shippingSettings ? parseFloat(shippingSettings.free_shipping_threshold) : 500.00
+        const shippingCost = shippingSettings ? parseFloat(shippingSettings.shipping_cost) : 100.00
+
         // Build XML items
         const xmlItems = products.map(product => {
             const images = product.images ? JSON.parse(product.images) : []
@@ -91,7 +99,11 @@ export async function GET() {
             if (!brand) brand = 'Onopo'
 
             // Determine Barcode/GTIN
-            const barcode = extracted.barcode || '' // Leave empty if not found
+            let barcode = extracted.barcode || '' // Leave empty if not found
+            // Clean concatenated text from barcode if any remains (e.g. HT250715A001HLDesi0 -> HT250715A001HL)
+            if (barcode && barcode.includes('Desi')) {
+                barcode = barcode.split('Desi')[0]
+            }
 
             // Determine SKU/Product Code
             const sku = product.product_code || extracted.productCode || product.id.toString()
@@ -104,6 +116,16 @@ export async function GET() {
             const oldPrice = (product.original_price && product.original_price > product.price)
                 ? product.original_price.toFixed(2)
                 : ''
+
+            // Shipping Logic
+            let shippingFee = '0'
+            if (!product.free_shipping) {
+                if (product.price >= freeThreshold) {
+                    shippingFee = '0'
+                } else {
+                    shippingFee = shippingCost.toFixed(2)
+                }
+            }
 
             return `  <urun>
     <id>${product.id}</id>
@@ -122,7 +144,7 @@ export async function GET() {
     ${oldPrice ? `<piyasa_fiyati>${oldPrice}</piyasa_fiyati>` : ''}
     <para_birimi>TRY</para_birimi>
     <stok>${product.stock}</stok>
-    <kargo_ucreti>${product.free_shipping ? '0' : '29.90'}</kargo_ucreti>
+    <kargo_ucreti>${shippingFee}</kargo_ucreti>
     <durum>Yeni</durum>
   </urun>`
         }).join('\n')

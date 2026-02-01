@@ -29,6 +29,14 @@ export async function GET() {
              FROM products ORDER BY id DESC`
         ).all() as { results: Product[] }
 
+        // Fetch shipping settings
+        const shippingSettings = await db.prepare(
+            `SELECT free_shipping_threshold, shipping_cost FROM shipping_settings LIMIT 1`
+        ).first()
+
+        const freeThreshold = shippingSettings ? parseFloat(shippingSettings.free_shipping_threshold) : 500.00
+        const baseShippingCost = shippingSettings ? parseFloat(shippingSettings.shipping_cost) : 100.00
+
         // CSV Header
         const headers = [
             'ID',
@@ -42,7 +50,8 @@ export async function GET() {
             'Ücretsiz Kargo',
             'Aktif',
             'Görsel URL',
-            'Oluşturma Tarihi'
+            'Oluşturma Tarihi',
+            'Kargo Ücreti' // Added Kargo Ücreti header
         ]
 
         // CSV Rows
@@ -53,6 +62,13 @@ export async function GET() {
             // Clean description for CSV
             const cleanDescription = stripHtml(product.description || '', 10000)
                 .replace(/"/g, '""') // Escape quotes for CSV
+
+            let calculatedShippingCost = 0;
+            if (!product.free_shipping) {
+                if (product.price < freeThreshold) {
+                    calculatedShippingCost = baseShippingCost;
+                }
+            }
 
             return [
                 product.id,
@@ -66,7 +82,8 @@ export async function GET() {
                 product.free_shipping ? 'Evet' : 'Hayır',
                 product.is_active ? 'Evet' : 'Hayır',
                 imageUrl,
-                product.created_at || ''
+                product.created_at || '',
+                calculatedShippingCost.toFixed(2) // Added calculated shipping cost
             ].join(',')
         })
 
