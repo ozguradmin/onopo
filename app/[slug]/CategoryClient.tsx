@@ -215,6 +215,12 @@ export default function CategoryClient({ slug }: { slug: string }) {
                                         src={product.images && product.images.length > 0 ? product.images[0] : product.image}
                                         alt={product.name}
                                         className="object-cover w-full h-full transform group-hover:scale-105 transition-transform duration-500"
+                                        loading="lazy"
+                                        onError={(e) => {
+                                            const target = e.currentTarget
+                                            target.onerror = null
+                                            target.src = '/placeholder.svg'
+                                        }}
                                     />
                                     {product.original_price > product.price && (
                                         <div className="absolute top-2 left-2 z-10">
