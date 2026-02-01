@@ -5,8 +5,8 @@
 export function stripHtml(html: string | null | undefined, maxLength: number = 160): string {
     if (!html) return ''
 
-    // Remove HTML tags
-    let text = html.replace(/<[^>]*>?/gm, '')
+    // Remove HTML tags - replacing with space to prevent word concatenation (e.g. </h1>next)
+    let text = html.replace(/<[^>]*>?/gm, ' ')
 
     // Decode common HTML entities
     text = text
@@ -28,6 +28,9 @@ export function stripHtml(html: string | null | undefined, maxLength: number = 1
 
     // Normalize whitespace (multiple spaces/newlines to single space)
     text = text.replace(/\s+/g, ' ').trim()
+
+    // Remove redundant "Ürün Açıklaması" prefix if present
+    text = text.replace(/^Ürün Açıklaması\s*/i, '')
 
     // Truncate to max length (for SEO - Google typically shows ~155-160 chars)
     if (text.length > maxLength) {
