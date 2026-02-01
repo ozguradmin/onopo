@@ -1,5 +1,6 @@
 // Akakçe Product Feed - XML Format
 import { getDB } from '@/lib/db'
+import { stripHtml } from '@/lib/stripHtml'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,12 +60,7 @@ export async function GET() {
             const inStock = product.stock > 0 ? 'var' : 'yok'
 
             // Clean description - remove HTML
-            const cleanDescription = (product.description || '')
-                .replace(/<[^>]*>/g, '')
-                .replace(/&nbsp;/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim()
-                .substring(0, 2000)
+            const cleanDescription = stripHtml(product.description || '', 2000)
 
             return `  <urun>
     <id>${product.id}</id>

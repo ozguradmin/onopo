@@ -1,5 +1,6 @@
 // CSV Product Export
 import { getDB } from '@/lib/db'
+import { stripHtml } from '@/lib/stripHtml'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,12 +51,8 @@ export async function GET() {
             const imageUrl = images[0] || ''
 
             // Clean description for CSV
-            const cleanDescription = (product.description || '')
-                .replace(/<[^>]*>/g, '')
-                .replace(/&nbsp;/g, ' ')
-                .replace(/\s+/g, ' ')
+            const cleanDescription = stripHtml(product.description || '', 10000)
                 .replace(/"/g, '""') // Escape quotes for CSV
-                .trim()
 
             return [
                 product.id,

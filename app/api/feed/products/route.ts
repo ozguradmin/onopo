@@ -1,5 +1,6 @@
 import { getDB } from '@/lib/db'
 import { NextResponse } from 'next/server'
+import { stripHtml } from '@/lib/stripHtml'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,10 +27,7 @@ export async function GET() {
                 : `${baseUrl}/placeholder.svg`
 
             // Clean description
-            const cleanDescription = (product.description || product.name)
-                .replace(/<[^>]*>/g, '')
-                .replace(/&nbsp;/g, ' ')
-                .substring(0, 5000)
+            const cleanDescription = stripHtml(product.description || product.name, 5000)
 
             return `
         <item>

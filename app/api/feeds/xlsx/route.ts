@@ -1,7 +1,8 @@
 // XLSX Product Export
-import { NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'// Product Export to Excel (XLSX)
 import { getDB } from '@/lib/db'
 import * as XLSX from 'xlsx'
+import { stripHtml } from '@/lib/stripHtml'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,11 +37,7 @@ export async function GET() {
             const imageUrl = images[0] || ''
 
             // Clean description
-            const cleanDescription = (product.description || '')
-                .replace(/<[^>]*>/g, '')
-                .replace(/&nbsp;/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim()
+            const cleanDescription = stripHtml(product.description || '', 30000) // Excel supports long text, 32k limit
 
             return {
                 'ID': product.id,

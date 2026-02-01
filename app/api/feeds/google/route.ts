@@ -1,5 +1,6 @@
 // Google Merchant Center Product Feed - RSS 2.0 / Atom XML Format
 import { getDB } from '@/lib/db'
+import { stripHtml } from '@/lib/stripHtml'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,12 +64,7 @@ export async function GET() {
             const productUrl = `${settings.site_url}/${product.slug}`
 
             // Clean description - remove HTML and limit length
-            const cleanDescription = (product.description || '')
-                .replace(/<[^>]*>/g, '')
-                .replace(/&nbsp;/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim()
-                .substring(0, 5000)
+            const cleanDescription = stripHtml(product.description || '', 5000)
 
             return `    <item>
       <g:id>${product.id}</g:id>
