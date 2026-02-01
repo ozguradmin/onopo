@@ -17,18 +17,23 @@ export default function ShippingSettings() {
     })
 
     useEffect(() => {
+        let mounted = true
         fetch('/api/shipping-settings')
             .then(res => res.json())
             .then(data => {
+                if (!mounted) return
                 if (data && !data.error) {
                     setSettings({
-                        free_shipping_threshold: parseFloat(data.free_shipping_threshold),
-                        shipping_cost: parseFloat(data.shipping_cost)
+                        free_shipping_threshold: data.free_shipping_threshold ? parseFloat(data.free_shipping_threshold) : 500,
+                        shipping_cost: data.shipping_cost ? parseFloat(data.shipping_cost) : 100
                     })
                 }
                 setLoading(false)
             })
-            .catch(() => setLoading(false))
+            .catch(() => {
+                if (mounted) setLoading(false)
+            })
+        return () => { mounted = false }
     }, [])
 
     const handleSave = async () => {

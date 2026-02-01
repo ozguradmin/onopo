@@ -30,8 +30,8 @@ export default function CheckoutPage() {
     const [orderId, setOrderId] = React.useState<number | null>(null)
     const [user, setUser] = React.useState<any>(null)
 
-    // Payment settings
-    const [paymentSettings, setPaymentSettings] = React.useState<any>(null)
+    // Payment settings - Default to active/offline to prevent flash of "not active"
+    const [paymentSettings, setPaymentSettings] = React.useState<any>({ is_active: true, provider: 'offline' })
     const [paymentMethod, setPaymentMethod] = React.useState<'card' | 'transfer'>('card')
 
     // Coupon State
