@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
+import { Label } from "@/components/ui/label_new"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { Save, Truck } from 'lucide-react'
