@@ -17,7 +17,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://onopo.com'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'),
   title: {
     default: "Onopo Store | Teknoloji ve Yaşam",
     template: "%s | Onopo Store"
@@ -66,7 +66,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopo.com'
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'
 
   // Organization structured data for SEO
   const organizationSchema = {

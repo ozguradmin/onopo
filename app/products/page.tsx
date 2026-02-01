@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<{ category?: string; q?: string }> }): Promise<Metadata> {
     const params = await searchParams
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopo.com'
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'
 
     let title = 'Tüm Ürünler'
     let description = 'Onopo Store\'da en yeni teknoloji ürünleri, aksesuarlar ve yaşam ürünlerini keşfedin. Uygun fiyatlar, hızlı kargo.'

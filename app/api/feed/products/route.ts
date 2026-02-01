@@ -13,7 +13,7 @@ export async function GET() {
             WHERE is_active = 1 AND stock > 0
         `).all() as { results: any[] }
 
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopo-app.ozgurglr256.workers.dev'
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'
 
         const xmlItems = (results || []).map((product: any) => {
             let images: string[] = []

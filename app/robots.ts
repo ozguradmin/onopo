@@ -23,12 +23,17 @@ export default function robots(): MetadataRoute.Robots {
                 userAgent: 'Googlebot',
                 allow: [
                     '/',
-                    '/api/feed/products',  // Allow Google to access product feed
+                    '/api/feeds/google',  // Allow Google to access product feed
                 ],
                 disallow: [
                     '/admin/',
+                    '/api/',
                     '/checkout/',
                     '/odeme/',
+                    '/private/',
+                    '/_next/',
+                    '/login',
+                    '/register',
                 ],
             },
             {
@@ -37,6 +42,5 @@ export default function robots(): MetadataRoute.Robots {
             },
         ],
         sitemap: `${baseUrl}/sitemap.xml`,
-        host: baseUrl,
     }
 }

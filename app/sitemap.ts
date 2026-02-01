@@ -10,12 +10,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     try {
         const db = await getDB()
 
-        // 1. Static Routes
+        // 1. Static Routes (SEO-valuable pages only, no login/register)
         const routes = [
             '',
             '/products',
-            '/login',
-            '/register',
         ].map((route) => ({
             url: `${baseUrl}${route}`,
             lastModified: new Date(),

@@ -54,7 +54,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
         },
         offers: {
             '@type': 'Offer',
-            url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://onopo.com'}/product/${product.id}`,
+            url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'}/product/${product.id}`,
             priceCurrency: 'TRY',
             price: price,
             priceValidUntil: '2027-12-31',
