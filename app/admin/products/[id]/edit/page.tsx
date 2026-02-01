@@ -23,6 +23,7 @@ export default function EditProductPage() {
         description: '',
         price: '',
         original_price: '',
+        price_usd: '',
         stock: '10',
         category: '',
         images: [] as string[],
@@ -36,18 +37,22 @@ export default function EditProductPage() {
         free_shipping: false
     })
 
+    const [exchangeRate, setExchangeRate] = React.useState<number>(0)
+
     // Fetch product and categories
     React.useEffect(() => {
         Promise.all([
             fetch(`/api/products/${productId}`).then(r => r.json()),
-            fetch('/api/categories').then(r => r.json())
-        ]).then(([product, cats]) => {
+            fetch('/api/categories').then(r => r.json()),
+            fetch('https://api.exchangerate-api.com/v4/latest/USD').then(r => r.json()).catch(() => ({ rates: { TRY: 0 } }))
+        ]).then(([product, cats, rateData]) => {
             if (product && !product.error) {
                 setFormData({
                     name: product.name || '',
                     description: product.description || '',
                     price: product.price?.toString() || '',
                     original_price: product.original_price?.toString() || '',
+                    price_usd: product.price_usd?.toString() || '',
                     stock: product.stock?.toString() || '10',
                     category: product.category || '',
                     images: product.images || (product.image ? [product.image] : []),
@@ -62,6 +67,7 @@ export default function EditProductPage() {
                 })
             }
             setCategories(cats || [])
+            if (rateData?.rates?.TRY) setExchangeRate(rateData.rates.TRY)
             setLoading(false)
         }).catch(() => setLoading(false))
     }, [productId])
@@ -131,6 +137,7 @@ export default function EditProductPage() {
                     ...formData,
                     price: parseFloat(formData.price),
                     original_price: formData.original_price ? parseFloat(formData.original_price) : null,
+                    price_usd: formData.price_usd ? parseFloat(formData.price_usd) : null,
                     stock: parseInt(formData.stock),
                     is_active: formData.is_active ? 1 : 0,
                     product_code: formData.product_code,
@@ -205,16 +212,69 @@ export default function EditProductPage() {
                     />
                 </div>
 
+                {/* USD Price Section */}
+                <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <label className="text-sm font-medium text-emerald-900 block flex items-center gap-2">
+                                <span className="text-lg">$</span>
+                                Dolar Bazlı Fiyat
+                            </label>
+                            <p className="text-xs text-emerald-700">
+                                USD fiyatı girilirse, TL fiyatı her gün saat 10:00'da güncel kurla otomatik güncellenir
+                            </p>
+                        </div>
+                        {exchangeRate > 0 && (
+                            <div className="text-right">
+                                <p className="text-xs text-emerald-600">Güncel Kur</p>
+                                <p className="text-sm font-bold text-emerald-900">1$ = ₺{exchangeRate.toFixed(2)}</p>
+                            </div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1 text-emerald-800">USD Fiyat</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-2.5 text-emerald-600 font-bold">$</span>
+                                <CurrencyInput
+                                    name="price_usd"
+                                    value={formData.price_usd}
+                                    onChange={(val) => {
+                                        setFormData(prev => ({ ...prev, price_usd: val }))
+                                        // Auto-calculate TL price if exchange rate available
+                                        if (val && exchangeRate > 0) {
+                                            const usdValue = parseFloat(val.replace(',', '.')) || 0
+                                            const tlValue = (usdValue * exchangeRate).toFixed(2)
+                                            setFormData(prev => ({ ...prev, price_usd: val, price: tlValue.replace('.', ',') }))
+                                        }
+                                    }}
+                                    className="w-full pl-8 p-2 border border-emerald-300 rounded-lg bg-white focus:ring-emerald-500"
+                                    placeholder="0.00"
+                                />
+                            </div>
+                        </div>
+                        {formData.price_usd && exchangeRate > 0 && (
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-emerald-800">Hesaplanan TL</label>
+                                <div className="p-2 bg-emerald-100 rounded-lg text-emerald-900 font-bold">
+                                    ₺{((parseFloat(formData.price_usd.replace(',', '.')) || 0) * exchangeRate).toFixed(2)}
+                                </div>
+                                <p className="text-xs text-emerald-600 mt-1">Otomatik güncellenecek</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-3 gap-4">
                     <div>
-                        <label className="block text-sm font-medium mb-1">Fiyat (₺)</label>
+                        <label className="block text-sm font-medium mb-1">Fiyat (₺) {formData.price_usd && <span className="text-xs text-emerald-600">(USD'den)</span>}</label>
                         <div className="relative">
                             <span className="absolute left-3 top-2.5 text-slate-500">₺</span>
                             <CurrencyInput
                                 name="price"
                                 value={formData.price}
                                 onChange={(val) => setFormData(prev => ({ ...prev, price: val }))}
-                                className="w-full pl-12 p-2 border rounded-lg"
+                                className={`w-full pl-12 p-2 border rounded-lg ${formData.price_usd ? 'bg-slate-50' : ''}`}
                                 placeholder="0,00"
                                 required
                             />

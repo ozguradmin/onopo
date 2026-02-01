@@ -47,6 +47,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             description,
             price,
             original_price,
+            price_usd,
             stock,
             images,
             category,
@@ -59,6 +60,11 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             whatsapp_number,
             free_shipping
         } = body
+
+        // Handle USD price - if provided, it takes priority
+        const safePriceUsd = price_usd !== undefined && price_usd !== null && price_usd !== ''
+            ? parseFloat(price_usd)
+            : null
 
         // Prepare values with safe defaults and type conversions
         const safePrice = parseFloat(price) || 0
@@ -92,7 +98,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         try {
             await db.prepare(
                 `UPDATE products SET 
-                 name = ?, description = ?, price = ?, original_price = ?, stock = ?, 
+                 name = ?, description = ?, price = ?, original_price = ?, price_usd = ?, stock = ?, 
                  images = ?, category = ?, warranty_info = ?, delivery_info = ?, installment_info = ?, is_active = ?,
                  product_code = ?, whatsapp_order_enabled = ?, whatsapp_number = ?, free_shipping = ?,
                  updated_at = CURRENT_TIMESTAMP
@@ -102,6 +108,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
                 description || '',
                 safePrice,
                 safeOriginalPrice,
+                safePriceUsd,
                 safeStock,
                 safeImages,
                 category || '',

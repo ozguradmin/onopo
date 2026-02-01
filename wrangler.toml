@@ -34,4 +34,7 @@ RESEND_API_KEY = "re_Vjx37rki_JFp5zCq3mcuj2HwW6jDqYDA9"
 [observability]
 enabled = true
 
+# Cron Triggers - Daily price update at 10:00 AM Turkey time (UTC+3 = 07:00 UTC)
+[triggers]
+crons = ["0 7 * * *"]
 
