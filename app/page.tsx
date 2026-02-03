@@ -48,16 +48,17 @@ export default function Home() {
       })
   }, [])
 
-  // Helper to filter products
-  const getProductsForSection = React.useCallback((configString: string, shuffle: boolean = false) => {
+  // Helper to filter products - config is already an object from API
+  const getProductsForSection = React.useCallback((config: any, shuffle: boolean = false) => {
     try {
-      const config = JSON.parse(configString || '{}')
+      // Config is already an object, no need to parse
+      const cfg = config || {}
       let filtered = [...products]
 
-      if (config.selection_type === 'category' && config.category) {
-        filtered = filtered.filter(p => p.category && p.category.toLowerCase() === config.category.toLowerCase())
-      } else if (config.selection_type === 'manual' && config.product_ids && config.product_ids.length > 0) {
-        filtered = filtered.filter(p => config.product_ids.includes(p.id))
+      if (cfg.selection_type === 'category' && cfg.category) {
+        filtered = filtered.filter(p => p.category && p.category.toLowerCase() === cfg.category.toLowerCase())
+      } else if (cfg.selection_type === 'manual' && cfg.product_ids && cfg.product_ids.length > 0) {
+        filtered = filtered.filter(p => cfg.product_ids.includes(p.id))
       }
 
       if (shuffle) {
@@ -67,7 +68,7 @@ export default function Home() {
         }
       }
 
-      return filtered.slice(0, config.limit || 8)
+      return filtered.slice(0, cfg.limit || 8)
     } catch {
       return []
     }
@@ -89,7 +90,8 @@ export default function Home() {
       )}
 
       {sections && sections.map((section: any, index: number) => {
-        const config = JSON.parse(section.config || '{}')
+        // Config is already parsed by the API
+        const config = section.config || {}
         const isLast = index === sections.length - 1
 
         let content = null
@@ -97,7 +99,7 @@ export default function Home() {
         if (section.type === 'hero') {
           content = <HeroSection key={section.id} />
         } else if (section.type === 'new_products') {
-          const sectionProducts = getProductsForSection(section.config, false)
+          const sectionProducts = getProductsForSection(config, false)
           content = (
             <ProductShowcase
               key={section.id}
@@ -108,7 +110,7 @@ export default function Home() {
             />
           )
         } else if (section.type === 'products') {
-          const sectionProducts = getProductsForSection(section.config, true)
+          const sectionProducts = getProductsForSection(config, true)
           content = (
             <ProductShowcase
               key={section.id}
