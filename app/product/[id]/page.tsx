@@ -1,120 +1,67 @@
+"use client"
 
-// ProductClient imported below
-
-
-
+import { useEffect, useState } from "react"
+import { useParams } from "next/navigation"
 import ProductClient from "./ProductClient"
-import { getDB } from "@/lib/db"
-import { Metadata } from "next"
-import { stripHtml } from "@/lib/stripHtml"
 
-// Dynamic Metadata for SEO
-export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
-    const params = await props.params
-    const db = await getDB()
-    const product = await db.prepare('SELECT * FROM products WHERE id = ?').bind(params.id).first() as any
-
-    if (!product) {
-        return { title: 'Ürün Bulunamadı' }
-    }
-
-    const images = JSON.parse(product.images || '[]')
-    const mainImage = images[0] || '/placeholder.svg'
-    const cleanDescription = stripHtml(product.description || 'Ürün detayları')
-
-    return {
-        title: product.name,
-        description: cleanDescription,
-        openGraph: {
-            images: [mainImage],
-        }
-    }
+// Loading skeleton
+function ProductSkeleton() {
+    return (
+        <div className="min-h-screen bg-slate-50 pt-32 animate-pulse">
+            <div className="container mx-auto px-4">
+                <div className="grid md:grid-cols-2 gap-8">
+                    {/* Image skeleton */}
+                    <div className="aspect-square bg-slate-200 rounded-2xl" />
+                    {/* Info skeleton */}
+                    <div className="space-y-4">
+                        <div className="h-8 bg-slate-200 rounded w-3/4" />
+                        <div className="h-6 bg-slate-200 rounded w-1/2" />
+                        <div className="h-10 bg-slate-200 rounded w-1/3" />
+                        <div className="h-32 bg-slate-100 rounded" />
+                        <div className="h-12 bg-slate-300 rounded-full w-full" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
 }
 
-export default async function Page(props: { params: Promise<{ id: string }> }) {
-    const params = await props.params
-    const db = await getDB()
-    const product = await db.prepare('SELECT * FROM products WHERE id = ?').bind(params.id).first() as any
+export default function Page() {
+    const params = useParams()
+    const id = params?.id as string
 
-    if (!product) return <ProductClient id={params.id} />
+    const [freeShippingThreshold, setFreeShippingThreshold] = useState(500)
+    const [loading, setLoading] = useState(true)
 
-    const images = JSON.parse(product.images || '[]')
-    const price = product.price
-    const stock = Number(product.stock)
+    useEffect(() => {
+        if (!id) return
 
-    // Clean description for JSON-LD (Google Shopping/Schema also dislikes HTML)
-    const cleanJsonLdDescription = stripHtml(product.description || '', 500) // Allow longer for Schema
-
-    // JSON-LD Structured Data (Google Shopping)
-    const jsonLd = {
-        '@context': 'https://schema.org',
-        '@type': 'Product',
-        name: product.name,
-        image: images,
-        description: cleanJsonLdDescription,
-        sku: product.id,
-        brand: {
-            '@type': 'Brand',
-            name: 'Onopo'
-        },
-        offers: {
-            '@type': 'Offer',
-            url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'}/product/${product.id}`,
-            priceCurrency: 'TRY',
-            price: price,
-            priceValidUntil: '2027-12-31',
-            itemCondition: 'https://schema.org/NewCondition',
-            availability: stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-            hasMerchantReturnPolicy: {
-                '@type': 'MerchantReturnPolicy',
-                applicableCountry: 'TR',
-                returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
-                merchantReturnDays: 14,
-                returnMethod: 'https://schema.org/ReturnByMail',
-                returnFees: 'https://schema.org/FreeReturn'
-            },
-            shippingDetails: {
-                '@type': 'OfferShippingDetails',
-                shippingRate: {
-                    '@type': 'MonetaryAmount',
-                    value: 0,
-                    currency: 'TRY'
-                },
-                shippingDestination: {
-                    '@type': 'DefinedRegion',
-                    addressCountry: 'TR'
-                },
-                deliveryTime: {
-                    '@type': 'ShippingDeliveryTime',
-                    handlingTime: {
-                        '@type': 'QuantitativeValue',
-                        minValue: 0,
-                        maxValue: 1,
-                        unitCode: 'DAY'
-                    },
-                    transitTime: {
-                        '@type': 'QuantitativeValue',
-                        minValue: 1,
-                        maxValue: 3,
-                        unitCode: 'DAY'
-                    }
+        // Fetch shipping settings
+        fetch('/api/shipping-settings')
+            .then(r => r.json())
+            .then(settings => {
+                if (settings.free_shipping_threshold) {
+                    setFreeShippingThreshold(parseFloat(settings.free_shipping_threshold))
                 }
-            }
-        },
-        aggregateRating: {
-            '@type': 'AggregateRating',
-            ratingValue: '4.8',
-            reviewCount: '12' // Mock data - Ideally fetch from reviews table
-        }
+                setLoading(false)
+            })
+            .catch(() => setLoading(false))
+    }, [id])
+
+    if (!id) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 pt-32">
+                <div className="text-center">
+                    <h1 className="text-4xl font-bold text-slate-900 mb-4">Ürün Bulunamadı</h1>
+                    <a href="/" className="px-6 py-3 bg-primary text-white rounded-full">Ana Sayfaya Dön</a>
+                </div>
+            </div>
+        )
     }
 
-    return (
-        <>
-            <script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-            />
-            <ProductClient id={params.id} />
-        </>
-    )
+    if (loading) {
+        return <ProductSkeleton />
+    }
+
+    return <ProductClient id={id} freeShippingThreshold={freeShippingThreshold} />
 }

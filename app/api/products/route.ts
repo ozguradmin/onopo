@@ -13,6 +13,48 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url)
         const category = searchParams.get('category')
         const includeAll = searchParams.get('includeAll') === 'true' // Admin flag to include out-of-stock
+        const slugParam = searchParams.get('slug')
+        const exactSlug = searchParams.get('exact') === 'true'
+        const searchSlug = searchParams.get('search_slug')
+        const query = searchParams.get('q')
+        const limit = searchParams.get('limit')
+
+        // Single product lookup by exact slug
+        if (slugParam && exactSlug) {
+            const { results } = await db.prepare(
+                `SELECT id, name, slug, price, original_price, stock, images, category FROM products WHERE slug = ? AND is_active = 1 LIMIT 1`
+            ).bind(slugParam).all()
+
+            if (results && results.length > 0) {
+                const p = results[0] as any
+                return NextResponse.json({
+                    ...p,
+                    images: (() => { try { return p.images ? JSON.parse(p.images) : [] } catch { return [] } })()
+                }, {
+                    headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' }
+                })
+            }
+            return NextResponse.json(null, { status: 404 })
+        }
+
+        // Fuzzy slug search for redirect
+        if (searchSlug) {
+            const cleanSlug = searchSlug.replace('onopo-', '').toLowerCase()
+            const tokens = cleanSlug.split('-').filter((w: string) => w.length > 2).slice(0, 3)
+
+            if (tokens.length > 0) {
+                const conditions = tokens.map(() => `slug LIKE ?`).join(' AND ')
+                const bindValues = tokens.map((w: string) => `%${w}%`)
+                const { results } = await db.prepare(
+                    `SELECT slug FROM products WHERE is_active = 1 AND (${conditions}) LIMIT 1`
+                ).bind(...bindValues).all()
+
+                if (results && results.length > 0) {
+                    return NextResponse.json({ slug: (results[0] as any).slug })
+                }
+            }
+            return NextResponse.json(null, { status: 404 })
+        }
 
         // Base query - only active products, and for customers, hide out-of-stock items
         let sql = 'SELECT id, name, slug, price, original_price, stock, images, category FROM products WHERE is_active = 1'
@@ -29,7 +71,33 @@ export async function GET(req: NextRequest) {
             params.push(category, category)
         }
 
+        // Search query support
+        if (query) {
+            const sanitizedQuery = query
+                .replace(/ü/gi, 'u').replace(/ö/gi, 'o').replace(/ş/gi, 's')
+                .replace(/ğ/gi, 'g').replace(/ı/gi, 'i').replace(/ç/gi, 'c')
+                .replace(/[%_\\'\"]/g, ' ').replace(/[^\w\s]/g, ' ')
+                .replace(/\s+/g, ' ').trim()
+
+            const words = sanitizedQuery.split(' ').filter((w: string) => w.length >= 3).slice(0, 2)
+            if (words.length > 0) {
+                const conditions = words.map(() => `(name LIKE ? OR slug LIKE ?)`).join(' AND ')
+                sql += ` AND (${conditions})`
+                words.forEach((word: string) => {
+                    params.push(`%${word}%`, `%${word}%`)
+                })
+            }
+        }
+
         sql += ' ORDER BY id DESC'
+
+        // Apply limit if specified
+        if (limit) {
+            const limitNum = parseInt(limit, 10)
+            if (limitNum > 0 && limitNum <= 500) {
+                sql += ` LIMIT ${limitNum}`
+            }
+        }
 
         const { results } = params.length > 0
             ? await db.prepare(sql).bind(...params).all()
