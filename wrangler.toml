@@ -30,6 +30,10 @@ RESEND_API_KEY = "re_Vjx37rki_JFp5zCq3mcuj2HwW6jDqYDA9"
 # R2_ACCESS_KEY_ID
 # R2_SECRET_ACCESS_KEY
 
+# Smart Placement - Run workers closer to backend for better performance
+[placement]
+mode = "smart"
+
 # Observability
 [observability]
 enabled = true
