@@ -1,56 +1,58 @@
+"use client"
+
 import * as React from 'react'
-import { getDB } from '@/lib/db'
 import { HeroSection } from '@/components/home/HeroSection'
 import ProductShowcase from '@/components/home/ProductShowcase'
 import { FeaturesSection } from '@/components/home/FeaturesSection'
 import { ImageCardSection } from '@/components/home/ImageCardSection'
 import { CategoriesSection } from '@/components/home/CategoriesSection'
-import { unstable_cache } from 'next/cache'
 
-// force-dynamic required because DB not available at build time
-// CDN caching is handled via Cache-Control headers in next.config.ts
-export const dynamic = 'force-dynamic'
+// Loading skeleton component
+function HomeSkeleton() {
+  return (
+    <div className="flex flex-col min-h-screen animate-pulse">
+      {/* Hero Skeleton */}
+      <div className="h-[400px] bg-slate-100" />
 
-// Cached data fetcher
-const getCachedHomepageData = unstable_cache(
-  async () => {
-    const db = await getDB()
+      {/* Products Skeleton */}
+      <div className="container mx-auto px-4 py-12">
+        <div className="h-8 bg-slate-200 rounded w-48 mb-8" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="aspect-square bg-slate-100 rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
-    // Fetch active sections
-    const { results: sections } = await db.prepare(
-      'SELECT * FROM homepage_sections WHERE is_active = 1 ORDER BY display_order ASC'
-    ).all()
+export default function Home() {
+  const [sections, setSections] = React.useState<any[]>([])
+  const [products, setProducts] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
 
-    // Pre-fetch products - LIMIT 30 for CPU optimization
-    const { results: allProducts } = await db.prepare(
-      'SELECT id, name, slug, price, original_price, stock, images, category FROM products WHERE is_active = 1 ORDER BY id DESC LIMIT 30'
-    ).all()
+  React.useEffect(() => {
+    // Fetch data client-side to avoid SSR CPU usage
+    Promise.all([
+      fetch('/api/homepage-sections').then(r => r.json()),
+      fetch('/api/products?limit=30').then(r => r.json())
+    ])
+      .then(([sectionsData, productsData]) => {
+        setSections(Array.isArray(sectionsData) ? sectionsData : [])
+        setProducts(Array.isArray(productsData) ? productsData : [])
+        setLoading(false)
+      })
+      .catch(() => {
+        setLoading(false)
+      })
+  }, [])
 
-    // Parse images once for all products
-    const productsWithImages = allProducts.map((p: any) => {
-      let images: string[] = []
-      try {
-        images = p.images ? JSON.parse(p.images) : []
-      } catch {
-        images = []
-      }
-      return { ...p, images }
-    })
-
-    return { sections, productsWithImages }
-  },
-  ['homepage-data'],
-  { revalidate: 300, tags: ['homepage'] } // Cache for 5 minutes
-)
-
-export default async function Home() {
-  const { sections, productsWithImages } = await getCachedHomepageData()
-
-  // Helper to filter products from pre-fetched list (no DB call!)
-  const getProductsForSection = (configString: string, shuffle: boolean = false) => {
+  // Helper to filter products
+  const getProductsForSection = React.useCallback((configString: string, shuffle: boolean = false) => {
     try {
       const config = JSON.parse(configString || '{}')
-      let filtered = [...productsWithImages]
+      let filtered = [...products]
 
       if (config.selection_type === 'category' && config.category) {
         filtered = filtered.filter(p => p.category && p.category.toLowerCase() === config.category.toLowerCase())
@@ -58,7 +60,6 @@ export default async function Home() {
         filtered = filtered.filter(p => config.product_ids.includes(p.id))
       }
 
-      // Shuffle if requested (for 'products' section type)
       if (shuffle) {
         for (let i = filtered.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
@@ -67,24 +68,27 @@ export default async function Home() {
       }
 
       return filtered.slice(0, config.limit || 8)
-    } catch (e) {
-      console.error('Product fetch error:', e)
+    } catch {
       return []
     }
+  }, [products])
+
+  if (loading) {
+    return <HomeSkeleton />
   }
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* If no sections, show default layout as fallback */}
+      {/* Default layout if no sections */}
       {(!sections || sections.length === 0) && (
         <>
           <HeroSection />
-          <ProductShowcase />
+          <ProductShowcase products={products.slice(0, 8)} />
           <FeaturesSection />
         </>
       )}
 
-      {sections && sections.map(async (section: any, index: number) => {
+      {sections && sections.map((section: any, index: number) => {
         const config = JSON.parse(section.config || '{}')
         const isLast = index === sections.length - 1
 
@@ -93,24 +97,24 @@ export default async function Home() {
         if (section.type === 'hero') {
           content = <HeroSection key={section.id} />
         } else if (section.type === 'new_products') {
-          const products = getProductsForSection(section.config, false)
+          const sectionProducts = getProductsForSection(section.config, false)
           content = (
             <ProductShowcase
               key={section.id}
               title={section.title}
               description={config.description}
-              products={products}
+              products={sectionProducts}
               category={config.selection_type === 'category' ? config.category : undefined}
             />
           )
         } else if (section.type === 'products') {
-          const products = getProductsForSection(section.config, true)
+          const sectionProducts = getProductsForSection(section.config, true)
           content = (
             <ProductShowcase
               key={section.id}
               title={section.title}
               description={config.description}
-              products={products}
+              products={sectionProducts}
               category={config.selection_type === 'category' ? config.category : undefined}
             />
           )
@@ -139,7 +143,6 @@ export default async function Home() {
             />
           )
         } else if (section.type === 'custom_code') {
-          // Render custom HTML/CSS code
           const htmlContent = config.html_content || ''
           content = (
             <div

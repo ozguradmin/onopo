@@ -4,6 +4,7 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ArrowRight, ArrowDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { getImageUrl } from "@/lib/utils"
 
 export function HeroSection() {
     const [currentSlide, setCurrentSlide] = React.useState(0)
@@ -72,7 +73,7 @@ export function HeroSection() {
                     <div className="absolute inset-0">
                         <div className="absolute inset-0 z-0">
                             <img
-                                src={slide.image_url || slide.image}
+                                src={getImageUrl(slide.image_url || slide.image)}
                                 alt={slide.title || "Hero Image"}
                                 className="w-full h-full object-cover object-center"
                                 fetchPriority="high"

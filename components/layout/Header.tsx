@@ -3,7 +3,7 @@
 import * as React from "react"
 import { ShoppingBag, User, Search, Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+import { cn, getImageUrl } from "@/lib/utils"
 import Link from 'next/link'
 import { useCartStore } from "@/store/cart-store"
 
@@ -51,7 +51,7 @@ export function Header() {
         fetch('/api/site-settings')
             .then(r => r.json())
             .then(data => {
-                if (data.logo_url) setLogoUrl(data.logo_url)
+                if (data.logo_url) setLogoUrl(getImageUrl(data.logo_url))
                 if (data.site_name) setSiteName(data.site_name)
             }).catch(() => { })
 

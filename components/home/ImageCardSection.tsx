@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { getImageUrl } from "@/lib/utils"
 
 interface ImageCardSectionProps {
     title?: string
@@ -10,7 +11,7 @@ export function ImageCardSection({ title, image_url, link_url }: ImageCardSectio
     const Content = () => (
         <div className="relative w-full rounded-2xl overflow-hidden group">
             <img
-                src={image_url}
+                src={getImageUrl(image_url)}
                 alt={title || 'Image'}
                 className="w-full h-auto max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-105"
             />

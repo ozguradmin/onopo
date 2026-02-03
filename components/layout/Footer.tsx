@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { Facebook, Instagram, Twitter, Linkedin, DollarSign } from "lucide-react"
+import { getImageUrl } from "@/lib/utils"
 
 interface Category {
     id: number
@@ -81,7 +82,7 @@ export function Footer() {
                     {/* Brand */}
                     <div className="col-span-2 md:col-span-1 space-y-3">
                         {settings.logo_url ? (
-                            <img src={settings.logo_url} alt={settings.site_name} className="h-7 object-contain brightness-0 invert" />
+                            <img src={getImageUrl(settings.logo_url)} alt={settings.site_name} className="h-7 object-contain brightness-0 invert" />
                         ) : (
                             <h3 className="font-heading text-xl font-bold text-white tracking-tighter">{settings.site_name}</h3>
                         )}
