@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, ArrowRight, Upload, Loader2, X, Plus } from 'lucide-react'
 import { CurrencyInput } from '@/components/ui/currency-input'
+import { VariationsSection, Variation } from '@/components/admin/VariationsSection'
 
 export default function AddProductPage() {
     const router = useRouter()
@@ -33,6 +34,7 @@ export default function AddProductPage() {
     })
 
     const [exchangeRate, setExchangeRate] = React.useState<number>(0)
+    const [variations, setVariations] = React.useState<Variation[]>([])
 
     // Fetch categories and exchange rate
     React.useEffect(() => {
@@ -127,6 +129,26 @@ export default function AddProductPage() {
             })
 
             if (!res.ok) throw new Error('Failed to create product')
+            const data = await res.json()
+
+            // Save variations if any
+            if (variations.length > 0 && data.id) {
+                await fetch(`/api/products/${data.id}/variations`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        variations: variations.map(v => ({
+                            name: v.name,
+                            value: v.value,
+                            price_modifier: parseFloat(String(v.price_modifier).replace(',', '.')) || 0,
+                            stock: parseInt(v.stock) || 0,
+                            sku: v.sku,
+                            image_url: v.image_url
+                        }))
+                    })
+                })
+            }
+
             router.push('/admin')
         } catch (error: any) {
             console.error(error)
@@ -376,6 +398,12 @@ export default function AddProductPage() {
                         </div>
                     )}
                 </div>
+
+                {/* Variations */}
+                <VariationsSection
+                    variations={variations}
+                    onChange={setVariations}
+                />
 
                 {/* Images */}
                 <div>

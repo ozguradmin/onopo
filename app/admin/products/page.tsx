@@ -7,6 +7,7 @@ import { Edit, Trash2, Plus, Upload, Trash, Loader2, Search } from 'lucide-react
 import { formatPrice } from '@/lib/formatPrice'
 import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
+import { ProductEditModal } from '@/components/admin/ProductEditModal'
 
 export default function AdminProductsPage() {
     const router = useRouter()
@@ -15,6 +16,10 @@ export default function AdminProductsPage() {
     const [products, setProducts] = React.useState<any[]>([])
     const [categories, setCategories] = React.useState<{ id: number, name: string }[]>([])
     const [loading, setLoading] = React.useState(true)
+
+    // Modal state
+    const [editModalOpen, setEditModalOpen] = React.useState(false)
+    const [editProductId, setEditProductId] = React.useState<string | null>(null)
 
     // Parse URL params for initial state
     const initialPage = Number(searchParams.get('page')) || 1
@@ -45,7 +50,7 @@ export default function AdminProductsPage() {
         router.replace(`/admin/products?${params.toString()}`, { scroll: false })
     }
 
-    React.useEffect(() => {
+    const fetchProducts = React.useCallback(() => {
         Promise.all([
             fetch('/api/products?includeAll=true').then(r => r.json()),
             fetch('/api/categories').then(r => r.json())
@@ -55,6 +60,10 @@ export default function AdminProductsPage() {
             setLoading(false)
         }).catch(() => setLoading(false))
     }, [])
+
+    React.useEffect(() => {
+        fetchProducts()
+    }, [fetchProducts])
 
     // Sync state changes to URL
     const handleSearchChange = (val: string) => {
@@ -367,8 +376,8 @@ export default function AdminProductsPage() {
                                             size="icon"
                                             className="h-8 w-8 text-slate-500 hover:text-blue-600"
                                             onClick={() => {
-                                                const q = getReturnQuery()
-                                                router.push(`/admin/products/${product.id}/edit${q ? '?' + q : ''}`)
+                                                setEditProductId(String(product.id))
+                                                setEditModalOpen(true)
                                             }}
                                         >
                                             <Edit className="w-4 h-4" />
@@ -435,6 +444,20 @@ export default function AdminProductsPage() {
                     </Button>
                 </div>
             )}
+
+            {/* Edit Product Modal */}
+            <ProductEditModal
+                isOpen={editModalOpen}
+                onClose={() => {
+                    setEditModalOpen(false)
+                    setEditProductId(null)
+                }}
+                productId={editProductId}
+                onSuccess={() => {
+                    fetchProducts()
+                    toast.success('Ürün güncellendi')
+                }}
+            />
         </div>
     )
 }
