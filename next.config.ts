@@ -40,6 +40,27 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // Static assets - cache for 1 year
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable'
+          }
+        ]
+      },
+      {
+        // Images - cache for 1 week
+        source: '/api/images/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=604800, stale-while-revalidate=86400'
+          }
+        ]
+      },
+      {
+        // All pages - allow CDN caching with stale-while-revalidate
         source: '/:path*',
         headers: [
           {
@@ -57,6 +78,10 @@ const nextConfig: NextConfig = {
           {
             key: 'X-Content-Type-Options',
             value: 'nosniff'
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, s-maxage=120, stale-while-revalidate=300'
           }
         ]
       }

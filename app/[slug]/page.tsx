@@ -3,7 +3,7 @@ import ProductClient from "../product/[id]/ProductClient"
 import { notFound, redirect } from "next/navigation"
 import { getDB } from "@/lib/db"
 
-export const dynamic = 'force-dynamic'
+// CDN caching handled via Cache-Control headers\nexport const dynamic = 'force-dynamic'
 
 const VALID_CATEGORIES = ['tech', 'gaming', 'beauty', 'products', 'new']
 

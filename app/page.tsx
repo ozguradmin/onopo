@@ -7,6 +7,8 @@ import { ImageCardSection } from '@/components/home/ImageCardSection'
 import { CategoriesSection } from '@/components/home/CategoriesSection'
 import { unstable_cache } from 'next/cache'
 
+// force-dynamic required because DB not available at build time
+// CDN caching is handled via Cache-Control headers in next.config.ts
 export const dynamic = 'force-dynamic'
 
 // Cached data fetcher
@@ -39,7 +41,7 @@ const getCachedHomepageData = unstable_cache(
     return { sections, productsWithImages }
   },
   ['homepage-data'],
-  { revalidate: 60 } // Cache for 60 seconds
+  { revalidate: 300, tags: ['homepage'] } // Cache for 5 minutes
 )
 
 export default async function Home() {

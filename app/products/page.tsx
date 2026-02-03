@@ -3,7 +3,7 @@ import { Metadata } from 'next'
 import { getDB } from '@/lib/db'
 import ProductsClient from '@/components/products/ProductsClient'
 
-export const dynamic = 'force-dynamic'
+// CDN caching handled via Cache-Control headers\nexport const dynamic = 'force-dynamic'
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<{ category?: string; q?: string }> }): Promise<Metadata> {
     const params = await searchParams
