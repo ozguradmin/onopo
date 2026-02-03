@@ -1,108 +1,80 @@
-"use client"
-
-import { useEffect, useState } from "react"
-import { useParams, notFound } from "next/navigation"
-import CategoryClient from "./CategoryClient"
-import ProductClient from "../product/[id]/ProductClient"
+import { Metadata } from "next"
+import { getDB } from "@/lib/db"
+import { stripHtml } from "@/lib/stripHtml"
+import SlugPageClient from "./SlugPageClient"
 
 const VALID_CATEGORIES = ['tech', 'gaming', 'beauty', 'products', 'new']
 
-// Loading skeleton
-function PageSkeleton() {
-    return (
-        <div className="min-h-screen bg-slate-50 pt-32 animate-pulse">
-            <div className="container mx-auto px-4">
-                <div className="h-10 bg-slate-200 rounded w-64 mb-8" />
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="aspect-square bg-slate-100 rounded-2xl" />
-                    ))}
-                </div>
-            </div>
-        </div>
-    )
+const CATEGORY_TITLES: Record<string, string> = {
+    'tech': 'Teknoloji Ürünleri',
+    'gaming': 'Gaming Ürünleri',
+    'beauty': 'Güzellik & Kozmetik',
+    'products': 'Tüm Ürünler',
+    'new': 'Yeni Ürünler'
 }
 
-export default function Page() {
-    const params = useParams()
-    const slug = params?.slug as string
+// Lightweight metadata generation for SEO
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+    try {
+        const params = await props.params
+        const slug = params.slug
 
-    const [pageType, setPageType] = useState<'category' | 'product' | 'notfound' | 'loading'>('loading')
-    const [productId, setProductId] = useState<string | null>(null)
-    const [freeShippingThreshold, setFreeShippingThreshold] = useState(500)
-
-    useEffect(() => {
-        if (!slug) {
-            setPageType('notfound')
-            return
-        }
-
-        // Check if it's a valid category first (no API call needed)
+        // Check if it's a category
         if (VALID_CATEGORIES.includes(slug)) {
-            setPageType('category')
-            return
+            const title = CATEGORY_TITLES[slug] || 'Ürünler'
+            return {
+                title: `${title} - ONOPO`,
+                description: `ONOPO Store'da ${title.toLowerCase()} kategorisindeki tüm ürünleri keşfedin.`,
+                openGraph: {
+                    title: `${title} - ONOPO`,
+                    description: `ONOPO Store'da ${title.toLowerCase()} kategorisindeki tüm ürünleri keşfedin.`,
+                    type: 'website',
+                },
+            }
         }
 
-        // Otherwise, check if it's a product slug
-        fetch(`/api/products?slug=${encodeURIComponent(slug)}&exact=true`)
-            .then(r => r.json())
-            .then(data => {
-                if (data && data.id) {
-                    setProductId(String(data.id))
-                    // Fetch shipping settings
-                    fetch('/api/shipping-settings')
-                        .then(r => r.json())
-                        .then(settings => {
-                            if (settings.free_shipping_threshold) {
-                                setFreeShippingThreshold(parseFloat(settings.free_shipping_threshold))
-                            }
-                            setPageType('product')
-                        })
-                        .catch(() => setPageType('product'))
-                } else {
-                    // Try fuzzy match / redirect
-                    fetch(`/api/products?search_slug=${encodeURIComponent(slug)}`)
-                        .then(r => r.json())
-                        .then(fuzzyData => {
-                            if (fuzzyData && fuzzyData.slug && fuzzyData.slug !== slug) {
-                                // Redirect to correct slug
-                                window.location.href = `/${fuzzyData.slug}`
-                            } else {
-                                setPageType('notfound')
-                            }
-                        })
-                        .catch(() => setPageType('notfound'))
-                }
-            })
-            .catch(() => setPageType('notfound'))
-    }, [slug])
+        // Check if it's a product
+        const db = await getDB()
+        const product = await db.prepare(
+            'SELECT name, description, images FROM products WHERE slug = ? LIMIT 1'
+        ).bind(slug).first() as any
 
-    if (pageType === 'loading') {
-        return <PageSkeleton />
+        if (product) {
+            const images = (() => {
+                try { return JSON.parse(product.images || '[]') }
+                catch { return [] }
+            })()
+            const mainImage = images[0] || '/og-image.png'
+            const cleanDescription = stripHtml(product.description || 'ONOPO Store\'da en uygun fiyatlarla.', 160)
+
+            return {
+                title: `${product.name} - ONOPO`,
+                description: cleanDescription,
+                openGraph: {
+                    title: product.name,
+                    description: cleanDescription,
+                    images: [mainImage],
+                    type: 'website',
+                },
+                twitter: {
+                    card: 'summary_large_image',
+                    title: product.name,
+                    description: cleanDescription,
+                    images: [mainImage],
+                },
+            }
+        }
+
+        // Default
+        return { title: 'ONOPO Store' }
+    } catch (e) {
+        console.error('Metadata generation error:', e)
+        return { title: 'ONOPO Store' }
     }
+}
 
-    if (pageType === 'notfound') {
-        // Client-side 404
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50 pt-32">
-                <div className="text-center">
-                    <h1 className="text-6xl font-bold text-slate-900 mb-4">404</h1>
-                    <p className="text-xl text-slate-600 mb-8">Sayfa bulunamadı</p>
-                    <a href="/" className="px-6 py-3 bg-primary text-white rounded-full hover:bg-primary/90 transition">
-                        Ana Sayfaya Dön
-                    </a>
-                </div>
-            </div>
-        )
-    }
-
-    if (pageType === 'category') {
-        return <CategoryClient slug={slug} />
-    }
-
-    if (pageType === 'product' && productId) {
-        return <ProductClient id={productId} freeShippingThreshold={freeShippingThreshold} />
-    }
-
-    return <PageSkeleton />
+// Server Component that renders the Client Component
+export default async function Page(props: { params: Promise<{ slug: string }> }) {
+    const params = await props.params
+    return <SlugPageClient slug={params.slug} />
 }
