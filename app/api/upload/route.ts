@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-
-
 export async function POST(req: NextRequest) {
     try {
         const formData = await req.formData()
@@ -11,18 +9,39 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'No file provided' }, { status: 400 })
         }
 
-        // In a real Cloudflare setup, you would upload to R2 here.
-        // For this demo/dev environment, we will return a Base64 string so it works immediately without external storage bucket.
-        // Warning: This increases payload size, but is fine for small/medium images in a demo.
+        // Get Cloudflare context for R2 access
+        const { getCloudflareContext } = await import('@opennextjs/cloudflare')
+        const { env } = await getCloudflareContext()
+        const bucket = env.BUCKET
 
-        const arrayBuffer = await file.arrayBuffer()
-        const buffer = Buffer.from(arrayBuffer)
-        const base64 = buffer.toString('base64')
-        const dataUrl = `data:${file.type};base64,${base64}`
+        if (!bucket) {
+            console.error('R2 Bucket binding not found')
+            return NextResponse.json({ error: 'Storage configuration error' }, { status: 500 })
+        }
+
+        // Create unique filename
+        const ext = file.name.split('.').pop()
+        // Generate random string (replacement for uuid)
+        const randomId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+        const key = `${Date.now()}-${randomId}.${ext}`
+
+        // Upload to R2
+        const buffer = await file.arrayBuffer()
+        await bucket.put(key, buffer, {
+            httpMetadata: {
+                contentType: file.type,
+            },
+        })
+
+        // Return public R2 URL directly (to bypass /api/images/ proxy)
+        // Hardcoded for now based on lib/utils.ts, ideally env var
+        const R2_PUBLIC_URL = 'https://pub-84a4a4a7d990439cbfeb17aaa4c7677c.r2.dev'
+        const url = `${R2_PUBLIC_URL}/${key}`
 
         return NextResponse.json({
             success: true,
-            url: dataUrl
+            url: url,
+            key: key
         })
 
     } catch (error: any) {
