@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    // unoptimized: true, // Enable optimization for mobile performance
+    unoptimized: true, // Cloudflare Workers doesn't support Next.js Image Optimization
     remotePatterns: [
       {
         protocol: 'https',
