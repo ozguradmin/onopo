@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Plus, X, Upload } from 'lucide-react'
+import { Plus, X, Upload, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CurrencyInput } from '@/components/ui/currency-input'
 
@@ -30,6 +30,7 @@ const VARIATION_TYPES = [
 export function VariationsSection({ variations, onChange }: VariationsSectionProps) {
     const [selectedType, setSelectedType] = React.useState('')
     const [customType, setCustomType] = React.useState('')
+    const [uploadingIndex, setUploadingIndex] = React.useState<number | null>(null)
 
     const addVariation = () => {
         const typeName = selectedType === 'Özel' ? customType : selectedType
@@ -56,6 +57,22 @@ export function VariationsSection({ variations, onChange }: VariationsSectionPro
 
     const removeVariation = (index: number) => {
         onChange(variations.filter((_, i) => i !== index))
+    }
+
+    const handleImageUpload = async (index: number, file: File) => {
+        setUploadingIndex(index)
+        try {
+            const formData = new FormData()
+            formData.append('file', file)
+            const res = await fetch('/api/admin/upload', { method: 'POST', body: formData })
+            if (!res.ok) throw new Error('Upload failed')
+            const result = await res.json()
+            updateVariation(index, 'image_url', result.url)
+        } catch (error) {
+            console.error('Upload error:', error)
+        } finally {
+            setUploadingIndex(null)
+        }
     }
 
     // Group variations by name for display
@@ -151,13 +168,43 @@ export function VariationsSection({ variations, onChange }: VariationsSectionPro
                                     placeholder="SKU"
                                     className="col-span-2 p-2 border rounded text-sm"
                                 />
-                                <input
-                                    type="text"
-                                    value={v.image_url}
-                                    onChange={e => updateVariation(v._index, 'image_url', e.target.value)}
-                                    placeholder="Görsel URL"
-                                    className="col-span-2 p-2 border rounded text-sm"
-                                />
+                                <div className="col-span-2 flex items-center gap-1">
+                                    {v.image_url ? (
+                                        <div className="relative group">
+                                            <img
+                                                src={v.image_url}
+                                                alt=""
+                                                className="w-10 h-10 object-cover rounded border"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => updateVariation(v._index, 'image_url', '')}
+                                                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <label className="flex items-center gap-1 px-2 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded cursor-pointer text-xs">
+                                            {uploadingIndex === v._index ? (
+                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                            ) : (
+                                                <Upload className="w-3 h-3" />
+                                            )}
+                                            <span>Görsel</span>
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0]
+                                                    if (file) handleImageUpload(v._index, file)
+                                                }}
+                                                disabled={uploadingIndex === v._index}
+                                            />
+                                        </label>
+                                    )}
+                                </div>
                                 <button
                                     type="button"
                                     onClick={() => removeVariation(v._index)}

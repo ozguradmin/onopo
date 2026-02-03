@@ -156,6 +156,19 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
     const [reviewError, setReviewError] = React.useState('')
     const [user, setUser] = React.useState<any>(null)
 
+    // Variations state
+    interface ProductVariation {
+        id: number
+        name: string
+        value: string
+        price_modifier: number
+        stock: number
+        sku: string
+        image_url: string
+    }
+    const [variations, setVariations] = React.useState<ProductVariation[]>([])
+    const [selectedVariations, setSelectedVariations] = React.useState<Record<string, ProductVariation>>({}) // by variation name
+
     React.useEffect(() => {
         // Auto slide
         if (!product) return
@@ -187,6 +200,12 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
             .then(data => setReviews(Array.isArray(data) ? data : []))
             .catch(() => { })
 
+        // Fetch variations
+        fetch(`/api/products/${id}/variations`)
+            .then(res => res.json())
+            .then(data => setVariations(Array.isArray(data) ? data : []))
+            .catch(() => { })
+
         // Check if user is logged in and fetch favorites
         fetch('/api/auth/me')
             .then(res => res.ok ? res.json() : null)
@@ -206,14 +225,19 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
             .catch(() => { })
     }, [id])
 
+    // Calculate price with selected variations
+    const variationPriceModifier = Object.values(selectedVariations).reduce((sum, v) => sum + (v?.price_modifier || 0), 0)
+    const finalPrice = product ? product.price + variationPriceModifier : 0
+
     const handleAddToCart = () => {
         if (!product) return
+        const variantName = Object.values(selectedVariations).map(v => v.value).join(' / ')
         for (let i = 0; i < quantity; i++) {
             addItem({
                 id: product.id,
-                name: product.name,
-                price: product.price,
-                image: getImageUrl(product.images && product.images.length > 0 ? product.images[0] : product.image),
+                name: variantName ? `${product.name} (${variantName})` : product.name,
+                price: finalPrice,
+                image: getImageUrl(Object.values(selectedVariations).find(v => v.image_url)?.image_url || (product.images && product.images.length > 0 ? product.images[0] : product.image)),
                 category: product.category
             })
         }
@@ -226,12 +250,13 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
 
     const handleBuyNow = () => {
         if (!product) return
+        const variantName = Object.values(selectedVariations).map(v => v.value).join(' / ')
         for (let i = 0; i < quantity; i++) {
             addItem({
                 id: product.id,
-                name: product.name,
-                price: product.price,
-                image: getImageUrl(product.images && product.images.length > 0 ? product.images[0] : product.image),
+                name: variantName ? `${product.name} (${variantName})` : product.name,
+                price: finalPrice,
+                image: getImageUrl(Object.values(selectedVariations).find(v => v.image_url)?.image_url || (product.images && product.images.length > 0 ? product.images[0] : product.image)),
                 category: product.category
             })
         }
@@ -475,14 +500,88 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                                 {/* Price */}
                                 <div className="flex items-baseline gap-3 mb-6">
                                     <span className="text-3xl font-bold text-slate-900">
-                                        {formatPrice(product.price)}
+                                        {formatPrice(finalPrice)}
                                     </span>
                                     {product.original_price && product.original_price > product.price && (
                                         <span className="text-xl text-slate-400 line-through">
                                             {formatPrice(product.original_price)}
                                         </span>
                                     )}
+                                    {variationPriceModifier > 0 && (
+                                        <span className="text-sm text-green-600">(+{formatPrice(variationPriceModifier)})</span>
+                                    )}
+                                    {variationPriceModifier < 0 && (
+                                        <span className="text-sm text-red-600">({formatPrice(variationPriceModifier)})</span>
+                                    )}
                                 </div>
+
+                                {/* Variations Selector */}
+                                {variations.length > 0 && (() => {
+                                    // Group variations by name
+                                    const groupedVars = variations.reduce((acc, v) => {
+                                        if (!acc[v.name]) acc[v.name] = []
+                                        acc[v.name].push(v)
+                                        return acc
+                                    }, {} as Record<string, typeof variations>)
+
+                                    return (
+                                        <div className="mb-6 space-y-4">
+                                            {Object.entries(groupedVars).map(([typeName, opts]) => (
+                                                <div key={typeName}>
+                                                    <label className="text-sm font-medium text-slate-700 mb-2 block">
+                                                        {typeName}: {selectedVariations[typeName]?.value && (
+                                                            <span className="text-slate-500 font-normal">{selectedVariations[typeName].value}</span>
+                                                        )}
+                                                    </label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {opts.map((opt) => {
+                                                            const isSelected = selectedVariations[typeName]?.id === opt.id
+                                                            const isOutOfStock = opt.stock <= 0
+                                                            return (
+                                                                <button
+                                                                    key={opt.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (!isOutOfStock) {
+                                                                            setSelectedVariations(prev => ({
+                                                                                ...prev,
+                                                                                [typeName]: opt
+                                                                            }))
+                                                                        }
+                                                                    }}
+                                                                    disabled={isOutOfStock}
+                                                                    className={`
+                                                                        flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all
+                                                                        ${isSelected
+                                                                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                                                            : isOutOfStock
+                                                                                ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed line-through'
+                                                                                : 'border-slate-200 hover:border-slate-400 text-slate-700'
+                                                                        }
+                                                                    `}
+                                                                >
+                                                                    {opt.image_url && (
+                                                                        <img
+                                                                            src={opt.image_url}
+                                                                            alt={opt.value}
+                                                                            className="w-6 h-6 rounded object-cover"
+                                                                        />
+                                                                    )}
+                                                                    <span className="font-medium">{opt.value}</span>
+                                                                    {opt.price_modifier !== 0 && (
+                                                                        <span className={`text-xs ${opt.price_modifier > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                            {opt.price_modifier > 0 ? '+' : ''}{formatPrice(opt.price_modifier)}
+                                                                        </span>
+                                                                    )}
+                                                                </button>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )
+                                })()}
 
                                 {/* Stock Status - MOVED UP */}
                                 <div className="mb-6 flex items-center gap-4">
