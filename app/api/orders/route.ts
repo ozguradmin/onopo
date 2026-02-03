@@ -228,21 +228,24 @@ export async function GET(req: NextRequest) {
             ? await db.prepare(query).bind(...bindArgs).all()
             : await db.prepare(query).all()
 
-        // Filter out pending PayTR/Online orders for Admin
-        // This prevents 'Pending Payment' / Abandoned carts from clogging the view
+        // Filter out pending/failed PayTR/Online orders for Admin
+        // This prevents 'Pending Payment' / Abandoned carts / Failed payments from clogging the view
         const filteredResults = (results || []).filter((order: any) => {
-            if (userRole !== 'admin') return true // Users see their own pending orders
+            if (userRole !== 'admin') return true // Users see their own orders (all statuses)
 
             try {
                 const addr = JSON.parse(order.shipping_address || '{}')
                 const provider = addr.provider
 
-                // If it's an online payment (paytr/iyzico) AND status is pending -> Hide it
+                // If it's an online payment (paytr/iyzico) AND payment is not confirmed -> Hide it
                 // Offline payments (havale) should remain visible even if pending
                 const isOnlinePayment = provider === 'paytr' || provider === 'iyzico'
 
-                // Also check if provider is missing (legacy orders) -> Show them to be safe
-                if (provider && isOnlinePayment && order.payment_status === 'pending' && order.status === 'pending') {
+                // Hide online payments that are:
+                // 1. Pending (user opened payment page but didn't complete)
+                // 2. Failed (payment was rejected/cancelled)
+                // Only show if payment_status is 'paid'
+                if (provider && isOnlinePayment && order.payment_status !== 'paid') {
                     return false
                 }
 

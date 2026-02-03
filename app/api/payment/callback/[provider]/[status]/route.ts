@@ -69,12 +69,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
 
                 return new NextResponse('OK')
             } else {
-                // Payment Failed
+                // Payment Failed - Cancel the order completely
                 let orderId = merchant_oid
                 if (merchant_oid.startsWith('SP') && merchant_oid.includes('T')) {
                     orderId = merchant_oid.split('T')[0].substring(2)
                 }
-                await db.prepare("UPDATE orders SET payment_status = 'failed' WHERE id = ?").bind(orderId).run()
+                // Set BOTH status and payment_status to prevent showing in admin
+                await db.prepare("UPDATE orders SET status = 'cancelled', payment_status = 'failed' WHERE id = ?").bind(orderId).run()
                 return new NextResponse('OK')
             }
         }
