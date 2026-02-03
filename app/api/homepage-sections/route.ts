@@ -12,10 +12,23 @@ export async function GET() {
         ).all()
 
         // Parse JSON config for each section
-        const sections = (results || []).map((s: any) => ({
-            ...s,
-            config: s.config ? JSON.parse(s.config) : {}
-        }))
+        // Parse JSON config for each section (handle both string and object)
+        const sections = (results || []).map((s: any) => {
+            let config = {}
+            if (typeof s.config === 'string') {
+                try {
+                    config = JSON.parse(s.config)
+                } catch {
+                    console.error('Failed to parse config string:', s.config)
+                }
+            } else if (typeof s.config === 'object' && s.config !== null) {
+                config = s.config
+            }
+            return {
+                ...s,
+                config
+            }
+        })
 
         return NextResponse.json(sections)
     } catch (error: any) {
