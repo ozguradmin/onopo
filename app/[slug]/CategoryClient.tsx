@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { ShoppingBag, ArrowRight, Filter, ChevronDown, Search } from "lucide-react"
 import { useCartStore } from "@/store/cart-store"
 import { formatPrice } from "@/lib/formatPrice"
+import { getImageUrl } from "@/lib/utils"
 
 // Constants needed (restored from previous context)
 const CATEGORY_INFO: Record<string, { title: string; desc: string }> = {
@@ -212,11 +213,11 @@ export default function CategoryClient({ slug }: { slug: string }) {
                                 {/* Image */}
                                 <a href={`/product/${product.id}`} className="block relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-slate-100 mb-3 md:mb-4">
                                     <img
-                                        src={product.images && product.images.length > 0 ? product.images[0] : product.image}
+                                        src={getImageUrl(product.images && product.images.length > 0 ? product.images[0] : product.image)}
                                         alt={product.name}
                                         className="object-cover w-full h-full transform group-hover:scale-105 transition-transform duration-500"
                                         loading="lazy"
-                                        data-original-src={product.images && product.images.length > 0 ? product.images[0] : product.image}
+                                        data-original-src={getImageUrl(product.images && product.images.length > 0 ? product.images[0] : product.image)}
                                         onError={(e) => {
                                             const target = e.currentTarget
                                             const retryCount = parseInt(target.dataset.retryCount || '0')
@@ -261,7 +262,7 @@ export default function CategoryClient({ slug }: { slug: string }) {
                                                     id: product.id,
                                                     name: product.name,
                                                     price: product.price,
-                                                    image: product.images && product.images.length > 0 ? product.images[0] : product.images,
+                                                    image: getImageUrl(product.images && product.images.length > 0 ? product.images[0] : product.images),
                                                     category: product.category
                                                 })
                                                 openCart();

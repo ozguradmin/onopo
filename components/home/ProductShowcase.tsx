@@ -6,7 +6,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useCartStore } from "@/store/cart-store"
-import { cn } from "@/lib/utils"
+import { cn, getImageUrl } from "@/lib/utils"
 import { formatPrice } from "@/lib/formatPrice"
 
 interface ProductShowcaseProps {
@@ -111,7 +111,7 @@ export default function ProductShowcase({ title = "Trend Ürünler", description
                                 <a href={`/${product.slug}`} className="block relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-slate-100 mb-3 md:mb-4">
                                     <div className="relative w-full h-full p-4 bg-white rounded-xl">
                                         <Image
-                                            src={product.images && product.images.length > 0 ? product.images[0] : product.image}
+                                            src={getImageUrl(product.images && product.images.length > 0 ? product.images[0] : product.image)}
                                             alt={product.name}
                                             fill
                                             className="object-contain w-full h-full transform group-hover:scale-105 transition-transform duration-500"

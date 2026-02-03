@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useCartStore } from "@/store/cart-store"
 import { Badge } from "@/components/ui/badge"
 import { formatPrice } from "@/lib/formatPrice"
+import { getImageUrl } from "@/lib/utils"
 import Link from "next/link"
 import Image from "next/image"
 import ProductShowcase from "@/components/home/ProductShowcase"
@@ -212,7 +213,7 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                 id: product.id,
                 name: product.name,
                 price: product.price,
-                image: product.images && product.images.length > 0 ? product.images[0] : product.image,
+                image: getImageUrl(product.images && product.images.length > 0 ? product.images[0] : product.image),
                 category: product.category
             })
         }
@@ -230,7 +231,7 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                 id: product.id,
                 name: product.name,
                 price: product.price,
-                image: product.images && product.images.length > 0 ? product.images[0] : product.image,
+                image: getImageUrl(product.images && product.images.length > 0 ? product.images[0] : product.image),
                 category: product.category
             })
         }
@@ -353,7 +354,7 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                                         >
                                             <div className="relative w-full h-full p-4">
                                                 <Image
-                                                    src={allImages[selectedImage] || '/placeholder.svg'}
+                                                    src={getImageUrl(allImages[selectedImage]) || '/placeholder.svg'}
                                                     alt={product.name}
                                                     fill
                                                     sizes="(max-width: 768px) 100vw, 50vw"
@@ -419,7 +420,7 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                                                         }`}
                                                 >
                                                     <Image
-                                                        src={img}
+                                                        src={getImageUrl(img)}
                                                         alt={`Thumbnail ${idx}`}
                                                         fill
                                                         sizes="80px"

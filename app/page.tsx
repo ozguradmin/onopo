@@ -21,10 +21,9 @@ const getCachedHomepageData = unstable_cache(
       'SELECT * FROM homepage_sections WHERE is_active = 1 ORDER BY display_order ASC'
     ).all()
 
-    // Pre-fetch ALL products once (cheaper than multiple queries)
-    // Ordered by id DESC so newest products come first for new_products section
+    // Pre-fetch products - LIMIT 30 for CPU optimization
     const { results: allProducts } = await db.prepare(
-      'SELECT id, name, slug, price, original_price, stock, images, category FROM products WHERE is_active = 1 ORDER BY id DESC LIMIT 500'
+      'SELECT id, name, slug, price, original_price, stock, images, category FROM products WHERE is_active = 1 ORDER BY id DESC LIMIT 30'
     ).all()
 
     // Parse images once for all products

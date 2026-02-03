@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { ShoppingBag, SlidersHorizontal, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatPrice } from '@/lib/formatPrice'
+import { getImageUrl } from '@/lib/utils'
 import { useCartStore } from '@/store/cart-store'
 
 interface Product {
@@ -146,7 +147,7 @@ export default function ProductsClient({
             id: product.id,
             name: product.name,
             price: product.price,
-            image: product.images[0] || '/placeholder.svg'
+            image: getImageUrl(product.images[0])
         })
 
         setAddedProducts(prev => new Set([...prev, product.id]))
@@ -381,11 +382,11 @@ export default function ProductsClient({
                                             <div className="aspect-[4/5] relative bg-white p-4">
                                                 {product.images[0] ? (
                                                     <img
-                                                        src={product.images[0]}
+                                                        src={getImageUrl(product.images[0])}
                                                         alt={product.name}
                                                         className="w-full h-full object-contain hover:scale-105 transition-transform duration-300"
                                                         loading="lazy"
-                                                        data-original-src={product.images[0]}
+                                                        data-original-src={getImageUrl(product.images[0])}
                                                         onError={(e) => {
                                                             const target = e.currentTarget
                                                             const retryCount = parseInt(target.dataset.retryCount || '0')

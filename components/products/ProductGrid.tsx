@@ -2,6 +2,7 @@ import { getDB } from "@/lib/db"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { formatPrice } from "@/lib/formatPrice"
+import { getImageUrl } from "@/lib/utils"
 
 interface ProductGridProps {
     category?: string
@@ -60,7 +61,7 @@ export async function ProductGrid({ category, query }: ProductGridProps) {
                         <div className="aspect-[4/5] relative bg-slate-100">
                             {product.images[0] && (
                                 <img
-                                    src={product.images[0]}
+                                    src={getImageUrl(product.images[0])}
                                     alt={product.name}
                                     className="w-full h-full object-cover"
                                 />
