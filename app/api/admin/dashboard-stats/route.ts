@@ -16,6 +16,16 @@ export async function GET(req: NextRequest) {
 
         const db = await getDB()
 
+        // Common filter: Hide unpaid online orders (PayTR/Iyzico)
+        // Keep offline orders and paid/approved online orders
+        const validOrderFilter = `
+            status != 'cancelled' 
+            AND NOT (
+                payment_status != 'paid' 
+                AND json_extract(shipping_address, '$.provider') IN ('paytr', 'iyzico')
+            )
+        `
+
         // Execute queries in parallel for performance
         const [
             productsCount,
@@ -31,18 +41,18 @@ export async function GET(req: NextRequest) {
             recentOrders
         ] = await Promise.all([
             db.prepare('SELECT COUNT(*) as count FROM products').first(),
-            db.prepare('SELECT COUNT(*) as count FROM orders').first(),
-            db.prepare('SELECT SUM(total_amount) as total FROM orders WHERE status != "cancelled"').first(),
-            db.prepare('SELECT COUNT(*) as count FROM orders WHERE status = "pending"').first(),
-            db.prepare('SELECT COUNT(*) as count FROM orders WHERE status = "completed"').first(),
+            db.prepare(`SELECT COUNT(*) as count FROM orders WHERE ${validOrderFilter}`).first(),
+            db.prepare(`SELECT SUM(total_amount) as total FROM orders WHERE ${validOrderFilter}`).first(),
+            db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = "pending" AND ${validOrderFilter}`).first(),
+            db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = "completed" AND ${validOrderFilter}`).first(),
             db.prepare('SELECT COUNT(*) as count FROM orders WHERE status = "cancelled"').first(),
-            db.prepare('SELECT AVG(total_amount) as avg FROM orders WHERE status != "cancelled"').first(),
+            db.prepare(`SELECT AVG(total_amount) as avg FROM orders WHERE ${validOrderFilter}`).first(),
             db.prepare(`
                 SELECT p.name, SUM(oi.quantity) as sold_count, SUM(oi.quantity * oi.price_at_purchase) as total_revenue
                 FROM order_items oi
                 JOIN products p ON oi.product_id = p.id
                 JOIN orders o ON oi.order_id = o.id
-                WHERE o.status != 'cancelled'
+                WHERE ${validOrderFilter.replace(/status/g, 'o.status').replace(/payment_status/g, 'o.payment_status').replace(/shipping_address/g, 'o.shipping_address')}
                 GROUP BY p.id
                 ORDER BY sold_count DESC
                 LIMIT 10
@@ -52,12 +62,12 @@ export async function GET(req: NextRequest) {
                 FROM order_items oi
                 JOIN products p ON oi.product_id = p.id
                 JOIN orders o ON oi.order_id = o.id
-                WHERE o.status != 'cancelled'
+                WHERE ${validOrderFilter.replace(/status/g, 'o.status').replace(/payment_status/g, 'o.payment_status').replace(/shipping_address/g, 'o.shipping_address')}
                 GROUP BY p.category
                 ORDER BY total_sales DESC
             `).all(),
             db.prepare('SELECT COUNT(*) as count FROM users').first(),
-            db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT 5').all()
+            db.prepare(`SELECT * FROM orders WHERE ${validOrderFilter} ORDER BY created_at DESC LIMIT 5`).all()
         ])
 
         return NextResponse.json({

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
+import { roundPrice } from '@/lib/roundPrice'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import { sendAdminNewOrderNotification, sendOrderConfirmation } from '@/lib/email'
@@ -39,16 +40,17 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Ad soyad zorunlu' }, { status: 400 })
         }
 
-        // Calculate items total
+        // Calculate items total with rounded prices
         let itemsTotal = 0
         const orderItems = []
 
         for (const item of items) {
-            itemsTotal += item.price * item.quantity
+            const roundedPrice = roundPrice(item.price)
+            itemsTotal += roundedPrice * item.quantity
             orderItems.push({
                 product_id: item.id,
                 quantity: item.quantity,
-                price: item.price,
+                price: roundedPrice,
                 name: item.name
             })
         }
@@ -59,14 +61,14 @@ export async function POST(req: NextRequest) {
         const shippingCostDef = shippingSettings ? parseFloat(shippingSettings.shipping_cost) : 100.00
 
         let shippingCost = 0
-        // Check if ANY item is not free shipping (logic assumption: if order total < threshold, charge shipping. 
-        // If we had per-product free shipping overrides, we'd check that, but standard is total based)
-        // User's XML logic used 'product.free_shipping' override. Let's assume site-wide threshold for now unless item specific is needed.
-        // The implementation plan mainly focused on threshold.
-        // XML implementation had: if (!product.free_shipping) { if (price < threshold) ... }
-        // For cart: usually if subtotal >= threshold => free.
 
-        if (itemsTotal < freeThreshold) {
+        // Check if ANY item has free_shipping flag - if so, entire order is free shipping
+        const hasFreeShippingItem = items.some((item: any) => item.free_shipping === true)
+
+        // Free shipping if:
+        // 1. Any item has free_shipping: true, OR
+        // 2. Total is above the free shipping threshold
+        if (!hasFreeShippingItem && itemsTotal < freeThreshold) {
             shippingCost = shippingCostDef
         }
 
@@ -113,9 +115,9 @@ export async function POST(req: NextRequest) {
 
         // Create order items
         const stmt = db.prepare(
-            `INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase) VALUES (?, ?, ?, ?)`
+            `INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase, product_name) VALUES (?, ?, ?, ?, ?)`
         )
-        const batch = orderItems.map(item => stmt.bind(orderId, item.product_id, item.quantity, item.price))
+        const batch = orderItems.map(item => stmt.bind(orderId, item.product_id, item.quantity, item.price, item.name))
         await db.batch(batch)
 
         // PAYMENT INTEGRATION
@@ -228,24 +230,25 @@ export async function GET(req: NextRequest) {
             ? await db.prepare(query).bind(...bindArgs).all()
             : await db.prepare(query).all()
 
-        // Filter out pending/failed PayTR/Online orders for Admin
-        // This prevents 'Pending Payment' / Abandoned carts / Failed payments from clogging the view
+        // Filter out pending/failed PayTR/online orders for Admin
+        // User requested to hide failed attempts.
         const filteredResults = (results || []).filter((order: any) => {
-            if (userRole !== 'admin') return true // Users see their own orders (all statuses)
+            if (userRole !== 'admin') return true // Users see their own orders
 
             try {
+                // If payment is paid, always show
+                if (order.payment_status === 'paid' || order.status === 'approved') return true
+
+                // Parse shipping address to get provider
                 const addr = JSON.parse(order.shipping_address || '{}')
                 const provider = addr.provider
 
-                // If it's an online payment (paytr/iyzico) AND payment is not confirmed -> Hide it
-                // Offline payments (havale) should remain visible even if pending
-                const isOnlinePayment = provider === 'paytr' || provider === 'iyzico'
+                // If provider is offline (Havale/Kapıda Ödeme), show even if pending
+                if (provider === 'offline' || !provider) return true
 
-                // Hide online payments that are:
-                // 1. Pending (user opened payment page but didn't complete)
-                // 2. Failed (payment was rejected/cancelled)
-                // Only show if payment_status is 'paid'
-                if (provider && isOnlinePayment && order.payment_status !== 'paid') {
+                // If online payment (paytr/iyzico) and NOT paid -> Hide
+                // This hides failed PayTR attempts
+                if ((provider === 'paytr' || provider === 'iyzico') && order.payment_status !== 'paid') {
                     return false
                 }
 

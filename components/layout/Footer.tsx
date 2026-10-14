@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Facebook, Instagram, Twitter, Linkedin, DollarSign } from "lucide-react"
+import { Facebook, Instagram, Twitter, Linkedin, Youtube, DollarSign } from "lucide-react"
 import { getImageUrl } from "@/lib/utils"
 
 interface Category {
@@ -24,7 +24,9 @@ export function Footer() {
         facebook_url: '',
         instagram_url: '',
         twitter_url: '',
-        linkedin_url: ''
+        linkedin_url: '',
+        youtube_url: '',
+        footer_social_visible: 'false'
     })
     const [categories, setCategories] = React.useState<Category[]>([])
     const [exchangeRate, setExchangeRate] = React.useState<number | null>(null)
@@ -89,12 +91,15 @@ export function Footer() {
                         <p className="text-sm text-slate-400 max-w-xs leading-relaxed">
                             {settings.site_description}
                         </p>
-                        <div className="flex gap-3 pt-1">
-                            {settings.facebook_url && <SocialLink icon={<Facebook className="w-4 h-4" />} href={settings.facebook_url} />}
-                            {settings.instagram_url && <SocialLink icon={<Instagram className="w-4 h-4" />} href={settings.instagram_url} />}
-                            {settings.twitter_url && <SocialLink icon={<Twitter className="w-4 h-4" />} href={settings.twitter_url} />}
-                            {settings.linkedin_url && <SocialLink icon={<Linkedin className="w-4 h-4" />} href={settings.linkedin_url} />}
-                        </div>
+                        {settings.footer_social_visible === 'true' && (
+                            <div className="flex gap-3 pt-1">
+                                {settings.facebook_url && <SocialLink icon={<Facebook className="w-4 h-4" />} href={settings.facebook_url} />}
+                                {settings.instagram_url && <SocialLink icon={<Instagram className="w-4 h-4" />} href={settings.instagram_url} />}
+                                {settings.twitter_url && <SocialLink icon={<Twitter className="w-4 h-4" />} href={settings.twitter_url} />}
+                                {settings.youtube_url && <SocialLink icon={<Youtube className="w-4 h-4" />} href={settings.youtube_url} />}
+                                {settings.linkedin_url && <SocialLink icon={<Linkedin className="w-4 h-4" />} href={settings.linkedin_url} />}
+                            </div>
+                        )}
                     </div>
 
                     {/* Shop - Dynamic Categories */}

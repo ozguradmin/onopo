@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
         // Single product lookup by exact slug
         if (slugParam && exactSlug) {
             const { results } = await db.prepare(
-                `SELECT id, name, slug, price, original_price, stock, images, category FROM products WHERE slug = ? AND is_active = 1 LIMIT 1`
+                `SELECT id, name, slug, price, original_price, stock, images, category, free_shipping FROM products WHERE slug = ? AND is_active = 1 LIMIT 1`
             ).bind(slugParam).all()
 
             if (results && results.length > 0) {
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
         }
 
         // Base query - only active products, and for customers, hide out-of-stock items
-        let sql = 'SELECT id, name, slug, price, original_price, stock, images, category FROM products WHERE is_active = 1'
+        let sql = 'SELECT id, name, slug, price, original_price, stock, images, category, free_shipping FROM products WHERE is_active = 1'
 
         // For customer-facing pages, only show in-stock products
         if (!includeAll) {
@@ -91,30 +91,74 @@ export async function GET(req: NextRequest) {
 
         sql += ' ORDER BY id DESC'
 
-        // Apply limit if specified
+        // Server-side pagination for customer-facing requests
+        // Admin requests (includeAll=true) bypass pagination
+        const pageParam = searchParams.get('page')
+        const page = parseInt(pageParam || '1', 10)
+        const pageSize = Math.min(parseInt(limit || '24', 10), 200) // Default 24, max 200
+
+        if (!includeAll) {
+            // If 'page' param is explicitly set, use paginated object format
+            // Otherwise (just 'limit' for homepage etc), use legacy array format
+            if (pageParam) {
+                // Get total count first (for pagination info)
+                let countSql = sql.replace('SELECT id, name, slug, price, original_price, stock, images, category, free_shipping', 'SELECT COUNT(*) as total')
+                const countResult = params.length > 0
+                    ? await db.prepare(countSql).bind(...params).first() as any
+                    : await db.prepare(countSql).first() as any
+                const totalCount = countResult?.total || 0
+
+                // Apply pagination
+                const offset = (page - 1) * pageSize
+                sql += ` LIMIT ${pageSize} OFFSET ${offset}`
+
+                const { results } = params.length > 0
+                    ? await db.prepare(sql).bind(...params).all()
+                    : await db.prepare(sql).all()
+
+                // Return paginated response (object format)
+                return NextResponse.json({
+                    products: results as any[],
+                    totalCount,
+                    page,
+                    pageSize,
+                    totalPages: Math.ceil(totalCount / pageSize)
+                }, {
+                    headers: {
+                        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600'
+                    }
+                })
+            } else {
+                // Legacy format (array) for homepage etc - just apply limit
+                sql += ` LIMIT ${pageSize}`
+
+                const { results } = params.length > 0
+                    ? await db.prepare(sql).bind(...params).all()
+                    : await db.prepare(sql).all()
+
+                return NextResponse.json(results as any[], {
+                    headers: {
+                        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600'
+                    }
+                })
+            }
+        }
+
+        // Admin request - return all products without pagination (array format)
         if (limit) {
             const limitNum = parseInt(limit, 10)
-            if (limitNum > 0 && limitNum <= 500) {
-                sql += ` LIMIT ${limitNum}`
-            }
+            if (limitNum > 0) sql += ` LIMIT ${limitNum}`
         }
 
         const { results } = params.length > 0
             ? await db.prepare(sql).bind(...params).all()
             : await db.prepare(sql).all()
 
-        const products = results.map((p: any) => ({
-            ...p,
-            images: (() => {
-                try {
-                    return p.images ? JSON.parse(p.images) : []
-                } catch {
-                    return []
-                }
-            })()
-        }))
+        // CPU Optimization: Return raw data without JSON.parse loop
+        // Client handles parsing for better CPU distribution
+        const products = results as any[]
 
-        // Add cache headers for edge caching (60 seconds)
+        // Admin response - array format for backwards compatibility
         return NextResponse.json(products, {
             headers: {
                 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300'

@@ -13,7 +13,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             'SELECT * FROM product_variations WHERE product_id = ? ORDER BY name, value'
         ).bind(id).all()
 
-        return NextResponse.json(results || [])
+        return NextResponse.json(results || [], {
+            headers: {
+                'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300'
+            }
+        })
     } catch (error: any) {
         console.error('Variations fetch error:', error)
         return NextResponse.json([], { status: 500 })

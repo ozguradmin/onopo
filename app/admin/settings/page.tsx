@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, User, Lock, Save, Upload, X, Image } from 'lucide-react'
+import { ArrowLeft, User, Lock, Save, Upload, X, Image, Facebook, Instagram, Twitter, Youtube, Linkedin } from 'lucide-react'
 
 export default function AdminSettingsPage() {
     const router = useRouter()
@@ -32,6 +32,16 @@ export default function AdminSettingsPage() {
     const [footerEmail, setFooterEmail] = React.useState('')
     const [footerPhone, setFooterPhone] = React.useState('')
     const [footerAddress, setFooterAddress] = React.useState('')
+
+    // Social Media URLs
+    const [facebookUrl, setFacebookUrl] = React.useState('https://www.facebook.com/people/Onopostorecom/61572923320449/')
+    const [instagramUrl, setInstagramUrl] = React.useState('https://www.instagram.com/onopostorecom/?igsh=aXgyYzMxbWlnaHJ0&utm_source=qr#')
+    const [twitterUrl, setTwitterUrl] = React.useState('https://x.com/onopostore')
+    const [youtubeUrl, setYoutubeUrl] = React.useState('https://www.youtube.com/@onopostore')
+    const [linkedinUrl, setLinkedinUrl] = React.useState('')
+
+    // Footer Social Media Visibility
+    const [footerSocialVisible, setFooterSocialVisible] = React.useState(false)
 
     // Admin Notification Email
     const [adminEmail, setAdminEmail] = React.useState('')
@@ -65,6 +75,13 @@ export default function AdminSettingsPage() {
                 setFooterEmail(settingsData.footer_email || '')
                 setFooterPhone(settingsData.footer_phone || '')
                 setFooterAddress(settingsData.footer_address || '')
+                // Social media URLs
+                if (settingsData.facebook_url !== undefined) setFacebookUrl(settingsData.facebook_url)
+                if (settingsData.instagram_url !== undefined) setInstagramUrl(settingsData.instagram_url)
+                if (settingsData.twitter_url !== undefined) setTwitterUrl(settingsData.twitter_url)
+                if (settingsData.youtube_url !== undefined) setYoutubeUrl(settingsData.youtube_url)
+                if (settingsData.linkedin_url !== undefined) setLinkedinUrl(settingsData.linkedin_url)
+                if (settingsData.footer_social_visible !== undefined) setFooterSocialVisible(settingsData.footer_social_visible === 'true')
                 setAdminEmail(settingsData.admin_email || '')
                 setProductsPerPage(settingsData.products_per_page || '40')
             }
@@ -106,6 +123,12 @@ export default function AdminSettingsPage() {
                     footer_email: footerEmail,
                     footer_phone: footerPhone,
                     footer_address: footerAddress,
+                    facebook_url: facebookUrl,
+                    instagram_url: instagramUrl,
+                    twitter_url: twitterUrl,
+                    youtube_url: youtubeUrl,
+                    linkedin_url: linkedinUrl,
+                    footer_social_visible: footerSocialVisible ? 'true' : 'false',
                     admin_email: adminEmail,
                     products_per_page: productsPerPage
                 })
@@ -340,6 +363,93 @@ export default function AdminSettingsPage() {
                                     className="w-full p-2 border rounded-lg"
                                     placeholder="İstanbul, Türkiye"
                                 />
+                            </div>
+                        </div>
+
+                        {/* Social Media URLs */}
+                        <div className="border-t pt-4 mt-4">
+                            <h3 className="font-semibold mb-4 text-sm text-slate-500 uppercase tracking-wider">📱 Sosyal Medya Hesapları</h3>
+                            <p className="text-xs text-slate-500 mb-4">Burada girdiğiniz linkler hem TopBar hem Footer'da otomatik olarak kullanılır.</p>
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 flex items-center gap-2">
+                                        <Facebook className="w-4 h-4 text-blue-600" /> Facebook
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={facebookUrl}
+                                        onChange={e => setFacebookUrl(e.target.value)}
+                                        className="w-full p-2 border rounded-lg"
+                                        placeholder="https://facebook.com/..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 flex items-center gap-2">
+                                        <Instagram className="w-4 h-4 text-pink-600" /> Instagram
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={instagramUrl}
+                                        onChange={e => setInstagramUrl(e.target.value)}
+                                        className="w-full p-2 border rounded-lg"
+                                        placeholder="https://instagram.com/..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 flex items-center gap-2">
+                                        <Twitter className="w-4 h-4 text-sky-500" /> X (Twitter)
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={twitterUrl}
+                                        onChange={e => setTwitterUrl(e.target.value)}
+                                        className="w-full p-2 border rounded-lg"
+                                        placeholder="https://x.com/..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 flex items-center gap-2">
+                                        <Youtube className="w-4 h-4 text-red-600" /> YouTube
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={youtubeUrl}
+                                        onChange={e => setYoutubeUrl(e.target.value)}
+                                        className="w-full p-2 border rounded-lg"
+                                        placeholder="https://youtube.com/@..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 flex items-center gap-2">
+                                        <Linkedin className="w-4 h-4 text-blue-700" /> LinkedIn
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={linkedinUrl}
+                                        onChange={e => setLinkedinUrl(e.target.value)}
+                                        className="w-full p-2 border rounded-lg"
+                                        placeholder="https://linkedin.com/..."
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Footer Social Visibility Toggle */}
+                            <div className="mt-6 p-4 bg-slate-50 rounded-lg border">
+                                <label className="flex items-center justify-between cursor-pointer">
+                                    <div>
+                                        <span className="font-medium text-sm">Footer'da Sosyal Medya İkonlarını Göster</span>
+                                        <p className="text-xs text-slate-500 mt-1">Kapalıyken footer'da sosyal medya ikonları gizlenir, TopBar'da her zaman görünür</p>
+                                    </div>
+                                    <div className="relative">
+                                        <input
+                                            type="checkbox"
+                                            checked={footerSocialVisible}
+                                            onChange={e => setFooterSocialVisible(e.target.checked)}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                    </div>
+                                </label>
                             </div>
                         </div>
 

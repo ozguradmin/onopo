@@ -14,8 +14,6 @@ export async function getDB() {
             throw new Error('Cloudflare environment not found')
         }
 
-        console.log('AVAILABLE ENV KEYS:', Object.keys(env))
-
         if (!env.DB) {
             console.error('DATABASE ERROR: Binding DB not found in environment.')
             throw new Error('Database binding not found')

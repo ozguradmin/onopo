@@ -36,7 +36,7 @@ export default function HomePageClient() {
         // Fetch data client-side to avoid SSR CPU usage
         Promise.all([
             fetch('/api/homepage-sections').then(r => r.json()),
-            fetch('/api/products?limit=30').then(r => r.json())
+            fetch('/api/products?limit=200').then(r => r.json())
         ])
             .then(([sectionsData, productsData]) => {
                 setSections(Array.isArray(sectionsData) ? sectionsData : [])

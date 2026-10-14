@@ -85,7 +85,7 @@ export function HeroSection() {
                     </div>
 
                     {/* Content */}
-                    <div className="relative h-full container mx-auto px-4 flex flex-col justify-center items-start z-10">
+                    <div className="relative h-full container mx-auto px-4 flex flex-col justify-center items-start z-10 pt-20 lg:pt-0">
                         <motion.div
                             initial={{ y: 20, opacity: 0 }}
                             animate={{ y: 0, opacity: 1 }}

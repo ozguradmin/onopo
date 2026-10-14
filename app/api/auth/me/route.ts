@@ -18,11 +18,21 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
         }
 
-        // Fetch user from database to get full_name, phone, and address
+        // Fetch user from database
         const db = await getDB()
-        const user = await db.prepare(
-            'SELECT id, email, full_name, phone, address, role FROM users WHERE id = ?'
-        ).bind(payload.id).first() as any
+
+        // Try with new columns first, fallback to basic columns if they don't exist
+        let user: any
+        try {
+            user = await db.prepare(
+                'SELECT id, email, full_name, phone, address, city, district, postal_code, role FROM users WHERE id = ?'
+            ).bind(payload.id).first()
+        } catch (e) {
+            // Fallback to basic columns if new ones don't exist
+            user = await db.prepare(
+                'SELECT id, email, full_name, phone, address, role FROM users WHERE id = ?'
+            ).bind(payload.id).first()
+        }
 
         if (!user) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -35,7 +45,10 @@ export async function GET(req: NextRequest) {
                 role: user.role,
                 full_name: user.full_name,
                 phone: user.phone,
-                address: user.address || ''
+                address: user.address || '',
+                city: user.city || '',
+                district: user.district || '',
+                postal_code: user.postal_code || ''
             }
         })
 

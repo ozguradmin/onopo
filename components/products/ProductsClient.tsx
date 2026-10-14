@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ShoppingBag, SlidersHorizontal, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatPrice } from '@/lib/formatPrice'
-import { getImageUrl } from '@/lib/utils'
+import { getImageUrl, parseProductImages } from '@/lib/utils'
 import { useCartStore } from '@/store/cart-store'
 
 interface Product {
@@ -20,53 +20,63 @@ interface Product {
     images: string[]
 }
 
+interface ServerPaginationInfo {
+    totalCount: number
+    totalPages: number
+    currentPage: number
+    isLoading?: boolean
+}
+
 interface ProductsClientProps {
     initialProducts: Product[]
     initialCategories: { name: string; slug: string; count: number }[]
     initialBrands: string[]
     searchParams: { category?: string; q?: string; page?: string; sort?: string; minPrice?: string; maxPrice?: string; brand?: string }
     itemsPerPage?: number
+    serverPagination?: ServerPaginationInfo
 }
 
-const DEFAULT_ITEMS_PER_PAGE = 40
+const DEFAULT_ITEMS_PER_PAGE = 24
 
 export default function ProductsClient({
     initialProducts,
     initialCategories,
     initialBrands,
-    searchParams,
-    itemsPerPage = DEFAULT_ITEMS_PER_PAGE
+    searchParams: initialSearchParams,
+    itemsPerPage = DEFAULT_ITEMS_PER_PAGE,
+    serverPagination
 }: ProductsClientProps) {
     const { addItem, openCart } = useCartStore()
+    const router = useRouter()
+    const searchParams = useSearchParams() // Use hook for hydration-safe params
+
     const [showFilters, setShowFilters] = useState(false)
     const [addedProducts, setAddedProducts] = useState<Set<number>>(new Set())
 
     // Filter states
-    const [minPrice, setMinPrice] = useState(searchParams.minPrice || '')
-    const [maxPrice, setMaxPrice] = useState(searchParams.maxPrice || '')
-    const [selectedBrand, setSelectedBrand] = useState(searchParams.brand || '')
-    const [sortBy, setSortBy] = useState(searchParams.sort || 'newest')
+    const [minPrice, setMinPrice] = useState(searchParams.get('minPrice') || '')
+    const [maxPrice, setMaxPrice] = useState(searchParams.get('maxPrice') || '')
+    const [selectedBrand, setSelectedBrand] = useState(searchParams.get('brand') || '')
+    const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'newest')
 
-    const currentPage = parseInt(searchParams.page || '1')
-
-    const router = useRouter()
+    const currentPage = parseInt(searchParams.get('page') || '1')
 
     // Search state
-    const [searchQuery, setSearchQuery] = useState(searchParams.q || '')
+    const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '')
 
     // Sync state with URL params (Critical for navigation/popstate)
     useEffect(() => {
-        setSearchQuery(searchParams.q || '')
-        setMinPrice(searchParams.minPrice || '')
-        setMaxPrice(searchParams.maxPrice || '')
-        setSelectedBrand(searchParams.brand || '')
-        setSortBy(searchParams.sort || 'newest')
+        setSearchQuery(searchParams.get('q') || '')
+        setMinPrice(searchParams.get('minPrice') || '')
+        setMaxPrice(searchParams.get('maxPrice') || '')
+        setSelectedBrand(searchParams.get('brand') || '')
+        setSortBy(searchParams.get('sort') || 'newest')
     }, [searchParams])
 
     // Debounce search - use window.location.href for reliable navigation
     useEffect(() => {
         const timer = setTimeout(() => {
-            const currentQ = searchParams.q || ''
+            const currentQ = searchParams.get('q') || ''
             const newQ = searchQuery.trim()
 
             // Only navigate if query actually changed
@@ -83,7 +93,7 @@ export default function ProductsClient({
             }
         }, 600) // Slightly longer debounce
         return () => clearTimeout(timer)
-    }, [searchQuery, searchParams.q])
+    }, [searchQuery, searchParams])
 
     const updateUrl = (updates: any) => {
         const params = new URLSearchParams(window.location.search)
@@ -132,12 +142,11 @@ export default function ProductsClient({
         return result
     }, [initialProducts, minPrice, maxPrice, selectedBrand, sortBy])
 
-    // Pagination
-    const totalPages = Math.ceil(filteredProducts.length / itemsPerPage)
-    const paginatedProducts = filteredProducts.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-    )
+    // Pagination - use server pagination if available
+    const totalPages = serverPagination?.totalPages || Math.ceil(filteredProducts.length / itemsPerPage)
+    const paginatedProducts = serverPagination
+        ? filteredProducts // Server already paginated
+        : filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
     const handleAddToCart = (product: Product, e: React.MouseEvent) => {
         e.preventDefault()
@@ -147,7 +156,7 @@ export default function ProductsClient({
             id: product.id,
             name: product.name,
             price: product.price,
-            image: getImageUrl(product.images[0])
+            image: getImageUrl(parseProductImages(product.images)[0])
         })
 
         setAddedProducts(prev => new Set([...prev, product.id]))
@@ -202,16 +211,16 @@ export default function ProductsClient({
 
     return (
 
-        <div className="container mx-auto px-4 py-8 mt-20">
+        <div className="container mx-auto px-2 lg:px-4 py-2 lg:py-8 pt-2 lg:mt-16">
             {/* Header */}
-            <div className="flex flex-col gap-4 mb-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col gap-2 mb-3 lg:mb-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 lg:gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold text-slate-900">
+                        <h1 className="text-lg lg:text-3xl font-bold text-slate-900">
                             {searchParams.category || (searchParams.q ? `Sonuçlar: "${searchParams.q}"` : 'Tüm Ürünler')}
                         </h1>
-                        <p className="text-slate-500 mt-1">
-                            Toplam <strong>{filteredProducts.length}</strong> ürün bulunmaktadır
+                        <p className="text-slate-500 text-xs lg:text-sm mt-0.5">
+                            Toplam <strong>{serverPagination?.totalCount ?? filteredProducts.length}</strong> ürün bulunmaktadır
                         </p>
                     </div>
 
@@ -375,22 +384,22 @@ export default function ProductsClient({
                         </div>
                     ) : (
                         <>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 lg:gap-6">
                                 {paginatedProducts.map((product) => (
-                                    <div key={product.id} className="group bg-white rounded-2xl overflow-hidden border border-slate-100 hover:shadow-lg transition-all">
+                                    <div key={product.id} className="group bg-white rounded-lg lg:rounded-2xl overflow-hidden border border-slate-100 hover:shadow-lg transition-all">
                                         <Link href={`/${product.slug}`} className="block">
-                                            <div className="aspect-[4/5] relative bg-white p-4">
-                                                {product.images[0] ? (
+                                            <div className="aspect-square relative bg-white p-2 lg:p-4">
+                                                {parseProductImages(product.images)[0] ? (
                                                     <img
-                                                        src={getImageUrl(product.images[0])}
+                                                        src={getImageUrl(parseProductImages(product.images)[0])}
                                                         alt={product.name}
                                                         className="w-full h-full object-contain hover:scale-105 transition-transform duration-300"
                                                         loading="lazy"
-                                                        data-original-src={getImageUrl(product.images[0])}
+                                                        data-original-src={getImageUrl(parseProductImages(product.images)[0])}
                                                         onError={(e) => {
                                                             const target = e.currentTarget
                                                             const retryCount = parseInt(target.dataset.retryCount || '0')
-                                                            const originalSrc = target.dataset.originalSrc || product.images[0]
+                                                            const originalSrc = target.dataset.originalSrc || parseProductImages(product.images)[0]
 
                                                             if (retryCount < 3) {
                                                                 // Retry loading with cache bust
@@ -420,38 +429,38 @@ export default function ProductsClient({
                                                     </div>
                                                 )}
                                                 {hasDiscount(product) && getDiscountPercent(product) > 0 && (
-                                                    <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-lg">
+                                                    <div className="absolute top-2 left-2 bg-red-500/60 text-white text-[9px] lg:text-xs font-bold px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-lg backdrop-blur-sm">
                                                         %{getDiscountPercent(product)} İndirim
                                                     </div>
                                                 )}
                                             </div>
                                         </Link>
-                                        <div className="p-4">
+                                        <div className="p-2 lg:p-4">
                                             <Link href={`/${product.slug}`}>
-                                                <h3 className="font-medium text-slate-900 line-clamp-2 text-sm group-hover:text-blue-600 transition-colors mb-2">
+                                                <h3 className="font-medium text-slate-900 line-clamp-2 text-xs lg:text-sm group-hover:text-blue-600 transition-colors mb-1 lg:mb-2">
                                                     {product.name}
                                                 </h3>
                                             </Link>
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <span className="font-bold text-slate-900">
+                                            <div className="flex items-center gap-1 lg:gap-2 mb-2 lg:mb-3">
+                                                <span className="text-sm lg:text-base font-bold text-slate-900">
                                                     {formatPrice(product.price)}
                                                 </span>
                                                 {hasDiscount(product) && (
-                                                    <span className="text-xs text-slate-400 line-through">
+                                                    <span className="text-[10px] lg:text-xs text-slate-400 line-through">
                                                         {formatPrice(product.original_price!)}
                                                     </span>
                                                 )}
                                             </div>
                                             <Button
                                                 size="sm"
-                                                className={`w-full gap-2 transition-all ${addedProducts.has(product.id)
+                                                className={`w-full gap-1 lg:gap-2 text-xs lg:text-sm h-8 lg:h-9 transition-all ${addedProducts.has(product.id)
                                                     ? 'bg-green-500 hover:bg-green-600'
                                                     : 'bg-slate-900 hover:bg-slate-800'
                                                     }`}
                                                 onClick={(e) => handleAddToCart(product, e)}
                                                 disabled={product.stock <= 0}
                                             >
-                                                <ShoppingBag className="w-4 h-4" />
+                                                <ShoppingBag className="w-3 h-3 lg:w-4 lg:h-4" />
                                                 {addedProducts.has(product.id) ? 'Eklendi!' : product.stock > 0 ? 'Sepete Ekle' : 'Tükendi'}
                                             </Button>
                                         </div>
@@ -469,18 +478,24 @@ export default function ProductsClient({
                                         <ChevronLeft className="w-5 h-5" />
                                     </Link>
 
-                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                        let page: number
+                                    {(() => {
+                                        let startPage = Math.max(1, currentPage - 2);
+                                        let endPage = Math.min(totalPages, currentPage + 2);
+
                                         if (totalPages <= 5) {
-                                            page = i + 1
-                                        } else if (currentPage <= 3) {
-                                            page = i + 1
-                                        } else if (currentPage >= totalPages - 2) {
-                                            page = totalPages - 4 + i
+                                            startPage = 1;
+                                            endPage = totalPages;
                                         } else {
-                                            page = currentPage - 2 + i
+                                            if (currentPage <= 3) {
+                                                startPage = 1;
+                                                endPage = 5;
+                                            } else if (currentPage >= totalPages - 2) {
+                                                startPage = totalPages - 4;
+                                                endPage = totalPages;
+                                            }
                                         }
-                                        return (
+
+                                        return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i).map(page => (
                                             <Link
                                                 key={page}
                                                 href={getPageUrl(page)}
@@ -491,8 +506,8 @@ export default function ProductsClient({
                                             >
                                                 {page}
                                             </Link>
-                                        )
-                                    })}
+                                        ));
+                                    })()}
 
                                     <Link
                                         href={getPageUrl(Math.min(totalPages, currentPage + 1))}

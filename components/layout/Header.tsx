@@ -343,18 +343,15 @@ function CategoriesDropdown() {
     const [loading, setLoading] = React.useState(true)
 
     React.useEffect(() => {
-        // Find distinct categories with product count
-        fetch('/api/products')
+        // Fetch categories from categories API (has accurate product counts)
+        fetch('/api/categories?hideEmpty=true')
             .then(res => res.json())
-            .then(products => {
-                if (Array.isArray(products)) {
-                    const cats = products.reduce((acc: any, product: any) => {
-                        if (!product.category) return acc
-                        if (!acc[product.category]) acc[product.category] = 0
-                        acc[product.category]++
-                        return acc
-                    }, {})
-                    setCategories(Object.entries(cats).map(([name, count]) => ({ name, count })))
+            .then(data => {
+                if (Array.isArray(data)) {
+                    setCategories(data.map((cat: any) => ({
+                        name: cat.name,
+                        count: cat.product_count || 0
+                    })))
                 }
                 setLoading(false)
             })
@@ -381,22 +378,20 @@ function CategoriesDropdown() {
 }
 
 function MobileCategoriesDropdown({ onClose }: { onClose: () => void }) {
-    const [isOpen, setIsOpen] = React.useState(false)
+    const [isOpen, setIsOpen] = React.useState(true)
     const [categories, setCategories] = React.useState<any[]>([])
     const [loading, setLoading] = React.useState(true)
 
     React.useEffect(() => {
-        fetch('/api/products')
+        // Fetch categories from categories API (has accurate product counts)
+        fetch('/api/categories?hideEmpty=true')
             .then(res => res.json())
-            .then(products => {
-                if (Array.isArray(products)) {
-                    const cats = products.reduce((acc: any, product: any) => {
-                        if (!product.category) return acc
-                        if (!acc[product.category]) acc[product.category] = 0
-                        acc[product.category]++
-                        return acc
-                    }, {})
-                    setCategories(Object.entries(cats).map(([name, count]) => ({ name, count })))
+            .then(data => {
+                if (Array.isArray(data)) {
+                    setCategories(data.map((cat: any) => ({
+                        name: cat.name,
+                        count: cat.product_count || 0
+                    })))
                 }
                 setLoading(false)
             })

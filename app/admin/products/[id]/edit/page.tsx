@@ -281,6 +281,35 @@ export default function EditProductPage() {
                                 <p className="text-xs text-emerald-600 mt-1">Otomatik güncellenecek</p>
                             </div>
                         )}
+                        {/* Rounded Price Preview */}
+                        {(formData.price || (formData.price_usd && exchangeRate > 0)) && (() => {
+                            const rawPrice = formData.price
+                                ? parseFloat(formData.price.replace(',', '.'))
+                                : (parseFloat(formData.price_usd.replace(',', '.')) || 0) * exchangeRate
+                            if (rawPrice <= 0) return null
+                            // Round to nearest 5 with .99 ending
+                            const wholePart = Math.floor(rawPrice)
+                            const remainder = wholePart % 5
+                            let roundedWhole = remainder < 2.5
+                                ? wholePart - remainder
+                                : wholePart + (5 - remainder)
+                            let roundedPrice = roundedWhole - 0.01
+                            if (Math.abs(roundedPrice - rawPrice) > 4) {
+                                roundedPrice = rawPrice > roundedPrice
+                                    ? Math.ceil(rawPrice) - 0.01
+                                    : Math.floor(rawPrice) - 0.01
+                            }
+                            if (roundedPrice < 0.99) roundedPrice = 0.99
+                            return (
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-blue-800">Yuvarlanmış Fiyat</label>
+                                    <div className="p-2 bg-blue-100 rounded-lg text-blue-900 font-bold">
+                                        ₺{roundedPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </div>
+                                    <p className="text-xs text-blue-600 mt-1">Müşteriye gösterilecek</p>
+                                </div>
+                            )
+                        })()}
                     </div>
                 </div>
 

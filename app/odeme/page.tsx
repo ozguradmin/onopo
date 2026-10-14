@@ -100,30 +100,16 @@ export default function CheckoutPage() {
             .then(data => {
                 if (data?.user) {
                     setUser(data.user)
-                    // Parse user address if it's a JSON string or use directly
-                    let addressData = { address: '', city: '', district: '' }
-                    if (data.user.address) {
-                        try {
-                            // Try parsing as JSON (for structured address)
-                            const parsed = JSON.parse(data.user.address)
-                            addressData = {
-                                address: parsed.address || data.user.address,
-                                city: parsed.city || '',
-                                district: parsed.district || ''
-                            }
-                        } catch {
-                            // Plain text address
-                            addressData.address = data.user.address
-                        }
-                    }
+                    // Use address fields directly from user object
                     setFormData(prev => ({
                         ...prev,
                         fullName: data.user.full_name || '',
                         email: data.user.email || '',
                         phone: data.user.phone || '',
-                        address: addressData.address,
-                        city: addressData.city,
-                        district: addressData.district
+                        address: data.user.address || '',
+                        city: data.user.city || '',
+                        district: data.user.district || '',
+                        postalCode: data.user.postal_code || ''
                     }))
                 }
             })
@@ -194,7 +180,8 @@ export default function CheckoutPage() {
                         id: item.id,
                         name: item.name,
                         price: item.price,
-                        quantity: item.quantity
+                        quantity: item.quantity,
+                        free_shipping: item.free_shipping || false
                     })),
                     customerInfo: formData
                 })
@@ -617,15 +604,17 @@ export default function CheckoutPage() {
                             <div className="space-y-4 mb-6">
                                 {items.map((item, idx) => (
                                     <div key={idx} className="flex gap-3">
-                                        <div className="w-16 h-16 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0">
+                                        <Link href={`/${item.slug || 'product/' + item.id}`} target="_blank" className="block w-16 h-16 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0 hover:opacity-80 transition-opacity">
                                             <img
                                                 src={item.image || '/placeholder.svg'}
                                                 alt={item.name}
                                                 className="w-full h-full object-cover"
                                             />
-                                        </div>
+                                        </Link>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-slate-900 truncate">{item.name}</p>
+                                            <Link href={`/${item.slug || 'product/' + item.id}`} target="_blank" className="text-sm font-medium text-slate-900 hover:text-blue-600 hover:underline block mb-1">
+                                                {item.name}
+                                            </Link>
                                             <p className="text-sm text-slate-500">Adet: {item.quantity}</p>
                                             <p className="text-sm font-bold text-slate-900">{formatPrice(item.price * item.quantity)}</p>
                                         </div>
@@ -696,7 +685,7 @@ export default function CheckoutPage() {
                                 )}
                                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-100">
                                     <span className="text-slate-900">Toplam</span>
-                                    <span className="text-slate-900">{formatPrice(finalTotal)}</span>
+                                    <span className="text-slate-900">{formatPrice(finalTotal, false)}</span>
                                 </div>
                             </div>
                         </div>

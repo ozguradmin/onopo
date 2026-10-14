@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save, Package, Truck, Check, X, Clock, ExternalLink, Trash2 } from 'lucide-react'
+import { ArrowLeft, Save, Package, Truck, Check, X, Clock, ExternalLink, Trash2, Printer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -86,6 +86,72 @@ export default function OrderEditPage() {
         }
     }
 
+
+    const handlePrint = () => {
+        if (!order) return
+
+        const shippingAddress = (() => {
+            try {
+                return typeof order.shipping_address === 'string'
+                    ? JSON.parse(order.shipping_address)
+                    : order.shipping_address
+            } catch {
+                return {}
+            }
+        })()
+
+        const printWindow = window.open('', '_blank')
+        if (!printWindow) return
+
+        const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Sipariş #${orderId} - Kargo Etiketi</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; max-width: 400px; margin: 0 auto; border: 1px solid #ccc; }
+                    h1 { font-size: 18px; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+                    p { margin: 5px 0; font-size: 14px; }
+                    .label { font-weight: bold; width: 100px; display: inline-block; }
+                    .address { margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; }
+                    .footer { margin-top: 30px; font-size: 12px; color: #666; border-top: 1px solid #eee; padding-top: 10px; }
+                    @media print {
+                        body { border: none; }
+                        .no-print { display: none; }
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>Alıcı Bilgileri</h1>
+                <p><span class="label">Alıcı:</span> ${shippingAddress.fullName || order.guest_email || 'Misafir'}</p>
+                <p><span class="label">Telefon:</span> ${shippingAddress.phone || order.guest_phone || '-'}</p>
+                
+                <div class="address">
+                    <p><strong>Adres:</strong></p>
+                    <p>${shippingAddress.address || '-'}</p>
+                    <p>
+                        ${[shippingAddress.district, shippingAddress.city].filter(Boolean).join(' / ')}
+                    </p>
+                    ${shippingAddress.postalCode ? `<p>${shippingAddress.postalCode}</p>` : ''}
+                </div>
+
+                <div class="footer">
+                    <p>Sipariş No: #${orderId}</p>
+                    <p>Tarih: ${new Date().toLocaleDateString('tr-TR')}</p>
+                </div>
+                <script>
+                    window.onload = () => {
+                        window.print();
+                    }
+                </script>
+            </body>
+            </html>
+        `
+
+        printWindow.document.write(html)
+        printWindow.document.close()
+    }
+
     const handleDelete = async () => {
         if (!confirm('Bu siparişi silmek istediğinize emin misiniz? Bu işlem geri alınamaz!')) return
 
@@ -137,6 +203,14 @@ export default function OrderEditPage() {
                     </p>
                 </div>
                 <div className="ml-auto flex gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={handlePrint}
+                        className="gap-2"
+                    >
+                        <Printer className="w-4 h-4" />
+                        Yazdır
+                    </Button>
                     <Button
                         variant="outline"
                         className="text-red-600 hover:bg-red-50 border-red-200"

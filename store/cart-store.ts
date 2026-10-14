@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { roundPrice } from '@/lib/roundPrice'
 
 export interface Product {
     id: number | string
@@ -8,6 +9,7 @@ export interface Product {
     image: string
     category?: string
     slug?: string
+    free_shipping?: boolean
 }
 
 export interface CartItem extends Product {
@@ -77,7 +79,7 @@ export const useCartStore = create<CartState>()(
                 if (existingItem) {
                     newItems = items.map(item =>
                         item.id === product.id
-                            ? { ...item, quantity: item.quantity + 1 }
+                            ? { ...item, ...product, quantity: item.quantity + 1 } // Update item properties (like free_shipping)
                             : item
                     )
                 } else {
@@ -112,12 +114,21 @@ export const useCartStore = create<CartState>()(
             totalItems: () => get().items.reduce((total, item) => total + item.quantity, 0),
 
             getSubtotal: () => {
-                return get().items.reduce((total, item) => total + (item.price * item.quantity), 0)
+                // Use roundPrice to calculate subtotal based on DISPLAY price (e.g. 0.57 becomes 0.99)
+                // This ensures "What you see is what you pay"
+                return get().items.reduce((total, item) => total + (roundPrice(item.price) * item.quantity), 0)
             },
 
             getShippingCost: () => {
+                const items = get().items
                 const subtotal = get().getSubtotal()
                 if (subtotal === 0) return 0
+
+                // Eğer herhangi bir üründe ücretsiz kargo varsa, tüm sepet ücretsiz
+                if (items.some(item => item.free_shipping)) {
+                    return 0
+                }
+
                 const settings = get().shippingSettings
                 return subtotal >= settings.freeThreshold ? 0 : settings.shippingCost
             },

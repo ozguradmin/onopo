@@ -49,16 +49,7 @@ const nextConfig: NextConfig = {
           }
         ]
       },
-      {
-        // Images - cache for 1 week
-        source: '/api/images/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=604800, stale-while-revalidate=86400'
-          }
-        ]
-      },
+
       {
         // All pages - allow CDN caching with stale-while-revalidate
         source: '/:path*',

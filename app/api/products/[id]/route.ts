@@ -18,6 +18,10 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
         return NextResponse.json({
             ...product,
             images: product.images ? JSON.parse(product.images as string) : []
+        }, {
+            headers: {
+                'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300'
+            }
         })
 
     } catch (error: any) {
@@ -130,6 +134,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
                     `UPDATE products SET 
                      name = ?, description = ?, price = ?, original_price = ?, stock = ?, 
                      images = ?, category = ?, warranty_info = ?, delivery_info = ?, installment_info = ?,
+                     free_shipping = ?,
                      updated_at = CURRENT_TIMESTAMP
                      WHERE id = ?`
                 ).bind(
@@ -143,6 +148,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
                     warranty_info || '',
                     delivery_info || '',
                     installment_info || '',
+                    safeFreeShipping,
                     intId
                 ).run()
             } else {

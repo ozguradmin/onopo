@@ -16,7 +16,7 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
         }
 
-        const { phone, address } = await req.json()
+        const { phone, address, city, district, postal_code } = await req.json()
 
         const db = await getDB()
 
@@ -34,6 +34,21 @@ export async function PUT(req: NextRequest) {
             values.push(address)
         }
 
+        if (city !== undefined) {
+            updates.push('city = ?')
+            values.push(city)
+        }
+
+        if (district !== undefined) {
+            updates.push('district = ?')
+            values.push(district)
+        }
+
+        if (postal_code !== undefined) {
+            updates.push('postal_code = ?')
+            values.push(postal_code)
+        }
+
         if (updates.length === 0) {
             return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
         }
@@ -46,7 +61,7 @@ export async function PUT(req: NextRequest) {
 
         // Fetch updated user
         const user = await db.prepare(
-            'SELECT id, email, full_name, phone, address, role FROM users WHERE id = ?'
+            'SELECT id, email, full_name, phone, address, city, district, postal_code, role FROM users WHERE id = ?'
         ).bind(payload.id).first() as any
 
         return NextResponse.json({
@@ -57,7 +72,10 @@ export async function PUT(req: NextRequest) {
                 role: user.role,
                 full_name: user.full_name,
                 phone: user.phone,
-                address: user.address || ''
+                address: user.address || '',
+                city: user.city || '',
+                district: user.district || '',
+                postal_code: user.postal_code || ''
             }
         })
 

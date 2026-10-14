@@ -6,7 +6,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useCartStore } from "@/store/cart-store"
-import { cn, getImageUrl } from "@/lib/utils"
+import { cn, getImageUrl, parseProductImages } from "@/lib/utils"
 import { formatPrice } from "@/lib/formatPrice"
 
 interface ProductShowcaseProps {
@@ -54,10 +54,10 @@ export default function ProductShowcase({ title = "Trend Ürünler", description
     }
 
     return (
-        <section className="py-12 bg-slate-50">
-            <div className="container mx-auto px-4 mb-8">
+        <section className="py-4 lg:py-8 bg-slate-50">
+            <div className="container mx-auto px-4 mb-6">
                 <div className="flex flex-col gap-2">
-                    <h2 className="text-xl md:text-3xl font-bold font-heading text-slate-900 tracking-tight">
+                    <h2 className="text-lg md:text-3xl font-bold font-heading text-slate-900 tracking-tight">
                         {title}
                     </h2>
                     <div className="flex flex-row items-center gap-3 md:gap-4 justify-between">
@@ -102,26 +102,26 @@ export default function ProductShowcase({ title = "Trend Ürünler", description
 
                 <div
                     id={`carousel-${title.replace(/\s/g, '')}`}
-                    className="flex gap-4 md:gap-6 overflow-x-auto pb-8 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide scroll-smooth"
+                    className="flex gap-3 md:gap-6 overflow-x-auto pb-4 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide scroll-smooth"
                 >
                     {products.map((product) => (
-                        <div key={product.id} className="min-w-[160px] md:min-w-[280px] snap-start">
-                            <div className="relative bg-white rounded-2xl md:rounded-3xl p-3 md:p-4 shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 h-full flex flex-col group">
+                        <div key={product.id} className="min-w-[140px] md:min-w-[280px] snap-start">
+                            <div className="relative bg-white rounded-xl md:rounded-3xl p-2 md:p-4 shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 h-full flex flex-col group">
                                 {/* Image Area */}
                                 <a href={`/${product.slug}`} className="block relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-slate-100 mb-3 md:mb-4">
                                     <div className="relative w-full h-full p-4 bg-white rounded-xl">
                                         <Image
-                                            src={getImageUrl(product.images && product.images.length > 0 ? product.images[0] : product.image)}
+                                            src={getImageUrl(parseProductImages(product.images)[0] || product.image)}
                                             alt={product.name}
                                             fill
                                             className="object-contain w-full h-full transform group-hover:scale-105 transition-transform duration-500"
                                             sizes="(max-width: 768px) 160px, 280px"
                                         />
                                     </div>
-                                    {/* Badge Logic */}
+                                    {/* Badge Logic - smaller and semi-transparent */}
                                     {(product.original_price > product.price) && (
                                         <div className="absolute top-2 left-2 z-10">
-                                            <Badge className="bg-red-500 text-white text-[10px] md:text-xs px-2 md:px-3 py-1 font-medium border-0 shadow-sm">
+                                            <Badge className="bg-red-500/60 text-white text-[9px] md:text-[10px] px-1.5 md:px-2 py-0.5 font-medium border-0 shadow-sm backdrop-blur-sm">
                                                 İndirim
                                             </Badge>
                                         </div>
@@ -130,17 +130,15 @@ export default function ProductShowcase({ title = "Trend Ürünler", description
 
                                 {/* Details */}
                                 <div className="flex flex-col flex-1">
-                                    <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">
-                                        {product.category}
-                                    </p>
+                                    {/* Category hidden per user request */}
                                     <a href={`/${product.slug}`} className="block group-hover:text-primary transition-colors">
-                                        <h3 className="font-heading font-bold text-sm md:text-base lg:text-lg text-slate-900 mb-2 line-clamp-2 min-h-[40px] md:min-h-[56px]">
+                                        <h3 className="font-heading font-bold text-xs md:text-base lg:text-lg text-slate-900 mb-1 md:mb-2 line-clamp-2 min-h-[32px] md:min-h-[56px]">
                                             {product.name}
                                         </h3>
                                     </a>
 
                                     <div className="mt-auto flex items-center justify-between pt-2 gap-2">
-                                        <span className="text-base md:text-lg lg:text-xl font-bold text-slate-900">
+                                        <span className="text-sm md:text-lg lg:text-xl font-bold text-slate-900">
                                             {formatPrice(product.price)}
                                         </span>
                                         <Button
@@ -152,9 +150,10 @@ export default function ProductShowcase({ title = "Trend Ürünler", description
                                                     id: product.id,
                                                     name: product.name,
                                                     price: product.price,
-                                                    image: product.images && product.images.length > 0 ? product.images[0] : product.images,
+                                                    image: parseProductImages(product.images)[0] || product.image,
                                                     category: product.category,
-                                                    slug: product.slug
+                                                    slug: product.slug,
+                                                    free_shipping: !!product.free_shipping
                                                 });
                                                 openCart();
                                             }}

@@ -24,14 +24,19 @@ function PageSkeleton() {
 
 interface SlugPageClientProps {
     slug: string
+    initialProductId?: string | null
+    initialPageType?: 'category' | 'product' | 'notfound'
 }
 
-export default function SlugPageClient({ slug }: SlugPageClientProps) {
-    const [pageType, setPageType] = useState<'category' | 'product' | 'notfound' | 'loading'>('loading')
-    const [productId, setProductId] = useState<string | null>(null)
+export default function SlugPageClient({ slug, initialProductId, initialPageType }: SlugPageClientProps) {
+    const [pageType, setPageType] = useState<'category' | 'product' | 'notfound' | 'loading'>(initialPageType || 'loading')
+    const [productId, setProductId] = useState<string | null>(initialProductId || null)
     const [freeShippingThreshold, setFreeShippingThreshold] = useState(500)
 
     useEffect(() => {
+        // If SSR already determined the page type, skip client-side detection
+        if (initialPageType) return
+
         if (!slug) {
             setPageType('notfound')
             return
@@ -75,7 +80,7 @@ export default function SlugPageClient({ slug }: SlugPageClientProps) {
                 }
             })
             .catch(() => setPageType('notfound'))
-    }, [slug])
+    }, [slug, initialPageType])
 
     if (pageType === 'loading') {
         return <PageSkeleton />

@@ -20,7 +20,11 @@ export async function GET(
             ORDER BY r.created_at DESC
         `).bind(id).all()
 
-        return NextResponse.json(results || [])
+        return NextResponse.json(results || [], {
+            headers: {
+                'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300'
+            }
+        })
     } catch (error: any) {
         console.error('Reviews fetch error:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })

@@ -15,7 +15,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             '',
             '/products',
         ].map((route) => ({
-            url: `${baseUrl}${route}`,
+            url: `${baseUrl}${route}/`,
             lastModified: new Date(),
             changeFrequency: 'daily' as const,
             priority: route === '' ? 1 : 0.8,
@@ -27,33 +27,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         ).all() as { results: any[] }
 
         const productUrls = (products || []).map((product: any) => ({
-            url: `${baseUrl}/${product.slug}`,
+            url: `${baseUrl}/${product.slug}/`,
             lastModified: new Date(product.updated_at || Date.now()),
             changeFrequency: 'weekly' as const,
             priority: 0.8,
         }))
 
-        // 3. Categories
-        const { results: categories } = await db.prepare(
-            'SELECT slug, name FROM categories'
-        ).all() as { results: any[] }
+        // Categories removed from sitemap — category pages have display issues
+        // and Akakçe only needs product URLs
 
-        const categoryUrls = (categories || []).map((cat: any) => ({
-            url: `${baseUrl}/${cat.slug}`,
-            lastModified: new Date(),
-            changeFrequency: 'weekly' as const,
-            priority: 0.7,
-        }))
-
-        // 4. Static pages
-        const staticPages = ['help', 'shipping', 'policy', 'terms'].map(page => ({
-            url: `${baseUrl}/page/${page}`,
-            lastModified: new Date(),
-            changeFrequency: 'monthly' as const,
-            priority: 0.5,
-        }))
-
-        return [...routes, ...productUrls, ...categoryUrls, ...staticPages]
+        return [...routes, ...productUrls]
     } catch (error) {
         console.error("Sitemap generation error:", error)
         // Return basic routes if DB fails

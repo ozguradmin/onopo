@@ -17,7 +17,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             return NextResponse.json({ error: 'Sipariş bulunamadı' }, { status: 404 })
         }
 
-        return NextResponse.json(order)
+        // Fetch items
+        const { results: items } = await db.prepare(`
+            SELECT 
+                oi.*, 
+                json_extract(p.images, '$[0]') as image,
+                COALESCE(oi.product_name, p.name) as name
+            FROM order_items oi
+            LEFT JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = ?
+        `).bind(id).all()
+
+        // Attach items to order object
+        // The admin page expects 'items' to be an array or JSON string. 
+        // We return it as an array which the page handles.
+        const orderWithItems = {
+            ...order,
+            items: items || []
+        }
+
+        return NextResponse.json(orderWithItems)
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }

@@ -16,7 +16,8 @@ export default function PaymentSettingsPage() {
         merchant_id: '',
         merchant_salt: '',
         base_url: '',
-        test_mode: 1
+        test_mode: 1,
+        taksit_token: ''
     })
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
@@ -144,6 +145,11 @@ export default function PaymentSettingsPage() {
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Merchant Salt (Gizli Anahtar)</label>
                                     <Input value={settings.merchant_salt || ''} onChange={e => setSettings({ ...settings, merchant_salt: e.target.value })} type="password" />
+                                </div>
+                                <div className="pt-4 border-t border-slate-200">
+                                    <label className="block text-sm font-medium mb-1">Taksit Tablosu Token</label>
+                                    <Input value={settings.taksit_token || ''} onChange={e => setSettings({ ...settings, taksit_token: e.target.value })} placeholder="a60893c8a3ed560fe804d51cfe..." />
+                                    <p className="text-xs text-slate-500 mt-1">PayTR Mağaza Paneli &gt; Taksit Ayarları sayfasından kopyalayın.</p>
                                 </div>
                             </div>
 

@@ -12,6 +12,8 @@ import Link from "next/link"
 import Image from "next/image"
 import ProductShowcase from "@/components/home/ProductShowcase"
 import { MarkdownRenderer } from "@/components/ui/MarkdownRenderer"
+import DescriptionRenderer from "@/components/products/DescriptionRenderer"
+import InstallmentModal from "@/components/product/InstallmentModal"
 
 const HeartIcon = ({ filled = false }: { filled?: boolean }) => (
     <div className="w-6 h-6 flex items-center justify-center">
@@ -32,99 +34,7 @@ const HeartIcon = ({ filled = false }: { filled?: boolean }) => (
     </div>
 )
 
-// Helper to decode common HTML entities
-function decodeHtmlEntities(text: string): string {
-    const entities: { [key: string]: string } = {
-        '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'",
-        '&nbsp;': ' ', '&ouml;': 'ö', '&Ouml;': 'Ö', '&ccedil;': 'ç', '&Ccedil;': 'Ç',
-        '&ş': 'ş', '&Ş': 'Ş', '&ı': 'ı', '&İ': 'İ', '&ğ': 'ğ', '&Ğ': 'Ğ',
-        '&uuml;': 'ü', '&Uuml;': 'Ü', '&rsquo;': "'", '&lsquo;': "'", '&rdquo;': '"',
-        '&ldquo;': '"', '&ndash;': '-', '&mdash;': '—', '&bull;': '•', '&middot;': '·',
-        '&euro;': '€', '&copy;': '©', '&reg;': '®', '&le;': '≤', '&ge;': '≥'
-    }
-    return text.replace(/&[a-z0-9#]+;/gi, (match) => entities[match] || match)
-}
 
-// Helper to format messy description text
-function preprocessDescription(text: string): string {
-    if (!text) return ""
-
-    // 1. Decode entities first
-    let formatted = decodeHtmlEntities(text)
-
-    // 2. Strip literal HTML tags displayed as text
-    formatted = formatted.replace(/<div[^>]*>/gi, '')
-    formatted = formatted.replace(/<\/div>/gi, '\n')
-    formatted = formatted.replace(/<p[^>]*>/gi, '\n')
-    formatted = formatted.replace(/<\/p>/gi, '\n')
-    formatted = formatted.replace(/<br\s*\/?>/gi, '\n')
-    formatted = formatted.replace(/<span[^>]*>/gi, '')
-    formatted = formatted.replace(/<\/span>/gi, '')
-
-    // 3. AGGRESSIVE Section Header Splitting - these can be ANYWHERE in text
-    // Pattern: "TextÜrün AçıklamasıMore text" -> "Text\n\n## Ürün Açıklaması\n\nMore text"
-    const sectionHeaders = [
-        "Ürün Açıklaması",
-        "Detaylı Bilgi",
-        "Teknik Özellikler",
-        "Kutu İçeriği",
-        "Ürün Özellikleri",
-        "Özellikler"
-    ]
-    sectionHeaders.forEach(section => {
-        // Insert newlines BEFORE and AFTER section headers, even if mashed
-        const regex = new RegExp(`(${section})`, 'gi')
-        formatted = formatted.replace(regex, '\n\n## $1\n\n')
-    })
-
-    // 4. AGGRESSIVE Key-Value Splitting for Teknik Özellikler
-    // Handle patterns like "MarkaOnopo" or "Ürün KoduX2" ANYWHERE in text
-    const techKeys = [
-        { key: "Marka", pattern: /Marka([A-Za-zğüşıöçĞÜŞİÖÇ\s]+?)(?=Ürün Kodu|Barkod|Desi|Varyant|$|\n)/gi },
-        { key: "Ürün Kodu", pattern: /Ürün Kodu([A-Za-z0-9ğüşıöçĞÜŞİÖÇ\s\-\_]+?)(?=Barkod|Desi|Varyant|$|\n)/gi },
-        { key: "Barkod", pattern: /Barkod(\d+)/gi },
-        { key: "Desi", pattern: /Desi(\d+)/gi }
-    ]
-
-    techKeys.forEach(({ key, pattern }) => {
-        formatted = formatted.replace(pattern, `\n- **${key}:** $1`)
-    })
-
-    // 5. Split mashed sentences - include Turkish characters
-    // Period followed by capital letter (including Turkish İÜÖÇŞĞ)
-    formatted = formatted.replace(/([a-zA-ZğüşıöçĞÜŞİÖÇ0-9])\.([A-ZİÜÖÇŞĞ])/g, '$1.\n\n$2')
-    formatted = formatted.replace(/([a-zA-ZğüşıöçĞÜŞİÖÇ0-9])\.\s+([A-ZİÜÖÇŞĞ])/g, '$1.\n\n$2')
-
-    // 6. Handle checkmarks - split them to new lines and convert to bullet points
-    formatted = formatted.replace(/([^\n\s])([✔✓])/g, '$1\n$2')
-    formatted = formatted.replace(/^[✔✓]\s*/gm, '- ✔ ')
-    formatted = formatted.replace(/\n[✔✓]\s*/g, '\n- ✔ ')
-
-    // 7. Handle Variant blocks
-    formatted = formatted.replace(/Varyant\s*\[/gi, '\n\n**Varyant Seçenekleri:**\n- ')
-    formatted = formatted.replace(/\[Renk:\s*/gi, '\n- Renk: ')
-    formatted = formatted.replace(/\(Stok:\s*(\d+)\s*\)/gi, ' (Stok: $1)')
-    formatted = formatted.replace(/\]/g, '')
-
-    // 8. Handle bullets
-    formatted = formatted.replace(/^\s*[•·]\s+/gm, '- ')
-    formatted = formatted.replace(/^\s*•\s*/gm, '- ')
-
-    // 9. Clean up "İthalatçı" which often appears randomly
-    formatted = formatted.replace(/\.?\s*İthalatçı\s*/gi, '.\n\n')
-
-    // 10. Remove "Ürün Açıklaması" if it appears at the very start (redundant with page title)
-    formatted = formatted.replace(/^(\s*##\s*)?Ürün Açıklaması\s*\n*/i, '')
-
-    // 11. Final Cleanup
-    formatted = formatted.replace(/^\s*[-*]\s*$/gm, '')  // Empty bullets
-    formatted = formatted.replace(/\*\*\s*\*\*/g, '')    // Empty bold
-    formatted = formatted.replace(/\.{2,}/g, '.')        // Double periods
-    formatted = formatted.replace(/##\s*##/g, '##')      // Double headers
-    formatted = formatted.replace(/\n{3,}/g, '\n\n')     // Max 2 newlines
-
-    return formatted.trim()
-}
 
 
 
@@ -169,6 +79,9 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
     const [variations, setVariations] = React.useState<ProductVariation[]>([])
     const [selectedVariations, setSelectedVariations] = React.useState<Record<string, ProductVariation>>({}) // by variation name
 
+    // Installment modal state
+    const [showInstallmentModal, setShowInstallmentModal] = React.useState(false)
+
     React.useEffect(() => {
         // Auto slide
         if (!product) return
@@ -182,31 +95,21 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
     }, [product])
 
     React.useEffect(() => {
-        // Fetch product
-        fetch(`/api/products/${id}`)
+        // Combined fetch: product + reviews + variations in ONE worker call
+        fetch(`/api/product-page-data/${id}`)
             .then(res => {
                 if (!res.ok) throw new Error("Not found")
                 return res.json()
             })
             .then(data => {
-                setProduct(data)
+                setProduct(data.product)
+                setReviews(Array.isArray(data.reviews) ? data.reviews : [])
+                setVariations(Array.isArray(data.variations) ? data.variations : [])
                 setLoading(false)
             })
             .catch(() => setLoading(false))
 
-        // Fetch reviews
-        fetch(`/api/products/${id}/reviews`)
-            .then(res => res.json())
-            .then(data => setReviews(Array.isArray(data) ? data : []))
-            .catch(() => { })
-
-        // Fetch variations
-        fetch(`/api/products/${id}/variations`)
-            .then(res => res.json())
-            .then(data => setVariations(Array.isArray(data) ? data : []))
-            .catch(() => { })
-
-        // Check if user is logged in and fetch favorites
+        // Auth check stays separate (user-specific, not cacheable)
         fetch('/api/auth/me')
             .then(res => res.ok ? res.json() : null)
             .then(data => {
@@ -232,13 +135,20 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
     const handleAddToCart = () => {
         if (!product) return
         const variantName = Object.values(selectedVariations).map(v => v.value).join(' / ')
+
+        // Generate unique ID for cart item based on variations to prevent merging
+        const variationIds = Object.values(selectedVariations).map(v => v.id).sort().join('-')
+        const uniqueId = variationIds ? `${product.id}-${variationIds}` : product.id
+
         for (let i = 0; i < quantity; i++) {
             addItem({
-                id: product.id,
+                id: uniqueId,
                 name: variantName ? `${product.name} (${variantName})` : product.name,
                 price: finalPrice,
                 image: getImageUrl(Object.values(selectedVariations).find(v => v.image_url)?.image_url || (product.images && product.images.length > 0 ? product.images[0] : product.image)),
-                category: product.category
+                category: product.category,
+                slug: product.slug,
+                free_shipping: !!product.free_shipping
             })
         }
         setAddedToCart(true)
@@ -257,7 +167,8 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                 name: variantName ? `${product.name} (${variantName})` : product.name,
                 price: finalPrice,
                 image: getImageUrl(Object.values(selectedVariations).find(v => v.image_url)?.image_url || (product.images && product.images.length > 0 ? product.images[0] : product.image)),
-                category: product.category
+                category: product.category,
+                free_shipping: !!product.free_shipping
             })
         }
         // Direct redirect without opening cart
@@ -329,10 +240,10 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <main className="pt-24 pb-20">
-                <div className="container mx-auto px-4">
-                    {/* Breadcrumb */}
-                    <div className="mb-6">
+            <main className="pt-2 lg:pt-24 pb-8 lg:pb-12">
+                <div className="container mx-auto px-2 lg:px-4">
+                    {/* Breadcrumb - Hidden on mobile */}
+                    <div className="mb-4 hidden lg:block">
                         <Button
                             variant="ghost"
                             className="pl-0 hover:pl-2 transition-all text-slate-600 hover:text-slate-900"
@@ -342,12 +253,12 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                         </Button>
                     </div>
 
-                    <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="bg-white rounded-2xl lg:rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
                         <div className="grid grid-cols-1 lg:grid-cols-2">
                             {/* Image Gallery */}
                             {/* Image Gallery */}
-                            <div className="p-6 lg:p-10 bg-slate-50">
-                                <div className="sticky top-24">
+                            <div className="p-3 lg:p-10 bg-slate-50">
+                                <div className="lg:sticky lg:top-24">
                                     {/* Main Image - FIXED: object-contain for proper fit */}
                                     <div className="relative group">
                                         <motion.div
@@ -355,7 +266,7 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             transition={{ duration: 0.3 }}
-                                            className="aspect-square relative overflow-hidden rounded-2xl bg-white mb-4 flex items-center justify-center max-h-[350px] lg:max-h-[500px]"
+                                            className="aspect-square relative overflow-hidden rounded-xl lg:rounded-2xl bg-white mb-2 lg:mb-4 flex items-center justify-center max-h-[220px] lg:max-h-[500px]"
                                             onTouchStart={(e) => {
                                                 const touch = e.touches[0]
                                                 // @ts-ignore
@@ -434,12 +345,12 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
 
                                     {/* Thumbnails */}
                                     {allImages.length > 1 && (
-                                        <div className="flex gap-3 overflow-x-auto pb-2 px-1">
+                                        <div className="flex gap-2 overflow-x-auto pb-2 px-1">
                                             {allImages.map((img: string, idx: number) => (
                                                 <button
                                                     key={idx}
                                                     onClick={() => setSelectedImage(idx)}
-                                                    className={`aspect-square w-20 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all bg-white relative ${selectedImage === idx
+                                                    className={`aspect-square w-14 lg:w-20 flex-shrink-0 rounded-lg lg:rounded-xl overflow-hidden border-2 transition-all bg-white relative ${selectedImage === idx
                                                         ? 'border-slate-900 ring-2 ring-slate-900/20'
                                                         : 'border-slate-200 hover:border-slate-300'
                                                         }`}
@@ -448,7 +359,7 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                                                         src={getImageUrl(img)}
                                                         alt={`Thumbnail ${idx}`}
                                                         fill
-                                                        sizes="80px"
+                                                        sizes="60px"
                                                         className="object-contain p-1"
                                                     />
                                                     {selectedImage === idx && (
@@ -462,12 +373,12 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                             </div>
 
                             {/* Product Info */}
-                            <div className="p-6 lg:p-10 flex flex-col">
+                            <div className="p-3 lg:p-10 flex flex-col">
                                 {/* Category & Info */}
-                                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                                    <div className="flex items-center gap-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2 mb-2 lg:mb-4">
+                                    <div className="flex items-center gap-2">
                                         <a href={`/products?category=${encodeURIComponent(product.category || '')}`}>
-                                            <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
+                                            <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer text-xs">
                                                 {product.category || 'Ürün'}
                                             </Badge>
                                         </a>
@@ -476,42 +387,42 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                                                 {[1, 2, 3, 4, 5].map((star) => (
                                                     <Star
                                                         key={star}
-                                                        className={`w-4 h-4 ${star <= Math.floor(avgRating) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-200'}`}
+                                                        className={`w-3 h-3 lg:w-4 lg:h-4 ${star <= Math.floor(avgRating) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-200'}`}
                                                     />
                                                 ))}
                                             </div>
-                                            <span className="text-sm text-slate-500 ml-2">
+                                            <span className="text-xs text-slate-500 ml-1">
                                                 {avgRating.toFixed(1)} ({reviews.length})
                                             </span>
                                         </div>
                                     </div>
                                     {product.product_code && (
-                                        <span className="text-xs font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded">
+                                        <span id="product-sku" className="text-[10px] font-mono text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
                                             KOD: {product.product_code}
                                         </span>
                                     )}
                                 </div>
 
                                 {/* Title */}
-                                <h1 className="text-3xl lg:text-4xl font-bold font-heading text-slate-900 tracking-tight mb-4">
+                                <h1 id="product-name" className="text-lg lg:text-4xl font-bold font-heading text-slate-900 tracking-tight mb-1 lg:mb-4">
                                     {product.name}
                                 </h1>
 
                                 {/* Price */}
-                                <div className="flex items-baseline gap-3 mb-6">
-                                    <span className="text-3xl font-bold text-slate-900">
+                                <div id="product-pricing" className="flex items-baseline gap-2 mb-3 lg:mb-6">
+                                    <span id="product-price" data-price={finalPrice} data-currency="TRY" className="text-2xl lg:text-3xl font-bold text-slate-900">
                                         {formatPrice(finalPrice)}
                                     </span>
                                     {product.original_price && product.original_price > product.price && (
-                                        <span className="text-xl text-slate-400 line-through">
+                                        <span id="product-original-price" data-price={product.original_price} className="text-base lg:text-xl text-slate-400 line-through">
                                             {formatPrice(product.original_price)}
                                         </span>
                                     )}
                                     {variationPriceModifier > 0 && (
-                                        <span className="text-sm text-green-600">(+{formatPrice(variationPriceModifier)})</span>
+                                        <span className="text-xs text-green-600">(+{formatPrice(variationPriceModifier)})</span>
                                     )}
                                     {variationPriceModifier < 0 && (
-                                        <span className="text-sm text-red-600">({formatPrice(variationPriceModifier)})</span>
+                                        <span className="text-xs text-red-600">({formatPrice(variationPriceModifier)})</span>
                                     )}
                                 </div>
 
@@ -583,46 +494,73 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                                     )
                                 })()}
 
-                                {/* Stock Status - MOVED UP */}
-                                <div className="mb-6 flex items-center gap-4">
+                                {/* Stock + Quantity + Favorites - ONE COMPACT ROW */}
+                                <div className="mb-4 lg:mb-6 flex flex-wrap items-center gap-2 lg:gap-4">
+                                    {/* Stock Status - Compact */}
                                     {(product.stock > 0) ? (
-                                        <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1.5 rounded-full">
-                                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                            <span className="text-sm font-medium">Stokta: {product.stock > 20 ? '+20' : product.stock} adet</span>
+                                        <div id="product-stock" data-stock={product.stock} data-availability="InStock" className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded-full text-xs lg:text-sm">
+                                            <div className="w-1.5 h-1.5 lg:w-2 lg:h-2 rounded-full bg-green-500 animate-pulse" />
+                                            <span className="font-medium">Stok: {product.stock > 20 ? '+20' : product.stock}</span>
                                         </div>
                                     ) : (
-                                        <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-1.5 rounded-full">
-                                            <div className="w-2 h-2 rounded-full bg-red-500" />
-                                            <span className="text-sm font-medium">Stokta Yok</span>
+                                        <div id="product-stock" data-stock="0" data-availability="OutOfStock" className="flex items-center gap-1 text-red-600 bg-red-50 px-2 py-1 rounded-full text-xs lg:text-sm">
+                                            <div className="w-1.5 h-1.5 lg:w-2 lg:h-2 rounded-full bg-red-500" />
+                                            <span className="font-medium">Tükendi</span>
                                         </div>
                                     )}
-                                </div>
 
-                                {/* Actions & Quantity - MOVED ABOVE TABS */}
-                                <div className="flex items-center gap-4 mb-6">
-                                    <span className="text-sm font-medium text-slate-700">Adet:</span>
-                                    <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden">
+                                    {/* Quantity Selector - Compact */}
+                                    <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white text-sm">
                                         <button
                                             onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                                            className="px-4 py-3 hover:bg-slate-50 transition-colors"
+                                            className="px-2 py-1 lg:px-3 lg:py-2 hover:bg-slate-50"
                                         >
-                                            <Minus className="w-4 h-4 text-slate-600" />
+                                            <Minus className="w-3 h-3 lg:w-4 lg:h-4 text-slate-600" />
                                         </button>
-                                        <span className="px-6 py-3 font-medium text-slate-900 min-w-[60px] text-center">
+                                        <span className="px-2 lg:px-4 py-1 lg:py-2 font-medium text-slate-900 min-w-[30px] lg:min-w-[40px] text-center">
                                             {quantity}
                                         </span>
                                         <button
                                             onClick={() => setQuantity(q => q + 1)}
-                                            className="px-4 py-3 hover:bg-slate-50 transition-colors"
+                                            className="px-2 py-1 lg:px-3 lg:py-2 hover:bg-slate-50"
                                         >
-                                            <Plus className="w-4 h-4 text-slate-600" />
+                                            <Plus className="w-3 h-3 lg:w-4 lg:h-4 text-slate-600" />
                                         </button>
                                     </div>
+
+                                    {/* Favorites - Compact */}
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className={`h-8 w-8 lg:h-11 lg:w-11 rounded-lg lg:rounded-xl border-slate-200 ${isFavorite ? 'text-red-500 border-red-200 bg-red-50' : 'text-slate-400 hover:text-red-500'}`}
+                                        disabled={togglingFavorite}
+                                        onClick={async () => {
+                                            if (!user) {
+                                                window.location.href = '/login?redirect=/product/' + id
+                                                return
+                                            }
+                                            setTogglingFavorite(true)
+                                            try {
+                                                const res = await fetch('/api/favorites', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ productId: parseInt(id) })
+                                                })
+                                                const data = await res.json()
+                                                setIsFavorite(data.favorited)
+                                            } catch (err) { } finally {
+                                                setTogglingFavorite(false)
+                                            }
+                                        }}
+                                    >
+                                        <HeartIcon filled={isFavorite} />
+                                    </Button>
                                 </div>
 
                                 <div className="flex flex-col gap-3 mb-8">
                                     <div className="flex gap-3">
                                         <Button
+                                            id="add-to-cart"
                                             size="lg"
                                             className={`flex-1 h-14 text-base rounded-xl gap-2 transition-all ${addedToCart
                                                 ? 'bg-green-500 hover:bg-green-600'
@@ -644,6 +582,7 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                                             )}
                                         </Button>
                                         <Button
+                                            id="buy-now"
                                             size="lg"
                                             onClick={handleBuyNow}
                                             disabled={product.stock <= 0}
@@ -670,35 +609,7 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                                         </a>
                                     )}
 
-                                    <div className="flex justify-center">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className={`text-slate-500 ${isFavorite ? 'text-red-500' : ''}`}
-                                            disabled={togglingFavorite}
-                                            onClick={async () => {
-                                                if (!user) {
-                                                    window.location.href = '/login?redirect=/product/' + id
-                                                    return
-                                                }
-                                                setTogglingFavorite(true)
-                                                try {
-                                                    const res = await fetch('/api/favorites', {
-                                                        method: 'POST',
-                                                        headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({ productId: parseInt(id) })
-                                                    })
-                                                    const data = await res.json()
-                                                    setIsFavorite(data.favorited)
-                                                } catch (err) { } finally {
-                                                    setTogglingFavorite(false)
-                                                }
-                                            }}
-                                        >
-                                            <HeartIcon filled={isFavorite} />
-                                            <span className="ml-2">{isFavorite ? 'Favorilerden Çıkar' : 'Favorilere Ekle'}</span>
-                                        </Button>
-                                    </div>
+
                                 </div>
 
                                 {/* Info Tabs - MOVED DOWN */}
@@ -725,7 +636,7 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                                     <div className="text-slate-600 leading-relaxed min-h-[60px]">
                                         {activeTab === 'desc' && (
                                             product.description
-                                                ? <MarkdownRenderer content={preprocessDescription(product.description)} />
+                                                ? <DescriptionRenderer text={product.description} />
                                                 : 'Ürün açıklaması bulunmuyor.'
                                         )}
                                         {activeTab === 'warranty' && product.warranty_info}
@@ -748,14 +659,22 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
                                         <ShieldCheck className="w-5 h-5 text-green-600" />
                                         <span className="text-xs font-medium text-slate-700">Garanti</span>
                                     </div>
-                                    <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-slate-50 text-center">
+                                    <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-slate-50 text-center cursor-pointer hover:bg-purple-50 hover:ring-2 ring-purple-200 transition-all" onClick={() => setShowInstallmentModal(true)}>
                                         <CreditCard className="w-5 h-5 text-purple-600" />
                                         <span className="text-xs font-medium text-slate-700">Taksit</span>
+                                        <span className="text-[10px] text-purple-600 -mt-1">Tıkla, Gör</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+
+                    {/* Installment Modal */}
+                    <InstallmentModal
+                        isOpen={showInstallmentModal}
+                        onClose={() => setShowInstallmentModal(false)}
+                        productPrice={finalPrice}
+                    />
 
                     {/* Reviews Section */}
                     <div className="mt-8 bg-white rounded-3xl shadow-sm border border-slate-100 p-6 lg:p-10">
@@ -848,7 +767,7 @@ export default function ProductClient({ id, freeShippingThreshold = 500 }: { id:
 
                     {/* Similar Products */}
                     {similarProducts.length > 0 && (
-                        <div className="mt-12 md:mt-20">
+                        <div className="mt-8 lg:mt-12">
                             <ProductShowcase title="Benzer Ürünler" products={similarProducts} />
                         </div>
                     )}

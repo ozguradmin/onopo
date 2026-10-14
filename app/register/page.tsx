@@ -12,6 +12,9 @@ export default function RegisterPage() {
     const [email, setEmail] = React.useState('')
     const [phone, setPhone] = React.useState('')
     const [address, setAddress] = React.useState('')
+    const [city, setCity] = React.useState('')
+    const [district, setDistrict] = React.useState('')
+    const [postalCode, setPostalCode] = React.useState('')
     const [password, setPassword] = React.useState('')
     const [loading, setLoading] = React.useState(false)
     const [error, setError] = React.useState('')
@@ -26,7 +29,16 @@ export default function RegisterPage() {
             const registerRes = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, phone, address, password }),
+                body: JSON.stringify({
+                    name,
+                    email,
+                    phone,
+                    address,
+                    city,
+                    district,
+                    postal_code: postalCode,
+                    password
+                }),
             })
 
             const registerData = await registerRes.json()
@@ -143,10 +155,39 @@ export default function RegisterPage() {
                                 <textarea
                                     value={address}
                                     onChange={e => setAddress(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all resize-none"
-                                    placeholder="İl, İlçe, Mahalle, Sokak, No..."
+                                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all resize-none mb-3"
+                                    placeholder="Mahalle, Sokak, No, Daire..."
                                     rows={2}
                                 />
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div>
+                                        <input
+                                            type="text"
+                                            value={city}
+                                            onChange={e => setCity(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
+                                            placeholder="İl"
+                                        />
+                                    </div>
+                                    <div>
+                                        <input
+                                            type="text"
+                                            value={district}
+                                            onChange={e => setDistrict(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
+                                            placeholder="İlçe"
+                                        />
+                                    </div>
+                                    <div>
+                                        <input
+                                            type="text"
+                                            value={postalCode}
+                                            onChange={e => setPostalCode(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
+                                            placeholder="Posta Kodu"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

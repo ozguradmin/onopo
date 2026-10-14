@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Edit, Trash2, Plus, Upload, Trash, Loader2, Search } from 'lucide-react'
 import { formatPrice } from '@/lib/formatPrice'
+import { getImageUrl, parseProductImages } from '@/lib/utils'
 import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
 import { ProductEditModal } from '@/components/admin/ProductEditModal'
@@ -362,7 +363,7 @@ export default function AdminProductsPage() {
                                 <tr key={product.id} className="hover:bg-slate-50">
                                     <td className="p-4">
                                         <img
-                                            src={product.images?.[0] || '/placeholder.svg'}
+                                            src={getImageUrl(parseProductImages(product.images)[0]) || '/placeholder.svg'}
                                             className="w-12 h-12 rounded-lg object-cover bg-slate-100"
                                         />
                                     </td>

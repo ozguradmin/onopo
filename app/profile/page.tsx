@@ -18,6 +18,9 @@ export default function ProfilePage() {
     // Profile edit state
     const [phone, setPhone] = React.useState('')
     const [address, setAddress] = React.useState('')
+    const [city, setCity] = React.useState('')
+    const [district, setDistrict] = React.useState('')
+    const [postalCode, setPostalCode] = React.useState('')
     const [saving, setSaving] = React.useState(false)
     const [saveSuccess, setSaveSuccess] = React.useState(false)
 
@@ -32,6 +35,9 @@ export default function ProfilePage() {
                 setUser(data.user)
                 setPhone(data.user.phone || '')
                 setAddress(data.user.address || '')
+                setCity(data.user.city || '')
+                setDistrict(data.user.district || '')
+                setPostalCode(data.user.postal_code || '')
                 setLoading(false)
             })
             .catch(() => {
@@ -62,7 +68,7 @@ export default function ProfilePage() {
             const res = await fetch('/api/user/update-profile', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone, address })
+                body: JSON.stringify({ phone, address, city, district, postal_code: postalCode })
             })
             if (res.ok) {
                 const data = await res.json()
@@ -219,15 +225,47 @@ export default function ProfilePage() {
                                 </div>
                                 <div>
                                     <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1">
-                                        <MapPin className="w-4 h-4" /> Adres
+                                        <MapPin className="w-4 h-4" /> Adres (Cadde/Sokak/No)
                                     </label>
                                     <textarea
                                         value={address}
                                         onChange={(e) => setAddress(e.target.value)}
                                         className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10 resize-none"
                                         rows={2}
-                                        placeholder="İl, İlçe, Mahalle, Sokak, No..."
+                                        placeholder="Mahalle, Sokak, No, Daire..."
                                     />
+                                </div>
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div>
+                                        <label className="text-sm font-medium text-slate-700 mb-1 block">İl</label>
+                                        <input
+                                            type="text"
+                                            value={city}
+                                            onChange={(e) => setCity(e.target.value)}
+                                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                                            placeholder="İstanbul"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium text-slate-700 mb-1 block">İlçe</label>
+                                        <input
+                                            type="text"
+                                            value={district}
+                                            onChange={(e) => setDistrict(e.target.value)}
+                                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                                            placeholder="Kadıköy"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium text-slate-700 mb-1 block">Posta Kodu</label>
+                                        <input
+                                            type="text"
+                                            value={postalCode}
+                                            onChange={(e) => setPostalCode(e.target.value)}
+                                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                                            placeholder="34000"
+                                        />
+                                    </div>
                                 </div>
                                 <Button
                                     onClick={handleSaveProfile}

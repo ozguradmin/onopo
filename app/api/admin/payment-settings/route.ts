@@ -19,10 +19,18 @@ export async function GET() {
                 merchant_salt TEXT,
                 base_url TEXT,
                 test_mode INTEGER DEFAULT 1,
+                taksit_token TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `).run()
+
+        // Ensure taksit_token column exists (migration)
+        try {
+            await db.prepare(`ALTER TABLE payment_settings ADD COLUMN taksit_token TEXT`).run()
+        } catch (e) {
+            // Column already exists, ignore
+        }
 
         const settings = await db.prepare('SELECT * FROM payment_settings LIMIT 1').first()
         return NextResponse.json(settings || {})
@@ -81,6 +89,7 @@ export async function POST(req: NextRequest) {
                     merchant_salt = ?,
                     base_url = ?,
                     test_mode = ?,
+                    taksit_token = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             `).bind(
@@ -92,13 +101,14 @@ export async function POST(req: NextRequest) {
                 body.merchant_salt || '',
                 body.base_url || '',
                 body.test_mode ? 1 : 0,
+                body.taksit_token || '',
                 (existing as any).id
             ).run()
         } else {
             // Insert new row
             await db.prepare(`
-                INSERT INTO payment_settings (provider, is_active, api_key, secret_key, merchant_id, merchant_salt, base_url, test_mode)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO payment_settings (provider, is_active, api_key, secret_key, merchant_id, merchant_salt, base_url, test_mode, taksit_token)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).bind(
                 body.provider || 'paytr',
                 body.is_active ? 1 : 0,
@@ -107,7 +117,8 @@ export async function POST(req: NextRequest) {
                 body.merchant_id || '',
                 body.merchant_salt || '',
                 body.base_url || '',
-                body.test_mode ? 1 : 0
+                body.test_mode ? 1 : 0,
+                body.taksit_token || ''
             ).run()
         }
 

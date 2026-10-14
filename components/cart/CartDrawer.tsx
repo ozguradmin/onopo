@@ -108,7 +108,7 @@ export function CartDrawer() {
                                     >
                                         {/* Clickable Image -> Product Page */}
                                         <Link
-                                            href={`/${item.slug || item.id}`}
+                                            href={`/${item.slug || 'product/' + item.id}`}
                                             onClick={closeCart}
                                             className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-xl border border-slate-100 hover:ring-2 ring-primary transition-all"
                                         >
@@ -123,13 +123,13 @@ export function CartDrawer() {
                                             {/* Clickable Name -> Product Page */}
                                             <div className="flex justify-between text-base font-bold text-slate-900">
                                                 <Link
-                                                    href={`/${item.slug || item.id}`}
+                                                    href={`/${item.slug || 'product/' + item.id}`}
                                                     onClick={closeCart}
-                                                    className="line-clamp-1 hover:text-primary transition-colors"
+                                                    className="line-clamp-2 hover:text-primary transition-colors"
                                                 >
                                                     {item.name}
                                                 </Link>
-                                                <p className="ml-4 text-slate-900 font-bold">{(item.price * item.quantity).toFixed(2)} ₺</p>
+                                                <p className="ml-4 text-slate-900 font-bold">{formatPrice(item.price * item.quantity)}</p>
                                             </div>
                                             <p className="mt-1 text-sm text-slate-500 line-clamp-1">{item.category}</p>
 
