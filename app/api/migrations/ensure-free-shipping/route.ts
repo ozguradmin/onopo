@@ -1,8 +1,12 @@
+import { requireAdmin } from '@/lib/auth'
 
 import { getDB } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const db = await getDB()
         try {

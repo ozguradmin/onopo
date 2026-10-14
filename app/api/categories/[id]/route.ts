@@ -1,8 +1,12 @@
+import { requireAdmin } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
 // PUT: Update category
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const { id } = await params
         const db = await getDB()
@@ -25,6 +29,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 // DELETE: Remove category
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const { id } = await params
         const db = await getDB()

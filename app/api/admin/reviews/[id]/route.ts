@@ -15,7 +15,7 @@ export async function PUT(
         if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
         const payload = await verifyJWT(token)
-        if (!payload) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        if (!payload || payload.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
         const db = await getDB()
         const { rating, comment } = await req.json()
@@ -43,7 +43,7 @@ export async function DELETE(
         if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
         const payload = await verifyJWT(token)
-        if (!payload) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        if (!payload || payload.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
         const db = await getDB()
         await db.prepare('DELETE FROM reviews WHERE id = ?').bind(id).run()

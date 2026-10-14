@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
@@ -5,6 +6,9 @@ export const dynamic = 'force-dynamic'
 
 // Migration to add missing columns to orders table
 export async function GET(req: NextRequest) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const db = await getDB()
         const results: string[] = []

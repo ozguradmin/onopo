@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
@@ -26,6 +27,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 // POST: Add or update variations for a product
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const { id } = await params
         const db = await getDB()
@@ -70,6 +74,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 // DELETE: Delete a specific variation
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const { id } = await params
         const { searchParams } = new URL(req.url)

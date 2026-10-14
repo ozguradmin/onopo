@@ -1,6 +1,12 @@
 import { SignJWT, jwtVerify } from 'jose'
+import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
 
-const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || 'super-secret-key-change-this')
+// Read lazily so the Cloudflare secret (process.env is populated per request) is always used.
+// The old fallback is kept only so a missing secret doesn't take the site down; set JWT_SECRET in Cloudflare.
+function getSecretKey(): Uint8Array {
+    return new TextEncoder().encode(process.env.JWT_SECRET || 'super-secret-key-change-this')
+}
 
 // Edge-compatible password hashing using Web Crypto API
 // Uses PBKDF2 instead of bcrypt for Edge Runtime compatibility
@@ -68,14 +74,28 @@ export async function signJWT(payload: any): Promise<string> {
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuedAt()
         .setExpirationTime('7d')
-        .sign(SECRET_KEY)
+        .sign(getSecretKey())
 }
 
 export async function verifyJWT(token: string): Promise<any> {
     try {
-        const { payload } = await jwtVerify(token, SECRET_KEY)
+        const { payload } = await jwtVerify(token, getSecretKey())
         return payload
     } catch (error) {
         return null
     }
+}
+
+// Returns an error response unless the request carries a valid admin token.
+// Usage: const denied = await requireAdmin(); if (denied) return denied
+export async function requireAdmin(): Promise<NextResponse | null> {
+    const cookieStore = await cookies()
+    const token = cookieStore.get('auth_token')?.value
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const payload = await verifyJWT(token)
+    if (!payload || payload.role !== 'admin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    return null
 }

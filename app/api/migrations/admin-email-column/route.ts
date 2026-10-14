@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
@@ -22,6 +23,9 @@ async function runMigration() {
 
 // GET method for easy browser access
 export async function GET() {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const result = await runMigration()
         return NextResponse.json(result)
@@ -32,6 +36,9 @@ export async function GET() {
 }
 
 export async function POST() {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const result = await runMigration()
         return NextResponse.json(result)

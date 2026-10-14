@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
@@ -6,6 +7,9 @@ export async function DELETE(
     req: NextRequest,
     { params }: { params: { id: string } }
 ) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const id = params.id
         if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
@@ -24,6 +28,9 @@ export async function PUT(
     req: NextRequest,
     { params }: { params: { id: string } }
 ) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const id = params.id
         const body = await req.json()

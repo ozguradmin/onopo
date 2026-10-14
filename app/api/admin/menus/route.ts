@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
@@ -5,6 +6,9 @@ import { getDB } from '@/lib/db'
 
 // GET: List all menus (Public/Admin use)
 export async function GET() {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const db = await getDB()
         const { results } = await db.prepare("SELECT * FROM menus ORDER BY sort_order ASC").run()
@@ -16,6 +20,9 @@ export async function GET() {
 
 // POST: Create a new menu
 export async function POST(req: NextRequest) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const db = await getDB()
         const body = await req.json()
@@ -41,6 +48,9 @@ export async function POST(req: NextRequest) {
 
 // PUT: Update a menu
 export async function PUT(req: NextRequest) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const db = await getDB()
         const body = await req.json()
@@ -67,6 +77,9 @@ export async function PUT(req: NextRequest) {
 
 // DELETE: Delete a menu
 export async function DELETE(req: NextRequest) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const db = await getDB()
         const { searchParams } = new URL(req.url)

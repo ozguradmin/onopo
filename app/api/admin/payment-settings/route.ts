@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
-import { verifyJWT } from '@/lib/auth'
+import { verifyJWT, requireAdmin } from '@/lib/auth'
 import { cookies } from 'next/headers'
 
 export async function GET() {
@@ -32,7 +32,14 @@ export async function GET() {
             // Column already exists, ignore
         }
 
-        const settings = await db.prepare('SELECT * FROM payment_settings LIMIT 1').first()
+        const settings = await db.prepare('SELECT * FROM payment_settings LIMIT 1').first() as any
+
+        // Storefront (checkout, installment modal) reads this too: only admins get the PayTR secrets
+        const isAdmin = !(await requireAdmin())
+        if (!isAdmin && settings) {
+            const { provider, is_active, merchant_id, test_mode, taksit_token } = settings
+            return NextResponse.json({ provider, is_active, merchant_id, test_mode, taksit_token })
+        }
         return NextResponse.json(settings || {})
     } catch (error: any) {
         console.error('Payment settings GET error:', error)
@@ -50,7 +57,7 @@ export async function POST(req: NextRequest) {
         }
 
         const payload = await verifyJWT(token)
-        if (!payload) {
+        if (!payload || payload.role !== 'admin') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
 

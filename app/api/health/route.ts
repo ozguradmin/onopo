@@ -19,7 +19,6 @@ export async function GET(req: NextRequest) {
         result.hasEnv = !!ctx?.env
 
         if (ctx?.env) {
-            result.envKeys = Object.keys(ctx.env)
             result.hasDB = !!ctx.env.DB
             result.hasBucket = !!ctx.env.BUCKET
 
@@ -28,15 +27,13 @@ export async function GET(req: NextRequest) {
                 try {
                     const res = await ctx.env.DB.prepare('SELECT 1 as x').first()
                     result.dbTest = res ? 'success' : 'empty'
-                } catch (dbErr: any) {
+                } catch {
                     result.dbTest = 'error'
-                    result.dbError = dbErr.message
                 }
             }
         }
-    } catch (err: any) {
-        result.error = err.message
-        result.stack = err.stack?.split('\n').slice(0, 5)
+    } catch {
+        result.error = 'context unavailable'
     }
 
     return NextResponse.json(result, {

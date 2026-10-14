@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
@@ -24,6 +25,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const body = await req.json()
         const { free_shipping_threshold, shipping_cost } = body

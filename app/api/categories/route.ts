@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
@@ -39,6 +40,9 @@ export async function GET(req: NextRequest) {
 
 // POST: Create new category
 export async function POST(req: NextRequest) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const db = await getDB()
         const { name, icon } = await req.json()

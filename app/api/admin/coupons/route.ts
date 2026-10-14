@@ -1,8 +1,12 @@
+import { requireAdmin } from '@/lib/auth'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const db = await getDB()
         const { results } = await db.prepare('SELECT * FROM coupons ORDER BY created_at DESC').all()
@@ -13,6 +17,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const body = await req.json()
         const { code, discount_type, discount_value, min_spend, usage_limit, expires_at, type, target_ids } = body
