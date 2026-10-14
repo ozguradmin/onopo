@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local build output / tooling
+/.open-next/
+/.wrangler/
+
+# local database backups (contain customer data)
+/backups/
+
+# scratch logs
+build_log*.txt
+d1_*.txt
+test_round.js
