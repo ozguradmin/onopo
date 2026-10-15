@@ -7,6 +7,19 @@ import { sendAdminNewOrderNotification, sendOrderConfirmation } from '@/lib/emai
 
 export const dynamic = 'force-dynamic'
 
+const MAX_CART_LINES = 50
+const MAX_QUANTITY_PER_ITEM = 100
+
+// Cart item ids are "<productId>" or "<productId>-<variationId>-..." (see handleAddToCart in ProductClient)
+function parseCartItemId(id: unknown): { productId: number, variationIds: number[] } | null {
+    if (typeof id !== 'number' && typeof id !== 'string') return null
+    const parts = String(id).split('-')
+    if (!parts.every(part => /^[1-9]\d{0,14}$/.test(part))) return null
+    const [productId, ...variationIds] = parts.map(Number)
+    if (new Set(variationIds).size !== variationIds.length) return null
+    return { productId, variationIds }
+}
+
 // POST: Create new order (Guest or User)
 export async function POST(req: NextRequest) {
     try {
@@ -40,18 +53,79 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Ad soyad zorunlu' }, { status: 400 })
         }
 
+        if (!Array.isArray(items) || items.length > MAX_CART_LINES) {
+            return NextResponse.json({ error: 'Sepet geçersiz' }, { status: 400 })
+        }
+
+        // Only the product id, variation ids and quantity come from the client.
+        // Price, name and free_shipping are read from D1 so a tampered request can't change the amount.
+        const cartLines = []
+        for (const item of items) {
+            const parsed = parseCartItemId(item?.id)
+            if (!parsed) {
+                return NextResponse.json({ error: 'Sepette geçersiz bir ürün var' }, { status: 400 })
+            }
+            const quantity = item.quantity
+            if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY_PER_ITEM) {
+                return NextResponse.json({ error: `Ürün adedi 1 ile ${MAX_QUANTITY_PER_ITEM} arasında olmalı` }, { status: 400 })
+            }
+            cartLines.push({ ...parsed, quantity })
+        }
+
+        const productStmt = db.prepare('SELECT id, name, price, free_shipping, is_active FROM products WHERE id = ?')
+        const variationStmt = db.prepare('SELECT id, product_id, name, value, price_modifier FROM product_variations WHERE id = ?')
+        const productIds = [...new Set(cartLines.map(line => line.productId))]
+        const variationIds = [...new Set(cartLines.flatMap(line => line.variationIds))]
+        const lookups = await db.batch([
+            ...productIds.map(id => productStmt.bind(id)),
+            ...variationIds.map(id => variationStmt.bind(id))
+        ])
+        const productsById = new Map<number, any>()
+        const variationsById = new Map<number, any>()
+        lookups.forEach((result: any, i: number) => {
+            const row = result.results?.[0]
+            if (!row) return
+            if (i < productIds.length) productsById.set(row.id, row)
+            else variationsById.set(row.id, row)
+        })
+
         // Calculate items total with rounded prices
         let itemsTotal = 0
+        let hasFreeShippingItem = false
         const orderItems = []
 
-        for (const item of items) {
-            const roundedPrice = roundPrice(item.price)
-            itemsTotal += roundedPrice * item.quantity
+        for (const line of cartLines) {
+            const product = productsById.get(line.productId)
+            if (!product || Number(product.is_active) !== 1) {
+                return NextResponse.json({ error: 'Sepetinizdeki bir ürün artık satışta değil. Lütfen sepetinizi güncelleyin.' }, { status: 400 })
+            }
+
+            // Same price the product page shows: base price + selected variation modifiers
+            let unitPrice = Number(product.price)
+            const variantValues = []
+            const variationGroups = new Set()
+            for (const variationId of line.variationIds) {
+                const variation = variationsById.get(variationId)
+                if (!variation || variation.product_id !== product.id || variationGroups.has(variation.name)) {
+                    return NextResponse.json({ error: 'Sepetinizdeki bir ürünün seçenekleri değişmiş. Lütfen ürünü sepetten çıkarıp yeniden ekleyin.' }, { status: 400 })
+                }
+                variationGroups.add(variation.name)
+                unitPrice += Number(variation.price_modifier) || 0
+                variantValues.push(variation.value)
+            }
+
+            const roundedPrice = roundPrice(unitPrice)
+            if (roundedPrice <= 0) {
+                return NextResponse.json({ error: 'Sepetinizdeki bir ürünün fiyatı geçersiz' }, { status: 400 })
+            }
+
+            itemsTotal += roundedPrice * line.quantity
+            if (Number(product.free_shipping) === 1) hasFreeShippingItem = true
             orderItems.push({
-                product_id: item.id,
-                quantity: item.quantity,
+                product_id: product.id,
+                quantity: line.quantity,
                 price: roundedPrice,
-                name: item.name
+                name: variantValues.length > 0 ? `${product.name} (${variantValues.join(' / ')})` : product.name
             })
         }
 
@@ -62,11 +136,8 @@ export async function POST(req: NextRequest) {
 
         let shippingCost = 0
 
-        // Check if ANY item has free_shipping flag - if so, entire order is free shipping
-        const hasFreeShippingItem = items.some((item: any) => item.free_shipping === true)
-
         // Free shipping if:
-        // 1. Any item has free_shipping: true, OR
+        // 1. Any item has free_shipping (from the products table), OR
         // 2. Total is above the free shipping threshold
         if (!hasFreeShippingItem && itemsTotal < freeThreshold) {
             shippingCost = shippingCostDef
