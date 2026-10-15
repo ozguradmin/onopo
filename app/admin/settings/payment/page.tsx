@@ -16,7 +16,6 @@ export default function PaymentSettingsPage() {
         merchant_id: '',
         merchant_salt: '',
         base_url: '',
-        test_mode: 1,
         taksit_token: ''
     })
     const [loading, setLoading] = useState(true)
@@ -36,8 +35,7 @@ export default function PaymentSettingsPage() {
                     setSettings({
                         ...settings,
                         ...data,
-                        is_active: data.is_active || 0,
-                        test_mode: data.test_mode ?? 1
+                        is_active: data.is_active || 0
                     })
                 }
             }
