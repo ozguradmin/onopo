@@ -20,6 +20,10 @@ function parseCartItemId(id: unknown): { productId: number, variationIds: number
     return { productId, variationIds }
 }
 
+function isFilled(value: unknown): boolean {
+    return typeof value === 'string' && value.trim() !== ''
+}
+
 // POST: Create new order (Guest or User)
 export async function POST(req: NextRequest) {
     try {
@@ -51,6 +55,24 @@ export async function POST(req: NextRequest) {
         }
         if (!customerInfo?.fullName) {
             return NextResponse.json({ error: 'Ad soyad zorunlu' }, { status: 400 })
+        }
+        // BirFatura requires il and ilçe on every invoice
+        if (!isFilled(customerInfo.city)) {
+            return NextResponse.json({ error: 'Teslimat adresi için il zorunlu' }, { status: 400 })
+        }
+        if (!isFilled(customerInfo.district)) {
+            return NextResponse.json({ error: 'Teslimat adresi için ilçe zorunlu' }, { status: 400 })
+        }
+        if (customerInfo.wantsDifferentBillingAddress) {
+            if (!isFilled(customerInfo.billingCity)) {
+                return NextResponse.json({ error: 'Fatura ili zorunlu' }, { status: 400 })
+            }
+            if (!isFilled(customerInfo.billingDistrict)) {
+                return NextResponse.json({ error: 'Fatura ilçesi zorunlu' }, { status: 400 })
+            }
+            if (!isFilled(customerInfo.billingAddress)) {
+                return NextResponse.json({ error: 'Fatura adresi zorunlu' }, { status: 400 })
+            }
         }
 
         if (!Array.isArray(items) || items.length > MAX_CART_LINES) {

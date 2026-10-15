@@ -171,6 +171,13 @@ export default function CheckoutPage() {
             if (!formData.fullName.trim()) throw new Error('Ad soyad zorunlu')
             if (!formData.email.trim()) throw new Error('E-posta zorunlu')
             if (!formData.phone.trim()) throw new Error('Telefon zorunlu')
+            if (!formData.city.trim()) throw new Error('Teslimat adresi için il zorunlu')
+            if (!formData.district.trim()) throw new Error('Teslimat adresi için ilçe zorunlu')
+            if (formData.wantsDifferentBillingAddress) {
+                if (!formData.billingCity.trim()) throw new Error('Fatura ili zorunlu')
+                if (!formData.billingDistrict.trim()) throw new Error('Fatura ilçesi zorunlu')
+                if (!formData.billingAddress.trim()) throw new Error('Fatura adresi zorunlu')
+            }
 
             const res = await fetch('/api/orders', {
                 method: 'POST',
@@ -408,23 +415,25 @@ export default function CheckoutPage() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">İl</label>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">İl <span className="text-red-500">*</span></label>
                                         <input
                                             type="text"
                                             name="city"
                                             value={formData.city}
                                             onChange={handleInputChange}
+                                            required
                                             className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
                                             placeholder="İstanbul"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">İlçe</label>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">İlçe <span className="text-red-500">*</span></label>
                                         <input
                                             type="text"
                                             name="district"
                                             value={formData.district}
                                             onChange={handleInputChange}
+                                            required
                                             className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
                                             placeholder="Kadıköy"
                                         />
@@ -509,34 +518,37 @@ export default function CheckoutPage() {
                                     <div className="space-y-4 pt-4 border-t border-slate-100">
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-1">Fatura İl</label>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Fatura İl <span className="text-red-500">*</span></label>
                                                 <input
                                                     type="text"
                                                     name="billingCity"
                                                     value={formData.billingCity}
                                                     onChange={handleInputChange}
+                                                    required
                                                     className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
                                                     placeholder="İstanbul"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-1">Fatura İlçe</label>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Fatura İlçe <span className="text-red-500">*</span></label>
                                                 <input
                                                     type="text"
                                                     name="billingDistrict"
                                                     value={formData.billingDistrict}
                                                     onChange={handleInputChange}
+                                                    required
                                                     className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
                                                     placeholder="Kadıköy"
                                                 />
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Fatura Adresi</label>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Fatura Adresi <span className="text-red-500">*</span></label>
                                             <textarea
                                                 name="billingAddress"
                                                 value={formData.billingAddress}
                                                 onChange={handleInputChange}
+                                                required
                                                 className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none resize-none"
                                                 rows={2}
                                                 placeholder="Mahalle, Sokak, Bina No, Daire..."
