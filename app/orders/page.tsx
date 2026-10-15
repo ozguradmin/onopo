@@ -12,6 +12,8 @@ interface Order {
     total_amount: number
     items: string | any[]
     tracking_number?: string
+    invoice_url?: string
+    invoice_no?: string
     note?: string
     created_at: string
     shipping_address?: string
@@ -173,6 +175,24 @@ export default function OrdersPage() {
                                                     className="inline-flex items-center gap-2 text-purple-600 hover:text-purple-800 font-mono font-bold text-lg"
                                                 >
                                                     {order.tracking_number}
+                                                    <ExternalLink className="w-4 h-4" />
+                                                </a>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Invoice */}
+                                    {order.invoice_url && (
+                                        <div className="px-4 pb-4">
+                                            <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+                                                <p className="text-sm text-emerald-700 mb-1">Faturanız</p>
+                                                <a
+                                                    href={order.invoice_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-2 text-emerald-700 hover:text-emerald-900 font-medium"
+                                                >
+                                                    {order.invoice_no ? `Fatura ${order.invoice_no}` : 'Faturayı Görüntüle'}
                                                     <ExternalLink className="w-4 h-4" />
                                                 </a>
                                             </div>

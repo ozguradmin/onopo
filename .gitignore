@@ -51,3 +51,7 @@ next-env.d.ts
 build_log*.txt
 d1_*.txt
 test_round.js
+
+# local worker secrets and BirFatura API password
+.dev.vars
+/BIRFATURA-API-SIFRESI.txt
