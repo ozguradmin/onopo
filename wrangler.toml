@@ -2,7 +2,8 @@
 name = "onopo-app"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
-main = ".open-next/worker.js"
+# worker.ts wraps .open-next/worker.js and adds the cron (scheduled) handler
+main = "worker.ts"
 
 # Assets configuration
 assets = { directory = ".open-next/assets", binding = "ASSETS" }
@@ -20,7 +21,7 @@ bucket_name = "onopo-storage"
 
 # Environment Variables
 [vars]
-NEXT_PUBLIC_BASE_URL = "https://onopo-app.ozgurglr256.workers.dev"
+NEXT_PUBLIC_BASE_URL = "https://onopostore.com"
 R2_ENDPOINT = "https://3c39c225b3a27de7822833feb24b65b1.r2.cloudflarestorage.com"
 R2_BUCKET_NAME = "onopo-storage"
 CLOUDFLARE_ACCOUNT_ID = "3c39c225b3a27de7822833feb24b65b1"
@@ -30,6 +31,7 @@ CLOUDFLARE_ACCOUNT_ID = "3c39c225b3a27de7822833feb24b65b1"
 # R2_SECRET_ACCESS_KEY
 # RESEND_API_KEY
 # JWT_SECRET
+# CRON_SECRET (used by the scheduled handler in worker.ts)
 
 # Smart Placement - Run workers closer to backend for better performance
 [placement]

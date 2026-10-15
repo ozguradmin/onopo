@@ -373,5 +373,62 @@ export async function send2FACode(code: string, toEmail: string) {
     }
 }
 
+// Admin password reset link template
+export const adminPasswordResetTemplate = (resetUrl: string, expiresMinutes: number) => ({
+    subject: '🔑 Admin Şifre Sıfırlama - Onopo Store',
+    html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #1e293b, #334155); padding: 30px; text-align: center;">
+                <h1 style="color: white; margin: 0;">Şifre Sıfırlama 🔑</h1>
+            </div>
+            <div style="padding: 30px; background: #f8fafc;">
+                <p style="font-size: 16px; color: #334155;">Merhaba,</p>
+                <p style="font-size: 16px; color: #334155;">
+                    Onopo Store yönetim paneli için şifre sıfırlama isteği aldık. Yeni şifrenizi belirlemek için aşağıdaki butona tıklayın:
+                </p>
+
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${resetUrl}"
+                       style="background: #6366f1; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                        Yeni Şifre Belirle
+                    </a>
+                </div>
+
+                <p style="font-size: 14px; color: #64748b; text-align: center;">
+                    ⏰ Bu bağlantı <strong>${expiresMinutes} dakika</strong> geçerlidir ve yalnızca bir kez kullanılabilir.
+                </p>
+
+                <p style="font-size: 14px; color: #94a3b8; margin-top: 30px;">
+                    Bu isteği siz yapmadıysanız bu e-postayı dikkate almayın; mevcut şifreniz değişmeden kalır.
+                </p>
+            </div>
+            <div style="background: #1e293b; padding: 20px; text-align: center;">
+                <p style="color: #94a3b8; margin: 0; font-size: 14px;">
+                    Onopo Store Güvenlik
+                </p>
+            </div>
+        </div>
+    `
+})
+
+// Send admin password reset link
+export async function sendAdminPasswordReset(resetUrl: string, expiresMinutes: number, toEmail: string) {
+    try {
+        const template = adminPasswordResetTemplate(resetUrl, expiresMinutes)
+        const { error } = await resend.emails.send({
+            from: FROM_EMAIL,
+            to: toEmail,
+            subject: template.subject,
+            html: template.html
+        })
+        if (error) throw error
+        console.log('Admin password reset email sent to:', toEmail)
+        return { success: true }
+    } catch (error) {
+        console.error('Failed to send admin password reset email:', error)
+        return { success: false, error }
+    }
+}
+
 // Get Resend instance for direct use
 export { resend }

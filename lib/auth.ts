@@ -86,6 +86,39 @@ export async function verifyJWT(token: string): Promise<any> {
     }
 }
 
+// Password reset tokens use their own key so they can never be accepted as auth tokens.
+function getResetKey(): Uint8Array {
+    return new TextEncoder().encode(`${process.env.JWT_SECRET || 'super-secret-key-change-this'}:password-reset`)
+}
+
+// Short fingerprint of the current password hash. Embedding it in the reset token makes the
+// token single-use: once the password changes, the fingerprint no longer matches.
+async function passwordFingerprint(passwordHash: string): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(passwordHash))
+    return arrayBufferToHex(digest).slice(0, 32)
+}
+
+export async function createPasswordResetToken(userId: number, passwordHash: string, expiresMinutes: number): Promise<string> {
+    return await new SignJWT({ purpose: 'password-reset', uid: userId, pwf: await passwordFingerprint(passwordHash) })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setIssuedAt()
+        .setExpirationTime(`${expiresMinutes}m`)
+        .sign(getResetKey())
+}
+
+// Returns the user id if the token is valid, unexpired and still matches the user's current password.
+export async function verifyPasswordResetToken(token: string, getPasswordHash: (userId: number) => Promise<string | null>): Promise<number | null> {
+    try {
+        const { payload } = await jwtVerify(token, getResetKey())
+        if (payload.purpose !== 'password-reset' || typeof payload.uid !== 'number') return null
+        const currentHash = await getPasswordHash(payload.uid)
+        if (!currentHash || payload.pwf !== await passwordFingerprint(currentHash)) return null
+        return payload.uid
+    } catch {
+        return null
+    }
+}
+
 // Returns an error response unless the request carries a valid admin token.
 // Usage: const denied = await requireAdmin(); if (denied) return denied
 export async function requireAdmin(): Promise<NextResponse | null> {

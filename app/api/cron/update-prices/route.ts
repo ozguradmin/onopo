@@ -6,17 +6,18 @@ export const dynamic = 'force-dynamic'
 // Cron endpoint to update TL prices from USD based on exchange rate
 // Should be called daily at 10:00 AM Turkey time (UTC 07:00)
 export async function GET(req: NextRequest) {
+    // Only the scheduled handler in worker.ts (or someone holding CRON_SECRET) may run this
+    const cronSecret = process.env.CRON_SECRET
+    if (!cronSecret) {
+        console.error('Cron endpoint called but CRON_SECRET is not configured')
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (req.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     try {
         const db = await getDB()
-
-        // Optional: Verify cron secret for security
-        const authHeader = req.headers.get('authorization')
-        const cronSecret = process.env.CRON_SECRET
-
-        // Allow without secret for manual testing, but log warning
-        if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-            console.log('Warning: Cron endpoint called without valid secret')
-        }
 
         // Fetch current USD/TRY exchange rate
         console.log('Fetching current exchange rate...')

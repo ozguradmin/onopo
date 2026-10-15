@@ -1,99 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
-import { hashPassword } from '@/lib/auth'
+import { createPasswordResetToken } from '@/lib/auth'
+import { sendAdminPasswordReset } from '@/lib/email'
 
-// Admin email for password reset
-const ADMIN_EMAIL = 'ozgurglr256@gmail.com'
+// The admin account (ozgurglr256@gmail.com logs in as admin@onopo.com, see /api/auth/login)
+const ADMIN_ACCOUNT_EMAIL = 'admin@onopo.com'
+// Where the reset link is sent
+const RESET_MAIL_TO = 'ozgurglr256@gmail.com'
+const ACCEPTED_EMAILS = [RESET_MAIL_TO, ADMIN_ACCOUNT_EMAIL]
 
+const RESET_EXPIRES_MINUTES = 30
+// Ignore repeated requests within this window so the endpoint can't be used to flood the inbox
+const RESEND_COOLDOWN_MS = 2 * 60 * 1000
+
+const GENERIC_MESSAGE = 'Eğer bu e-posta kayıtlıysa, şifre sıfırlama bağlantısı gönderildi.'
+
+// Sends a time-limited, single-use reset link. The password itself is not changed here.
 export async function POST(req: NextRequest) {
     try {
-        const { email } = await req.json()
+        const { email } = await req.json().catch(() => ({}))
 
-        // Verify the email matches admin email
-        if (email !== ADMIN_EMAIL) {
+        if (typeof email !== 'string' || !ACCEPTED_EMAILS.includes(email.trim().toLowerCase())) {
             // Don't reveal if email exists or not for security
-            return NextResponse.json({ success: true, message: 'Eğer bu e-posta kayıtlıysa, şifre sıfırlama maili gönderildi.' })
+            return NextResponse.json({ success: true, message: GENERIC_MESSAGE })
         }
 
-        // Generate a new random password
-        const newPassword = generateRandomPassword()
         const db = await getDB()
-        const passwordHash = await hashPassword(newPassword)
 
-        // Update admin password
-        await db.prepare(
-            'UPDATE users SET password_hash = ? WHERE email = ?'
-        ).bind(passwordHash, ADMIN_EMAIL).run()
-
-        // Try to send email with MailChannels
-        try {
-            const emailResponse = await fetch('https://api.mailchannels.net/tx/v1/send', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    personalizations: [
-                        {
-                            to: [{ email: ADMIN_EMAIL, name: 'Admin' }]
-                        }
-                    ],
-                    from: {
-                        email: 'no-reply@onopo-app.workers.dev',
-                        name: 'Onopo Admin'
-                    },
-                    subject: 'Onopo Admin - Şifre Sıfırlama',
-                    content: [
-                        {
-                            type: 'text/plain',
-                            value: `Merhaba,
-
-Admin şifreniz sıfırlandı. Yeni giriş bilgileriniz:
-
-E-posta: ${ADMIN_EMAIL}
-Yeni Şifre: ${newPassword}
-
-Güvenliğiniz için giriş yaptıktan sonra şifrenizi değiştirmenizi öneririz.
-
-Bu e-posta Onopo Admin paneli tarafından gönderilmiştir.`
-                        }
-                    ]
-                })
-            })
-
-            if (emailResponse.ok) {
-                console.log('Password reset email sent successfully')
-            } else {
-                console.error('MailChannels error:', await emailResponse.text())
-            }
-        } catch (emailError) {
-            console.error('Email sending error:', emailError)
+        const lastSent = await db.prepare(
+            "SELECT value FROM site_settings WHERE key = 'admin_reset_last_sent'"
+        ).first() as any
+        if (lastSent?.value && Date.now() - Number(lastSent.value) < RESEND_COOLDOWN_MS) {
+            return NextResponse.json({ success: true, message: GENERIC_MESSAGE })
         }
 
-        // Log password to console for backup (server logs only)
-        console.log('========================================')
-        console.log('PASSWORD RESET COMPLETED')
-        console.log(`Email: ${ADMIN_EMAIL}`)
-        console.log(`New Password: ${newPassword}`)
-        console.log('========================================')
+        const user = await db.prepare(
+            "SELECT id, password_hash FROM users WHERE email = ? AND role = 'admin'"
+        ).bind(ADMIN_ACCOUNT_EMAIL).first() as any
+        if (!user) {
+            console.error('Forgot password: admin account not found')
+            return NextResponse.json({ success: true, message: GENERIC_MESSAGE })
+        }
 
-        // Always return success message - never expose password in response
-        return NextResponse.json({
-            success: true,
-            message: `Şifre sıfırlama maili ${ADMIN_EMAIL} adresine gönderildi. Mail gelmezse sunucu loglarını kontrol edin.`
-        })
+        await db.prepare(
+            'INSERT OR REPLACE INTO site_settings (key, value) VALUES (?, ?)'
+        ).bind('admin_reset_last_sent', Date.now().toString()).run()
+
+        const token = await createPasswordResetToken(user.id, user.password_hash, RESET_EXPIRES_MINUTES)
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'
+        const resetUrl = `${baseUrl}/admin/reset-password?token=${encodeURIComponent(token)}`
+
+        const result = await sendAdminPasswordReset(resetUrl, RESET_EXPIRES_MINUTES, RESET_MAIL_TO)
+        if (!result.success) {
+            return NextResponse.json({ error: 'Şifre sıfırlama e-postası gönderilemedi. Lütfen daha sonra tekrar deneyin.' }, { status: 502 })
+        }
+
+        return NextResponse.json({ success: true, message: GENERIC_MESSAGE })
 
     } catch (error: any) {
         console.error('Forgot password error:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ error: 'Bir hata oluştu' }, { status: 500 })
     }
-}
-
-function generateRandomPassword(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
-    let password = ''
-    for (let i = 0; i < 12; i++) {
-        password += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
-    return password
 }

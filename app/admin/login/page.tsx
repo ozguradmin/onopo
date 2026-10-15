@@ -40,11 +40,7 @@ export default function AdminLoginPage() {
             })
             const data = await res.json()
             if (res.ok) {
-                if (data.newPassword) {
-                    alert(`Şifreniz sıfırlandı!\n\nE-posta: ${data.email}\nYeni Şifre: ${data.newPassword}\n\nBu şifreyi güvenli bir yere kaydedin!`)
-                } else {
-                    alert(data.message || 'Şifre yenileme maili gönderildi.')
-                }
+                alert(data.message || 'Şifre yenileme bağlantısı gönderildi.')
                 setShowForgot(false)
             } else {
                 alert(data.error || 'Şifre sıfırlama hatası oluştu.')
@@ -318,7 +314,7 @@ export default function AdminLoginPage() {
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl">
                         <h2 className="text-xl font-bold mb-2">Şifremi Unuttum</h2>
-                        <p className="text-sm text-slate-500 mb-6">Şifre yenileme bağlantısı **ozgurglr256@gmail.com** adresine gönderilecektir.</p>
+                        <p className="text-sm text-slate-500 mb-6">Şifre yenileme bağlantısı ozgurglr256@gmail.com adresine gönderilecektir. Bağlantı 30 dakika geçerlidir.</p>
 
                         <div className="space-y-4">
                             <Button

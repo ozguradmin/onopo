@@ -46,15 +46,20 @@ const navItems = [
     { href: '/admin/image-optimization', label: 'Görsel Optimizasyonu', icon: ImageIcon },
 ]
 
+// Pages reachable without an admin session
+const PUBLIC_ADMIN_PATHS = ['/admin/login', '/admin/reset-password']
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
+    // next.config uses trailingSlash, so the pathname may end with '/'
+    const isPublicPage = PUBLIC_ADMIN_PATHS.includes(pathname.replace(/\/$/, ''))
     const router = useRouter()
     const [sidebarOpen, setSidebarOpen] = React.useState(false)
     const [user, setUser] = React.useState<any>(null)
     const [loading, setLoading] = React.useState(true)
 
     React.useEffect(() => {
-        if (pathname === '/admin/login') {
+        if (isPublicPage) {
             setLoading(false)
             return
         }
@@ -82,7 +87,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.push('/')
     }
 
-    if (loading && pathname !== '/admin/login') {
+    if (loading && !isPublicPage) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="text-slate-500">Yükleniyor...</div>
@@ -90,8 +95,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         )
     }
 
-    // Don't show sidebar on login page
-    if (pathname === '/admin/login') {
+    // Don't show sidebar on login/reset pages
+    if (isPublicPage) {
         return <>{children}</>
     }
 

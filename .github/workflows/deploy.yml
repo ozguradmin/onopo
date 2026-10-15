@@ -26,6 +26,7 @@ jobs:
         run: npx @opennextjs/cloudflare build
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          NEXT_PUBLIC_BASE_URL: https://onopostore.com
 
       # Apply database migrations (continue even if tables exist)
       - name: Apply Database Migrations
