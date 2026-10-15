@@ -1,24 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
-import { verifyJWT } from '@/lib/auth'
+import { verifyJWT, requireAdmin } from '@/lib/auth'
 import { cookies } from 'next/headers'
 
-// GET: Get all site settings
+// Settings that only the admin panel may read (e.g. where 2FA codes and order notifications go)
+const ADMIN_ONLY_KEYS = new Set(['admin_email'])
+
+// GET: Get site settings (admin-only keys are returned to admins only)
 export async function GET() {
     try {
         const db = await getDB()
         const { results } = await db.prepare('SELECT key, value FROM site_settings').all()
+        const isAdmin = (await requireAdmin()) === null
 
         // Convert to object
         const settings: Record<string, string> = {}
         for (const row of (results || [])) {
-            settings[(row as any).key] = (row as any).value
+            const key = (row as any).key
+            if (!isAdmin && ADMIN_ONLY_KEYS.has(key)) continue
+            settings[key] = (row as any).value
         }
 
-        // Cache settings for 5 minutes
+        // Public settings are cached for 5 minutes; the admin view must never be cached
         return NextResponse.json(settings, {
             headers: {
-                'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600'
+                'Cache-Control': isAdmin ? 'private, no-store' : 'public, s-maxage=300, stale-while-revalidate=600',
+                'Vary': 'Cookie'
             }
         })
     } catch (error: any) {
