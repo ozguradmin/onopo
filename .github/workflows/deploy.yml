@@ -16,16 +16,14 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
       # Build with OpenNext for Cloudflare
-      # Next.js 15 left official support on 2026-10-21 and OpenNext refuses to build it without this flag.
-      # Remove the flag after upgrading to a supported Next.js major.
       - name: Build with OpenNext
-        run: npx @opennextjs/cloudflare build --dangerouslyUseUnsupportedNextVersion
+        run: npx @opennextjs/cloudflare build
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           NEXT_PUBLIC_BASE_URL: https://onopostore.com

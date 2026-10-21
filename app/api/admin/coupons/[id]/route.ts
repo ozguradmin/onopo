@@ -5,13 +5,13 @@ import { getDB } from '@/lib/db'
 
 export async function DELETE(
     req: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     const denied = await requireAdmin()
     if (denied) return denied
 
     try {
-        const id = params.id
+        const { id } = await params
         if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
 
         const db = await getDB()
@@ -26,13 +26,13 @@ export async function DELETE(
 // Toggle status (PUT)
 export async function PUT(
     req: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     const denied = await requireAdmin()
     if (denied) return denied
 
     try {
-        const id = params.id
+        const { id } = await params
         const body = await req.json()
         const { is_active } = body
 
