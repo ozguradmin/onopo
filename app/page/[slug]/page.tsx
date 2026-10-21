@@ -19,7 +19,8 @@ type Params = Promise<{ slug: string }>
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
     const page = await resolveCmsPageCached((await params).slug)
-    if (!page) return {}
+    // Unknown slug: the page calls notFound(); keep the 404 title instead of the site default
+    if (!page) return { title: 'Sayfa bulunamadı', robots: { index: false, follow: true } }
     const site = await getSiteSeo()
     return buildMetadata({
         title: page.title,

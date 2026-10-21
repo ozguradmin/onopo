@@ -8,6 +8,7 @@ import { LogIn, ShieldCheck } from 'lucide-react'
 import { Suspense } from 'react'
 import { safeRedirectPath } from '@/lib/safeRedirect'
 import { AuthShell } from '@/components/account/AuthShell'
+import { authErrorText } from '@/components/account/auth-errors'
 import { Field, FormAlert, inputClass } from '@/components/forms/Field'
 import { PasswordInput } from '@/components/forms/PasswordInput'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -170,7 +171,7 @@ function LoginForm() {
                 panelTitle="Hesabın iki adımlı doğrulamayla korunuyor"
             >
                 <form onSubmit={handle2FASubmit} className="space-y-5">
-                    {error && <FormAlert>{error}</FormAlert>}
+                    {error && <FormAlert>{authErrorText(error)}</FormAlert>}
 
                     <Field id="login-code" label="Doğrulama kodu">
                         <input
@@ -182,7 +183,7 @@ function LoginForm() {
                             value={code}
                             onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                             autoComplete="one-time-code"
-                            className={cn(inputClass, 'h-16 text-center text-[28px] font-bold tracking-[0.5em] tabular placeholder:tracking-[0.5em]')}
+                            className={cn(inputClass, 'h-16 text-center indent-[0.5em] text-[28px] font-bold tracking-[0.5em] tabular placeholder:tracking-[0.5em]')}
                             placeholder="000000"
                             autoFocus
                         />
@@ -252,7 +253,7 @@ function LoginForm() {
             }
         >
             <form onSubmit={handleSubmit} className="space-y-5">
-                {error && <FormAlert>{error}</FormAlert>}
+                {error && <FormAlert>{authErrorText(error)}</FormAlert>}
 
                 <Field id="login-email" label="E-posta">
                     <input

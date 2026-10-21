@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronDown, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AuthShell } from '@/components/account/AuthShell'
+import { authErrorText } from '@/components/account/auth-errors'
 import { Field, FormAlert, inputClass, textareaClass } from '@/components/forms/Field'
 import { PasswordInput } from '@/components/forms/PasswordInput'
 import { safeRedirectPath } from '@/lib/safeRedirect'
@@ -95,7 +96,7 @@ function RegisterForm() {
             }
         >
             <form onSubmit={handleSubmit} className="space-y-5">
-                {error && <FormAlert>{error}</FormAlert>}
+                {error && <FormAlert>{authErrorText(error)}</FormAlert>}
 
                 <Field id="register-name" label="Ad soyad" required>
                     <input

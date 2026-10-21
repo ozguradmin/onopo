@@ -9,7 +9,6 @@ import { unitPrice } from '@/lib/pricing'
 import { originalImageUrl, productImageUrl } from '@/lib/images'
 import { cn } from '@/lib/utils'
 import { FallbackImage } from '@/components/ui/FallbackImage'
-import { EmptyState } from '@/components/ui/EmptyState'
 import { Field, FormAlert, checkboxClass, inputClass, textareaClass } from '@/components/forms/Field'
 import { CheckoutSkeleton } from '@/components/checkout/CheckoutSkeleton'
 import { TrustNote } from '@/components/checkout/TrustNote'
@@ -322,6 +321,12 @@ export default function CheckoutPage() {
     const errorField = Object.prototype.hasOwnProperty.call(FIELD_FOR_ERROR, error) ? FIELD_FOR_ERROR[error] : undefined
     const fieldError = (name: string) => (errorField === name ? error : undefined)
 
+    // The confirmation replaces the (tall) payment view: show it from the top, also when the
+    // payment was confirmed by the status polling rather than by the form submit
+    React.useEffect(() => {
+        if (orderComplete) window.scrollTo(0, 0)
+    }, [orderComplete])
+
     // Wait for the persisted cart before deciding the cart is empty (avoids a 'Sepetiniz Boş' flash)
     if (!hydrated) {
         return <CheckoutSkeleton />
@@ -332,13 +337,17 @@ export default function CheckoutPage() {
         return (
             <div className="min-h-[60vh] bg-surface py-10 lg:py-16">
                 <div className="container-store">
-                    <div className="mx-auto max-w-lg rounded-sheet border border-line bg-white shadow-card">
-                        <EmptyState
-                            icon={<ShoppingBag />}
-                            title={<span className="type-h2 block">Sepetin boş</span>}
-                            description="Ödeme yapmak için önce sepetine ürün ekle. Şarj aletleri, kablolar ve daha fazlası seni bekliyor."
-                            action={{ label: 'Alışverişe başla', href: '/products/' }}
-                        />
+                    <div className="mx-auto flex max-w-lg flex-col items-center rounded-sheet border border-line bg-white px-6 py-12 text-center shadow-card">
+                        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-surface text-muted" aria-hidden="true">
+                            <ShoppingBag className="h-7 w-7" />
+                        </span>
+                        <h1 className="type-h2 mt-4 text-ink">Sepetin boş</h1>
+                        <p className="mt-1.5 max-w-sm text-sm leading-6 text-muted">
+                            Ödeme yapmak için önce sepetine ürün ekle. Şarj aletleri, kablolar ve daha fazlası seni bekliyor.
+                        </p>
+                        <Link href="/products/" className={cn(buttonClasses({ variant: 'brand', size: '44' }), 'mt-5')}>
+                            Alışverişe başla
+                        </Link>
                     </div>
                 </div>
             </div>
