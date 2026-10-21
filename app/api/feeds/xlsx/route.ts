@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server'// Product Export to Excel (XLSX)
 import { getDB } from '@/lib/db'
 import * as XLSX from 'xlsx'
 import { stripHtml } from '@/lib/stripHtml'
+import { requireAdmin } from '@/lib/auth'
+import { parseShippingSettings, shippingCost as computeShippingCost } from '@/lib/pricing'
+import { absoluteImageUrl, canonicalOrigin, feedPrices, parseImages } from '@/lib/feeds'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,10 +28,14 @@ export async function GET() {
     try {
         const db = await getDB()
 
-        // Fetch all products
+        // The admin panel gets the full export (inactive products too, stored prices: the admin product
+        // import reads 'Fiyat (₺)' back). Everyone else gets active products only, priced exactly as the
+        // checkout charges them.
+        const isAdmin = (await requireAdmin()) === null
+
         const { results: products } = await db.prepare(
-            `SELECT id, name, description, price, original_price, stock, images, category, is_active, free_shipping, product_code, created_at 
-             FROM products ORDER BY id DESC`
+            `SELECT id, name, description, price, original_price, stock, images, category, is_active, free_shipping, product_code, created_at
+             FROM products ${isAdmin ? '' : 'WHERE is_active = 1 '}ORDER BY id DESC`
         ).all() as { results: Product[] }
 
         // Fetch shipping settings
@@ -36,30 +43,27 @@ export async function GET() {
             `SELECT free_shipping_threshold, shipping_cost FROM shipping_settings LIMIT 1`
         ).first()
 
-        const freeThreshold = shippingSettings ? parseFloat(shippingSettings.free_shipping_threshold) : 500.00
-        const baseShippingCost = shippingSettings ? parseFloat(shippingSettings.shipping_cost) : 100.00
+        const shipping = parseShippingSettings(shippingSettings)
+        const origin = canonicalOrigin(null)
 
         // Prepare data for Excel
         const data = products.map((product: any) => {
-            const images = product.images ? JSON.parse(product.images) : []
-            const imageUrl = images[0] || ''
+            const images = parseImages(product.images)
+            const imageUrl = absoluteImageUrl(images[0], origin)
+            const { price: chargedPrice, listPrice } = feedPrices(product.price, product.original_price)
 
             // Clean description
             const cleanDescription = stripHtml(product.description || '', 30000)
 
-            let shippingPriceValue = 0
-            if (!product.free_shipping) {
-                if (product.price < freeThreshold) {
-                    shippingPriceValue = baseShippingCost
-                }
-            }
+            // Shipping for one unit, as the order API computes it
+            const shippingPriceValue = computeShippingCost(chargedPrice, Number(product.free_shipping) === 1, shipping)
 
             return {
                 'ID': product.id,
                 'Ürün Adı': product.name,
                 'Açıklama': cleanDescription,
-                'Fiyat (₺)': product.price,
-                'Eski Fiyat (₺)': product.original_price || '',
+                'Fiyat (₺)': isAdmin ? product.price : chargedPrice,
+                'Eski Fiyat (₺)': isAdmin ? (product.original_price || '') : (listPrice ?? ''),
                 'Stok': product.stock,
                 'Kategori': product.category || '',
                 'Ürün Kodu': product.product_code || '',
@@ -99,7 +103,8 @@ export async function GET() {
             headers: {
                 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 'Content-Disposition': 'attachment; filename="urunler.xlsx"',
-                'Cache-Control': 'no-cache'
+                'Cache-Control': 'private, no-cache',
+                'Vary': 'Cookie'
             }
         })
     } catch (error: any) {

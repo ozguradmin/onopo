@@ -1,6 +1,9 @@
 // CSV Product Export
 import { getDB } from '@/lib/db'
 import { stripHtml } from '@/lib/stripHtml'
+import { requireAdmin } from '@/lib/auth'
+import { parseShippingSettings, shippingCost as computeShippingCost } from '@/lib/pricing'
+import { absoluteImageUrl, canonicalOrigin, feedPrices, parseImages } from '@/lib/feeds'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,10 +26,14 @@ export async function GET() {
     try {
         const db = await getDB()
 
-        // Fetch all products (including inactive for full export)
+        // The admin panel (Entegrasyonlar) gets the full export: inactive products too, and the stored
+        // prices, so the file can be edited and imported back. Everyone else gets active products only,
+        // priced exactly as the checkout charges them.
+        const isAdmin = (await requireAdmin()) === null
+
         const { results: products } = await db.prepare(
-            `SELECT id, name, description, price, original_price, stock, images, category, is_active, free_shipping, product_code, created_at 
-             FROM products ORDER BY id DESC`
+            `SELECT id, name, description, price, original_price, stock, images, category, is_active, free_shipping, product_code, created_at
+             FROM products ${isAdmin ? '' : 'WHERE is_active = 1 '}ORDER BY id DESC`
         ).all() as { results: Product[] }
 
         // Fetch shipping settings
@@ -34,8 +41,8 @@ export async function GET() {
             `SELECT free_shipping_threshold, shipping_cost FROM shipping_settings LIMIT 1`
         ).first()
 
-        const freeThreshold = shippingSettings ? parseFloat(shippingSettings.free_shipping_threshold) : 500.00
-        const baseShippingCost = shippingSettings ? parseFloat(shippingSettings.shipping_cost) : 100.00
+        const shipping = parseShippingSettings(shippingSettings)
+        const origin = canonicalOrigin(null)
 
         // CSV Header
         const headers = [
@@ -56,26 +63,23 @@ export async function GET() {
 
         // CSV Rows
         const rows = products.map(product => {
-            const images = product.images ? JSON.parse(product.images) : []
-            const imageUrl = images[0] || ''
+            const images = parseImages(product.images)
+            const imageUrl = absoluteImageUrl(images[0], origin)
+            const { price: chargedPrice, listPrice } = feedPrices(product.price, product.original_price)
 
             // Clean description for CSV
             const cleanDescription = stripHtml(product.description || '', 10000)
                 .replace(/"/g, '""') // Escape quotes for CSV
 
-            let calculatedShippingCost = 0;
-            if (!product.free_shipping) {
-                if (product.price < freeThreshold) {
-                    calculatedShippingCost = baseShippingCost;
-                }
-            }
+            // Shipping for one unit, as the order API computes it
+            const calculatedShippingCost = computeShippingCost(chargedPrice, Number(product.free_shipping) === 1, shipping)
 
             return [
                 product.id,
                 `"${product.name.replace(/"/g, '""')}"`,
                 `"${cleanDescription}"`,
-                product.price,
-                product.original_price || '',
+                isAdmin ? product.price : chargedPrice,
+                isAdmin ? (product.original_price || '') : (listPrice ?? ''),
                 product.stock,
                 `"${(product.category || '').replace(/"/g, '""')}"`,
                 product.product_code || '',
@@ -97,7 +101,8 @@ export async function GET() {
             headers: {
                 'Content-Type': 'text/csv; charset=utf-8',
                 'Content-Disposition': 'attachment; filename="urunler.csv"',
-                'Cache-Control': 'no-cache'
+                'Cache-Control': 'private, no-cache',
+                'Vary': 'Cookie'
             }
         })
     } catch (error) {

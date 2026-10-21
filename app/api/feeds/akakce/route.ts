@@ -1,6 +1,8 @@
 // Akakçe Product Feed - XML Format
 import { getDB } from '@/lib/db'
 import { stripHtml } from '@/lib/stripHtml'
+import { parseShippingSettings, shippingCost as computeShippingCost } from '@/lib/pricing'
+import { absoluteImageUrl, canonicalOrigin, escapeXml, feedPrices, parseImages, productPageUrl } from '@/lib/feeds'
 
 export const dynamic = 'force-dynamic'
 
@@ -76,16 +78,17 @@ export async function GET() {
             `SELECT free_shipping_threshold, shipping_cost FROM shipping_settings LIMIT 1`
         ).first()
 
-        const freeThreshold = shippingSettings ? parseFloat(shippingSettings.free_shipping_threshold) : 500.00
-        const shippingCost = shippingSettings ? parseFloat(shippingSettings.shipping_cost) : 100.00
+        const shipping = parseShippingSettings(shippingSettings)
+
+        // Absolute, canonical URLs: https://onopostore.com/<slug>/ and absolute image links
+        const origin = canonicalOrigin(settings.site_url)
 
         // Build XML items
         const xmlItems = products.map(product => {
-            const images = product.images ? JSON.parse(product.images) : []
+            const images = parseImages(product.images).map(img => absoluteImageUrl(img, origin)).filter(Boolean)
             const mainImage = images[0] || ''
 
-            // Clean URL (trim whitespace)
-            const productUrl = `${settings.site_url}/${product.slug}`.trim()
+            const productUrl = productPageUrl(origin, product.slug?.trim(), product.id)
 
             // Extract metadata from description
             const extracted = extractFromDescription(product.description || '')
@@ -111,34 +114,27 @@ export async function GET() {
             // Description cleaning
             const cleanDescription = stripHtml(product.description || '', 5000)
 
-            // Price logic
-            const currentPrice = product.price.toFixed(2)
-            const oldPrice = (product.original_price && product.original_price > product.price)
-                ? product.original_price.toFixed(2)
-                : ''
+            // Price logic: exactly what the checkout charges (lib/pricing.ts)
+            const { price, listPrice } = feedPrices(product.price, product.original_price)
+            const currentPrice = price.toFixed(2)
+            const oldPrice = listPrice ? listPrice.toFixed(2) : ''
 
-            // Shipping Logic
-            let shippingFee = '0'
-            if (!product.free_shipping) {
-                if (product.price >= freeThreshold) {
-                    shippingFee = '0'
-                } else {
-                    shippingFee = shippingCost.toFixed(2)
-                }
-            }
+            // Shipping for one unit, as the order API computes it
+            const shippingValue = computeShippingCost(price, Number(product.free_shipping) === 1, shipping)
+            const shippingFee = shippingValue === 0 ? '0' : shippingValue.toFixed(2)
 
             return `  <urun>
     <id>${product.id}</id>
-    <sku>${escapeCDATA(sku)}</sku>
-    <barkod>${escapeCDATA(barcode)}</barkod>
+    <sku>${escapeXml(sku)}</sku>
+    <barkod>${escapeXml(barcode)}</barkod>
     <isim><![CDATA[${escapeCDATA(product.name)}]]></isim>
     <aciklama><![CDATA[${escapeCDATA(cleanDescription)}]]></aciklama>
     <marka><![CDATA[${escapeCDATA(brand)}]]></marka>
     <kategori><![CDATA[${escapeCDATA(product.category || 'Genel')}]]></kategori>
-    <link>${productUrl}</link>
-    <resim>${mainImage.trim()}</resim>
+    <link>${escapeXml(productUrl)}</link>
+    <resim>${escapeXml(mainImage)}</resim>
     <resimler>
-      ${images.map((img: string) => `<resim>${img.trim()}</resim>`).join('\n      ')}
+      ${images.map((img: string) => `<resim>${escapeXml(img)}</resim>`).join('\n      ')}
     </resimler>
     <fiyat>${currentPrice}</fiyat>
     ${oldPrice ? `<piyasa_fiyati>${oldPrice}</piyasa_fiyati>` : ''}
@@ -153,7 +149,7 @@ export async function GET() {
 <urunler>
   <magaza>
     <isim>${escapeXml(settings.site_name)}</isim>
-    <url>${settings.site_url}</url>
+    <url>${origin}</url>
   </magaza>
 ${xmlItems}
 </urunler>`
@@ -168,15 +164,6 @@ ${xmlItems}
         console.error('Akakce Feed Error:', error)
         return new Response('Feed error', { status: 500 })
     }
-}
-
-function escapeXml(str: string): string {
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&apos;')
 }
 
 function escapeCDATA(str: string): string {
