@@ -26,7 +26,7 @@ export default function robots(): MetadataRoute.Robots {
                     '/api/categories',
                     '/api/site-settings',
                     '/api/homepage-sections',
-                    '/api/hero-slides',
+                    '/api/hero', // /api/hero/ (home page HeroSection) and /api/hero-slides
                     '/api/shipping-settings',
                     '/api/pages/',
                     '/api/menus',

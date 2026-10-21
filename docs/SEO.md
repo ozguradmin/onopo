@@ -287,7 +287,7 @@ return buildMetadata({ title, description, path: '/products/', query: ls.canonic
   - `/api/feeds/google` (Merchant)
   - `/api/images/` (stored image URLs, favicon)
   - the read-only storefront GETs that client components still fetch while rendering: products,
-    product-page-data, categories, site-settings, homepage-sections, hero-slides, shipping-settings, pages, menus
+    product-page-data, categories, site-settings, homepage-sections, hero (`/api/hero/`, the home page hero) and hero-slides, shipping-settings, pages, menus
   The longest matching rule wins, so these Allow lines win over `/api/`. Ask the `next.config.ts` owner to add
   `X-Robots-Tag: noindex` on `/api/:path*` so JSON responses are never indexed. Change only that header there,
   and never Cache-Control.
