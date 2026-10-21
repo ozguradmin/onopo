@@ -1,79 +1,75 @@
-"use client"
+import * as React from 'react'
+import { cn } from '@/lib/utils'
+import { homeIcon } from './icons'
 
-import { Truck, ShieldCheck, MapPin, HeadphonesIcon, RefreshCw } from "lucide-react"
-import { motion } from "framer-motion"
-import { cn } from "@/lib/utils"
-
-const features = [
-    {
-        title: "Ücretsiz Kargo",
-        description: "500 TL üzeri tüm elektronik siparişlerinde. Kapınıza kadar hızlı ve güvenilir teslimat.",
-        icon: Truck,
-        className: "bg-blue-600 text-white shadow-blue-900/20 shadow-lg", // Premium colors
-    },
-    {
-        title: "Mardin'in Kalbi",
-        description: "Global tasarlandı, yerel köklerden beslendi. Yerel zanaatkarları destekliyoruz.",
-        icon: MapPin,
-        className: "bg-slate-900 text-white shadow-slate-900/20 shadow-lg",
-    },
-    {
-        title: "Güvenli Ödeme",
-        description: "256-bit SSL şifreleme. Verileriniz bizimle her zaman güvende.",
-        icon: ShieldCheck,
-        className: "bg-white text-slate-900 border-slate-200 shadow-lg",
-    },
-    {
-        title: "7/24 Destek",
-        description: "Ekibimiz her zaman, her yerde size yardımcı olmak için burada.",
-        icon: HeadphonesIcon,
-        className: "bg-emerald-600 text-white shadow-emerald-900/20 shadow-lg",
-    },
-]
+export interface FeatureItem {
+    icon?: string
+    title?: string
+    description?: string
+}
 
 interface FeaturesSectionProps {
+    id?: string
     title?: string
-    features?: any[]
+    /** Admin › Ana Sayfa › Özellikler `config.items` ({ icon, title, description }), as saved. */
+    features?: unknown
+    className?: string
 }
 
-const iconMap: any = {
-    truck: Truck,
-    shield: ShieldCheck,
-    map: MapPin,
-    headphones: HeadphonesIcon,
-    'refresh-cw': RefreshCw,
-    refreshcw: RefreshCw
+function cleanItems(raw: unknown): Required<FeatureItem>[] {
+    if (!Array.isArray(raw)) return []
+    return raw
+        .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
+        .map(x => ({
+            icon: String(x.icon ?? '').trim(),
+            title: String(x.title ?? '').trim(),
+            description: String(x.description ?? '').trim(),
+        }))
+        .filter(x => x.title || x.description)
 }
 
-export function FeaturesSection({ title = "Neden Onopo?", features: custFeatures }: FeaturesSectionProps) {
-    const displayFeatures = custFeatures || features
+/**
+ * "Neden Onopo?" USP block (Admin › Ana Sayfa "Özellikler"): the admin's own items and texts, with
+ * inline lucide icons (no icon font). Server Component. Renders nothing when the admin left no item
+ * (no invented claims).
+ */
+export function FeaturesSection({ id = 'home-features', title, features, className }: FeaturesSectionProps) {
+    const items = cleanItems(features)
+    if (!items.length) return null
+    const headingId = `${id}-title`
     return (
-        <section className="py-20 bg-slate-50 border-y border-slate-200">
-            <div className="container mx-auto px-4">
-                <div className="mb-12 text-center">
-                    <h2 className="text-3xl font-bold text-slate-900 mb-4">{title}</h2>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
-                    {displayFeatures.map((feature: any, index: number) => {
-                        // Resolve icon component
-                        const IconComponent = typeof feature.icon === 'string'
-                            ? (iconMap[feature.icon.toLowerCase()] || Truck)
-                            : feature.icon
-
+        <section aria-labelledby={title ? headingId : undefined} aria-label={title ? undefined : 'Neden Onopo'} className={cn('bg-surface py-8 lg:py-12', className)}>
+            <div className="container-store">
+                {title && (
+                    <h2 id={headingId} className="type-h2 mb-4 text-ink lg:mb-6">
+                        {title}
+                    </h2>
+                )}
+                <ul className={cn('grid grid-cols-2 gap-3 md:gap-4 lg:gap-6', items.length >= 4 ? 'lg:grid-cols-4' : items.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2')}>
+                    {items.map((item, i) => {
+                        const Icon = homeIcon(item.icon)
                         return (
-                            <div key={index} className="flex flex-col items-center text-center group">
-                                <div className="w-16 h-16 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 group-hover:shadow-md">
-                                    <IconComponent className="w-8 h-8 text-slate-700" strokeWidth={1.5} />
-                                </div>
-                                <h3 className="text-lg font-bold text-slate-900 mb-2">{feature.title}</h3>
-                                <p className="text-sm text-slate-500 max-w-[200px] leading-relaxed">
-                                    {feature.description}
-                                </p>
-                            </div>
+                            <li
+                                key={`${item.title}-${i}`}
+                                className={cn(
+                                    'flex flex-col gap-3 rounded-card bg-white p-4 lg:flex-row lg:items-start lg:gap-4 lg:p-5',
+                                    items.length % 2 === 1 && i === items.length - 1 && 'col-span-2 lg:col-span-1',
+                                )}
+                            >
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-500 lg:h-12 lg:w-12">
+                                    <Icon className="h-5 w-5 lg:h-6 lg:w-6" strokeWidth={1.75} aria-hidden="true" />
+                                </span>
+                                <span className="min-w-0">
+                                    {item.title && <h3 className="text-sm leading-5 font-semibold text-ink lg:text-[15px] lg:leading-6">{item.title}</h3>}
+                                    {item.description && <p className="mt-1 text-[13px] leading-5 text-muted">{item.description}</p>}
+                                </span>
+                            </li>
                         )
                     })}
-                </div>
+                </ul>
             </div>
-        </section >
+        </section>
     )
 }
+
+export default FeaturesSection
