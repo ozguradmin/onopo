@@ -79,3 +79,20 @@ export function useMenus(): MenuItem[] {
 export function useShellChrome(): boolean {
     return React.useContext(ShellChromeContext)
 }
+
+/**
+ * Facts the trust badges need that are not part of StorefrontData. `returnDays` comes from the CMS
+ * shipping page (getSiteSeo().returnPolicy.days) when the root layout passes it to LayoutProvider;
+ * otherwise 14 (the statutory withdrawal period for distance sales in Turkey).
+ */
+export interface ShellFacts {
+    returnDays: number
+}
+
+export const DEFAULT_SHELL_FACTS: ShellFacts = { returnDays: 14 }
+
+export const ShellFactsContext = React.createContext<ShellFacts>(DEFAULT_SHELL_FACTS)
+
+export function useShellFacts(): ShellFacts {
+    return React.useContext(ShellFactsContext)
+}

@@ -154,6 +154,10 @@ export const useCartStore = create<CartState>()(
         {
             name: 'onopo-cart-storage',
             skipHydration: true,
+            // Never persist the drawer's open state, or it reopens by itself after a reload
+            partialize: (state) => ({ items: state.items, coupon: state.coupon, shippingSettings: state.shippingSettings }),
+            // Carts saved before this fix still contain isOpen: ignore it when loading
+            merge: (persistedState, currentState) => ({ ...currentState, ...(persistedState as Partial<CartState>), isOpen: false }),
             version: 2, // Increment version to force refresh if needed
             migrate: (persistedState: any, version: number) => {
                 return persistedState as CartState

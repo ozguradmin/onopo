@@ -1,56 +1,72 @@
 "use client"
 
+/**
+ * Announcement bar above the header (static, not sticky).
+ * Desktop (≥1024): 36px ink bar, all messages on one line + phone and help links on the right.
+ * Mobile: 32px, one message at a time (CSS-only rotation, static under reduced motion).
+ * Messages are built from data (free-shipping threshold, max installments, return window) unless the
+ * admin set site_settings.topbar_messages.
+ */
 import * as React from "react"
-import { Phone, Mail, Facebook, Instagram, Twitter, Youtube, Linkedin } from "lucide-react"
+import Link from "next/link"
+import { Phone } from "lucide-react"
 import { useSiteSettings } from "@/components/layout/store-data"
+import { useAnnouncements } from "@/components/layout/trust"
+import { telHref } from "@/components/layout/nav-data"
 
 export function TopBar() {
-    // Server-loaded settings (Admin › Ayarlar); no /api/site-settings fetch from the browser
     const settings = useSiteSettings()
+    const messages = useAnnouncements()
+    if (messages.length === 0) return null
+    const count = Math.min(messages.length, 4)
 
     return (
-        <div className="bg-slate-900 text-white text-xs py-2 hidden md:block">
-            <div className="container mx-auto px-4 flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                    {settings.footer_phone && (
-                        <a href={`tel:${settings.footer_phone.replace(/\s/g, '')}`} className="flex items-center gap-1 hover:text-slate-300 transition-colors">
-                            <Phone className="w-3 h-3" aria-hidden="true" />
-                            <span>{settings.footer_phone}</span>
-                        </a>
-                    )}
-                    {settings.footer_email && (
-                        <a href={`mailto:${settings.footer_email}`} className="flex items-center gap-1 hover:text-slate-300 transition-colors">
-                            <Mail className="w-3 h-3" aria-hidden="true" />
-                            <span>{settings.footer_email}</span>
-                        </a>
-                    )}
+        <div className="bg-ink text-white">
+            {/* Mobile: rotating single line */}
+            <div className="lg:hidden">
+                <div
+                    className="topbar-rotator relative mx-auto h-8 max-w-[480px] overflow-hidden px-4 text-center text-[12.5px] font-medium leading-8"
+                    data-count={count > 1 ? count : undefined}
+                    style={{ ['--topbar-count' as string]: count }}
+                >
+                    {messages.slice(0, 4).map((m, i) => (
+                        <p
+                            key={m.key}
+                            data-msg=""
+                            className="absolute inset-0 flex items-center justify-center gap-1.5 truncate px-4"
+                            style={count > 1 ? { animationDelay: `${i * 4}s` } : undefined}
+                        >
+                            {m.icon && <m.icon className="h-3.5 w-3.5 shrink-0 text-brand-100" aria-hidden="true" />}
+                            <span className="truncate">{m.text}</span>
+                        </p>
+                    ))}
                 </div>
-                <div className="flex items-center gap-3">
-                    {settings.facebook_url && (
-                        <a href={settings.facebook_url} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="hover:text-slate-300 transition-colors">
-                            <Facebook className="w-3 h-3" />
+            </div>
+
+            {/* Desktop: everything on one line */}
+            <div className="container-store hidden h-9 items-center justify-between gap-6 text-[13px] font-medium lg:flex">
+                <ul className="flex min-w-0 items-center gap-5 text-white/90">
+                    {messages.map((m, i) => (
+                        <li key={m.key} className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+                            {i > 0 && <span className="mr-3.5 h-1 w-1 rounded-full bg-white/30" aria-hidden="true" />}
+                            {m.icon && <m.icon className="h-4 w-4 shrink-0 text-brand-100" aria-hidden="true" strokeWidth={1.75} />}
+                            <span className="truncate">{m.text}</span>
+                        </li>
+                    ))}
+                </ul>
+                <div className="flex shrink-0 items-center gap-5 text-white/75">
+                    {settings.footer_phone && (
+                        <a href={telHref(settings.footer_phone)} className="inline-flex items-center gap-1.5 transition-colors hover:text-white">
+                            <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span className="tabular-nums">{settings.footer_phone}</span>
                         </a>
                     )}
-                    {settings.twitter_url && (
-                        <a href={settings.twitter_url} target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)" className="hover:text-slate-300 transition-colors">
-                            <Twitter className="w-3 h-3" />
-                        </a>
-                    )}
-                    {settings.instagram_url && (
-                        <a href={settings.instagram_url} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:text-slate-300 transition-colors">
-                            <Instagram className="w-3 h-3" />
-                        </a>
-                    )}
-                    {settings.youtube_url && (
-                        <a href={settings.youtube_url} target="_blank" rel="noopener noreferrer" aria-label="YouTube" className="hover:text-slate-300 transition-colors">
-                            <Youtube className="w-3 h-3" />
-                        </a>
-                    )}
-                    {settings.linkedin_url && (
-                        <a href={settings.linkedin_url} target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="hover:text-slate-300 transition-colors">
-                            <Linkedin className="w-3 h-3" />
-                        </a>
-                    )}
+                    <Link href="/orders/" prefetch={false} className="transition-colors hover:text-white">
+                        Sipariş takibi
+                    </Link>
+                    <Link href="/page/help/" prefetch={false} className="transition-colors hover:text-white">
+                        Yardım
+                    </Link>
                 </div>
             </div>
         </div>

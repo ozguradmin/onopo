@@ -332,3 +332,125 @@
     background-image: none !important;
   }
 }
+
+/* ---------------------------------------------------------------------------------------------- */
+/* Shell (header, search, navigation, drawers): wave 2, additive only                              */
+/* ---------------------------------------------------------------------------------------------- */
+
+/* Z-index scale (spec §6): header 40 · bottom nav 40 · sticky buy bar 45 · overlay 50 · drawer/sheet 60 · toast 70 */
+@utility z-header {
+  z-index: 40;
+}
+
+@utility z-bottom-nav {
+  z-index: 40;
+}
+
+@utility z-buybar {
+  z-index: 45;
+}
+
+@utility z-overlay {
+  z-index: 50;
+}
+
+@utility z-drawer {
+  z-index: 60;
+}
+
+@utility z-toast {
+  z-index: 70;
+}
+
+/* Bottom safe area (iPhone home indicator) */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Cart badge "bump" when an item is added (150 ms, off under reduced motion) */
+@keyframes badge-bump {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.18);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-badge-bump {
+  animation: badge-bump 300ms var(--ease-sheet);
+}
+
+/* Mobile announcement bar: one message at a time, 4 s each (2–4 messages); static under reduced motion */
+@keyframes topbar-cycle-2 {
+  0% { opacity: 0; transform: translateY(6px); }
+  4% { opacity: 1; transform: translateY(0); }
+  46% { opacity: 1; transform: translateY(0); }
+  50%, 100% { opacity: 0; transform: translateY(-6px); }
+}
+
+@keyframes topbar-cycle-3 {
+  0% { opacity: 0; transform: translateY(6px); }
+  3% { opacity: 1; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(0); }
+  33.333%, 100% { opacity: 0; transform: translateY(-6px); }
+}
+
+@keyframes topbar-cycle-4 {
+  0% { opacity: 0; transform: translateY(6px); }
+  2% { opacity: 1; transform: translateY(0); }
+  23% { opacity: 1; transform: translateY(0); }
+  25%, 100% { opacity: 0; transform: translateY(-6px); }
+}
+
+.topbar-rotator > [data-msg] {
+  animation-duration: calc(var(--topbar-count, 3) * 4s);
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+  animation-timing-function: ease-out;
+}
+
+.topbar-rotator[data-count="2"] > [data-msg] {
+  animation-name: topbar-cycle-2;
+}
+
+.topbar-rotator[data-count="3"] > [data-msg] {
+  animation-name: topbar-cycle-3;
+}
+
+.topbar-rotator[data-count="4"] > [data-msg] {
+  animation-name: topbar-cycle-4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar-rotator > [data-msg] {
+    animation: none !important;
+    opacity: 0;
+  }
+
+  .topbar-rotator > [data-msg]:first-child {
+    opacity: 1;
+  }
+
+  .animate-badge-bump {
+    animation: none !important;
+  }
+}
+
+/* Pages with their own sticky bottom bar (product page buy bar, checkout) hide the mobile bottom nav:
+   render any element with the attribute `data-hide-bottom-nav` in the page. */
+body:has([data-hide-bottom-nav]) [data-bottom-nav] {
+  display: none;
+}
+
+/* Toasts sit above the mobile bottom nav (sonner's own mobile breakpoint is 600px) */
+@media (max-width: 767px) {
+  body:not(:has([data-hide-bottom-nav])) [data-sonner-toaster][data-y-position="bottom"] {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}

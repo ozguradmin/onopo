@@ -1,136 +1,252 @@
 "use client"
 
+/**
+ * Store footer (spec §14, §15). Rendered once by the root shell (`fromShell`); legacy pages that render
+ * <Footer /> themselves get nothing. Everything comes from server data (store-data context):
+ *   trust band (shipping rule, PayTR, return window, support)
+ *   brand + site_description + social links (when footer_social_visible)
+ *   categories (footer_categories, else categories with products)
+ *   customer service: CMS pages at /page/<slug>/, order tracking
+ *   contact: footer_phone, whatsapp_number, footer_email, footer_address
+ *   bottom bar: footer_text with the current year, payment marks, SSL note
+ * On phones the link columns are accordions (links stay in the HTML for crawlers).
+ * variant "checkout" (/odeme): trust band + bottom bar only.
+ */
 import * as React from "react"
 import Link from "next/link"
-import { Facebook, Instagram, Twitter, Linkedin, Youtube } from "lucide-react"
-import { getImageUrl } from "@/lib/utils"
-import { useCategories, useShellChrome, useSiteSettings } from "@/components/layout/store-data"
+import { ChevronDown, Facebook, Instagram, Linkedin, Lock, Mail, MapPin, MessageCircle, Phone, Twitter, Youtube } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { originalImageUrl } from "@/lib/images"
+import { useShellChrome, useStoreData } from "@/components/layout/store-data"
+import { PaymentMarks, TrustBand } from "./trust"
+import { SUPPORT_LINKS, telHref, whatsappHref } from "./nav-data"
 
-/**
- * Store footer. Rendered once by the root shell (`fromShell`); legacy pages that render <Footer />
- * themselves get nothing. Settings and categories come from the server (store-data context).
- * Page-view tracking moved to LayoutProvider; the USD/TRY rate is no longer shown to customers
- * (the exchange-rate cron is unaffected).
- */
-export function Footer({ fromShell = false }: { fromShell?: boolean }) {
+export function Footer({ fromShell = false, variant = 'store' }: { fromShell?: boolean; variant?: 'store' | 'checkout' }) {
     const shellChrome = useShellChrome()
     if (shellChrome && !fromShell) return null
-    return <FooterInner />
+    return <FooterInner variant={variant} />
 }
 
-function FooterInner() {
-    const s = useSiteSettings()
-    const allCategories = useCategories()
+/** "© 2025 Onopo. …" → the current year (the admin text keeps working, the year never goes stale). */
+function footerText(raw: string, siteName: string): string {
+    const year = new Date().getFullYear()
+    const text = raw.trim()
+    if (!text) return `© ${year} ${siteName}. Tüm hakları saklıdır.`
+    return text.replace(/(©\s*)(19|20)\d{2}(?!\s*[-–]\s*\d)/, `$1${year}`)
+}
 
-    const settings = {
-        site_name: s.site_name || 'ONOPO',
-        site_description: s.site_description || 'Yaşam tarzı ve teknolojinin geleceğini tanımlıyoruz. Modern yaratıcılar için premium temeller.',
-        logo_url: s.logo_url || '',
-        footer_text: s.footer_text || `© ${new Date().getFullYear()} Onopo Store. Tüm hakları saklıdır.`,
-    }
-
-    // Admin-selected footer categories, otherwise the first 4 categories with products
-    const categories = s.footer_categories.length > 0
-        ? allCategories.filter(c => s.footer_categories.includes(c.name))
-        : allCategories.filter(c => c.product_count > 0).slice(0, 4)
-
+function TikTok({ className }: { className?: string }) {
     return (
-        <footer className="bg-slate-950 text-slate-300 py-10 mt-12">
-            <div className="container mx-auto px-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
-                    {/* Brand */}
-                    <div className="col-span-2 md:col-span-1 space-y-3">
-                        {settings.logo_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={getImageUrl(settings.logo_url)} alt={settings.site_name} width={140} height={28} loading="lazy" className="h-7 w-auto object-contain brightness-0 invert" />
-                        ) : (
-                            <p className="font-heading text-xl font-bold text-white tracking-tighter">{settings.site_name}</p>
-                        )}
-                        <p className="text-sm text-slate-400 max-w-xs leading-relaxed">
-                            {settings.site_description}
-                        </p>
-                        {s.footer_social_visible && (
-                            <div className="flex gap-3 pt-1">
-                                {s.facebook_url && <SocialLink label="Facebook" icon={<Facebook className="w-4 h-4" />} href={s.facebook_url} />}
-                                {s.instagram_url && <SocialLink label="Instagram" icon={<Instagram className="w-4 h-4" />} href={s.instagram_url} />}
-                                {s.twitter_url && <SocialLink label="X (Twitter)" icon={<Twitter className="w-4 h-4" />} href={s.twitter_url} />}
-                                {s.youtube_url && <SocialLink label="YouTube" icon={<Youtube className="w-4 h-4" />} href={s.youtube_url} />}
-                                {s.linkedin_url && <SocialLink label="LinkedIn" icon={<Linkedin className="w-4 h-4" />} href={s.linkedin_url} />}
-                            </div>
-                        )}
-                    </div>
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5" />
+            <path d="M14 3c.4 2.6 2.2 4.4 5 4.6" />
+        </svg>
+    )
+}
 
-                    {/* Shop - Dynamic Categories */}
-                    <div>
-                        <h2 className="font-heading text-white font-semibold mb-4 text-sm">Alışveriş</h2>
-                        <ul className="space-y-2 text-sm">
-                            <FooterLink href="/products/">Tüm Ürünler</FooterLink>
-                            {categories.map(cat => (
-                                <FooterLink key={cat.id} href={cat.href}>{cat.name}</FooterLink>
-                            ))}
-                        </ul>
-                    </div>
+function FooterInner({ variant }: { variant: 'store' | 'checkout' }) {
+    const { settings: s, categories: allCategories } = useStoreData()
+    const siteName = s.site_name || 'Onopo'
+    const text = footerText(s.footer_text, siteName)
 
-                    {/* Support */}
-                    <div>
-                        <h2 className="font-heading text-white font-semibold mb-4 text-sm">Destek</h2>
-                        <ul className="space-y-2 text-sm">
-                            <FooterLink href="/page/help">Yardım Merkezi</FooterLink>
-                            <FooterLink href="/page/shipping">Kargo & İade</FooterLink>
-                            <FooterLink href="/page/policy">Gizlilik Politikası</FooterLink>
-                            <FooterLink href="/page/terms">Kullanım Koşulları</FooterLink>
-                        </ul>
-                    </div>
-
-                    {/* Contact */}
-                    <div>
-                        <h2 className="font-heading text-white font-semibold mb-4 text-sm">İletişim</h2>
-                        <ul className="space-y-2 text-sm">
-                            {s.footer_email && (
-                                <li><a href={`mailto:${s.footer_email}`} className="hover:text-white transition-colors">{s.footer_email}</a></li>
-                            )}
-                            {s.footer_phone && (
-                                <li><a href={`tel:${s.footer_phone.replace(/\s/g, '')}`} className="hover:text-white transition-colors">{s.footer_phone}</a></li>
-                            )}
-                            {s.footer_address && (
-                                <li className="text-slate-400">{s.footer_address}</li>
-                            )}
-                            {!s.footer_email && !s.footer_phone && !s.footer_address && (
-                                <li className="text-slate-500">info@onopo.com</li>
-                            )}
-                        </ul>
-                    </div>
-                </div>
-
-                <div className="border-t border-slate-800 mt-8 pt-6 flex flex-col md:flex-row justify-between items-center text-xs text-slate-500 gap-2">
-                    <p>{settings.footer_text}</p>
-                    <p>Güvenli Ödeme & Hızlı Teslimat</p>
+    const bottomBar = (
+        <div className="border-t border-white/10">
+            <div className="container-store flex flex-col gap-4 py-5 text-[13px] text-white/65 md:flex-row md:items-center md:justify-between">
+                <p suppressHydrationWarning>{text}</p>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <span className="inline-flex items-center gap-1.5">
+                        <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                        256-bit SSL ile güvenli ödeme
+                    </span>
+                    <PaymentMarks tone="dark" />
                 </div>
             </div>
+        </div>
+    )
+
+    if (variant === 'checkout') {
+        return (
+            <footer className="mt-12">
+                <TrustBand />
+                <div className="bg-ink text-white">
+                    <div className="container-store flex flex-wrap gap-x-5 gap-y-2 pt-5 text-[13px] text-white/75">
+                        {SUPPORT_LINKS.filter(l => l.href.startsWith('/page/')).map(l => (
+                            <Link key={l.href} href={l.href} prefetch={false} className="hover:text-white">
+                                {l.label}
+                            </Link>
+                        ))}
+                    </div>
+                    {bottomBar}
+                </div>
+            </footer>
+        )
+    }
+
+    // Admin-selected footer categories (by name), otherwise every category with products (max 6)
+    const categories = s.footer_categories.length > 0
+        ? allCategories.filter(c => s.footer_categories.includes(c.name))
+        : allCategories.filter(c => c.product_count > 0).slice(0, 6)
+
+    const socials = s.footer_social_visible
+        ? [
+            { label: 'Instagram', href: s.instagram_url, icon: Instagram },
+            { label: 'Facebook', href: s.facebook_url, icon: Facebook },
+            { label: 'X (Twitter)', href: s.twitter_url, icon: Twitter },
+            { label: 'YouTube', href: s.youtube_url, icon: Youtube },
+            { label: 'TikTok', href: s.tiktok_url, icon: TikTok },
+            { label: 'LinkedIn', href: s.linkedin_url, icon: Linkedin },
+        ].filter(x => /^https?:\/\//i.test((x.href || '').trim()))
+        : []
+
+    const whatsapp = whatsappHref(s.whatsapp_number)
+    const hasContact = !!(s.footer_phone || s.footer_email || s.footer_address || whatsapp)
+
+    return (
+        <footer className="mt-12 lg:mt-16">
+            <TrustBand />
+            <div className="bg-ink text-white">
+                <div className="container-store grid gap-x-8 gap-y-2 py-8 lg:grid-cols-12 lg:gap-y-8 lg:py-14">
+                    {/* Brand */}
+                    <div className="pb-4 lg:col-span-4 lg:pb-0 lg:pr-8">
+                        <Link href="/" prefetch={false} aria-label={`${siteName} ana sayfa`} className="inline-flex rounded-thumb">
+                            {s.logo_url ? (
+                                // Black wordmark → white, the cyan "STORE" keeps its hue (invert + 180° hue rotation)
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    src={originalImageUrl(s.logo_url)}
+                                    alt={`${siteName} Store`}
+                                    width={1080}
+                                    height={216}
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="h-8 w-auto [filter:invert(1)_hue-rotate(180deg)_saturate(1.4)]"
+                                />
+                            ) : (
+                                <span className="text-2xl font-extrabold tracking-tight">{siteName}</span>
+                            )}
+                        </Link>
+                        {s.site_description && <p className="mt-4 max-w-sm text-sm leading-6 text-white/70">{s.site_description}</p>}
+                        {socials.length > 0 && (
+                            <ul className="mt-5 flex flex-wrap gap-2" aria-label="Sosyal medya">
+                                {socials.map(({ label, href, icon: Icon }) => (
+                                    <li key={label}>
+                                        <a
+                                            href={href.trim()}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            aria-label={label}
+                                            className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white/85 transition-colors hover:bg-brand-600 hover:text-white"
+                                        >
+                                            <Icon className="h-[18px] w-[18px]" />
+                                        </a>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+
+                    <FooterColumn id="footer-cats" title="Kategoriler" className="lg:col-span-2">
+                        <FooterLink href="/products/">Tüm ürünler</FooterLink>
+                        {categories.map(c => (
+                            <FooterLink key={c.id} href={c.href}>
+                                {c.name}
+                            </FooterLink>
+                        ))}
+                    </FooterColumn>
+
+                    <FooterColumn id="footer-help" title="Müşteri hizmetleri" className="lg:col-span-3">
+                        {SUPPORT_LINKS.map(l => (
+                            <FooterLink key={l.href} href={l.href}>
+                                {l.label}
+                            </FooterLink>
+                        ))}
+                        <FooterLink href="/profile/">Hesabım</FooterLink>
+                    </FooterColumn>
+
+                    {hasContact && (
+                        <FooterColumn id="footer-contact" title="İletişim" className="lg:col-span-3" defaultOpen>
+                            {s.footer_phone && (
+                                <li>
+                                    <a href={telHref(s.footer_phone)} className="inline-flex min-h-11 items-center gap-2.5 py-1 text-white/85 transition-colors hover:text-white lg:min-h-0">
+                                        <Phone className="h-4 w-4 shrink-0 text-brand-100" aria-hidden="true" />
+                                        <span className="tabular-nums">{s.footer_phone}</span>
+                                    </a>
+                                </li>
+                            )}
+                            {whatsapp && (
+                                <li>
+                                    <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2.5 py-1 text-white/85 transition-colors hover:text-white lg:min-h-0">
+                                        <MessageCircle className="h-4 w-4 shrink-0 text-brand-100" aria-hidden="true" />
+                                        WhatsApp ile yazın
+                                    </a>
+                                </li>
+                            )}
+                            {s.footer_email && (
+                                <li>
+                                    <a href={`mailto:${s.footer_email}`} className="inline-flex min-h-11 items-center gap-2.5 break-all py-1 text-white/85 transition-colors hover:text-white lg:min-h-0">
+                                        <Mail className="h-4 w-4 shrink-0 text-brand-100" aria-hidden="true" />
+                                        {s.footer_email}
+                                    </a>
+                                </li>
+                            )}
+                            {s.footer_address && (
+                                <li className="flex gap-2.5 py-1 text-white/65">
+                                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-100" aria-hidden="true" />
+                                    <address className="not-italic leading-6">{s.footer_address}</address>
+                                </li>
+                            )}
+                        </FooterColumn>
+                    )}
+                </div>
+                {bottomBar}
+            </div>
         </footer>
+    )
+}
+
+/** Link column: a plain list on desktop, an accordion on phones (content stays in the HTML). */
+function FooterColumn({
+    id,
+    title,
+    className,
+    defaultOpen = false,
+    children,
+}: {
+    id: string
+    title: string
+    className?: string
+    defaultOpen?: boolean
+    children: React.ReactNode
+}) {
+    const [open, setOpen] = React.useState(defaultOpen)
+    return (
+        <div className={cn('border-t border-white/10 lg:border-0', className)}>
+            <h2 className="text-sm font-semibold text-white">
+                <button
+                    type="button"
+                    aria-expanded={open}
+                    aria-controls={`${id}-list`}
+                    onClick={() => setOpen(o => !o)}
+                    className="flex min-h-[52px] w-full items-center justify-between text-left lg:hidden"
+                >
+                    {title}
+                    <ChevronDown className={cn('h-5 w-5 text-white/60 transition-transform duration-200', open && 'rotate-180')} aria-hidden="true" />
+                </button>
+                <span className="hidden lg:mb-4 lg:block">{title}</span>
+            </h2>
+            <ul id={`${id}-list`} className={cn('flex-col gap-1 pb-4 text-sm lg:flex lg:gap-2.5 lg:pb-0', open ? 'flex' : 'hidden')}>
+                {children}
+            </ul>
+        </div>
     )
 }
 
 function FooterLink({ href, children }: { href: string; children: React.ReactNode }) {
     return (
         <li>
-            <Link href={href} prefetch={false} className="hover:text-white transition-colors">
+            <Link href={href} prefetch={false} className="inline-flex min-h-11 items-center text-white/75 transition-colors hover:text-white lg:min-h-0">
                 {children}
             </Link>
         </li>
-    )
-}
-
-function SocialLink({ icon, href, label }: { icon: React.ReactNode; href: string; label: string }) {
-    return (
-        <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={label}
-            className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center hover:bg-primary hover:text-white transition-all text-slate-400"
-        >
-            {icon}
-        </a>
     )
 }
