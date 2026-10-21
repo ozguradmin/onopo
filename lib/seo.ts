@@ -2,7 +2,7 @@
  * SEO helpers for every storefront page: site constants, <head> metadata, titles, meta descriptions
  * and schema.org JSON-LD builders. The rules that pages must follow are in docs/SEO.md.
  *
- * Everything here is a pure function except getSiteSeo(), which reads D1 (server only).
+ * Everything here is pure and safe in client components. getSiteSeo(), which reads D1, is in lib/seo-server.ts.
  * Values that end up in structured data come from real data (site_settings, shipping_settings,
  * the CMS policy pages, products, reviews). Nothing is invented: when a value is unknown it is left out.
  */
@@ -236,30 +236,6 @@ export async function loadSiteSeo(db: D1Like): Promise<SiteSeo> {
         }
     }
     return site
-}
-
-let siteSeoCache: { at: number; ttl: number; value: Promise<SiteSeo> } | null = null
-
-/**
- * Site data for metadata/JSON-LD, cached per Worker isolate for 5 minutes (30 s after a failure).
- * Server only: it imports the D1 binding lazily.
- */
-export async function getSiteSeo(): Promise<SiteSeo> {
-    const now = Date.now()
-    if (siteSeoCache && now - siteSeoCache.at < siteSeoCache.ttl) return siteSeoCache.value
-    const entry: { at: number; ttl: number; value: Promise<SiteSeo> } = { at: now, ttl: 5 * 60 * 1000, value: Promise.resolve(DEFAULT_SITE_SEO) }
-    entry.value = (async () => {
-        try {
-            const { getDB } = await import('./db')
-            return await loadSiteSeo((await getDB()) as unknown as D1Like)
-        } catch (err) {
-            console.error('getSiteSeo failed, using defaults:', err)
-            entry.ttl = 30 * 1000
-            return { ...DEFAULT_SITE_SEO }
-        }
-    })()
-    siteSeoCache = entry
-    return entry.value
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1158,7 +1134,9 @@ export function productJsonLd(p: ProductSeoInput, opts: { site?: SiteSeo; review
     const inStock = Number(p.stock) > 0
     const code = (p.product_code || '').trim()
     const specs = parseProductSpecs(p.description)
-    const brand = productBrand(p)
+    // Akakçe has matched on brand "ONOPO" for every product since launch, so the JSON-LD keeps that exact
+    // value (productBrand() gives the real brand where a page needs it). Change it only after checking with Akakçe.
+    const brand = 'ONOPO'
     const now = opts.now || new Date()
     const priceValidUntil = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 

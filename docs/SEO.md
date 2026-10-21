@@ -71,7 +71,8 @@ whichever host served the page.
 ### Every page
 
 ```ts
-import { buildMetadata, getSiteSeo } from '@/lib/seo'
+import { buildMetadata } from '@/lib/seo'
+import { getSiteSeo } from '@/lib/seo-server'
 
 export async function generateMetadata(): Promise<Metadata> {
     const site = await getSiteSeo()
