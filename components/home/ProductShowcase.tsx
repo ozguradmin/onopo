@@ -1,172 +1,43 @@
-"use client"
-
-import * as React from "react"
-import { ShoppingBag, ArrowRight } from "lucide-react"
-import Image from "next/image"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { useCartStore } from "@/store/cart-store"
-import { cn, getImageUrl, parseProductImages } from "@/lib/utils"
-import { formatPrice } from "@/lib/formatPrice"
+import * as React from 'react'
+import { ProductCard, type ProductCardProduct } from '@/components/product/ProductCard'
+import { SectionHeader } from '@/components/ui/SectionHeader'
+import { RailScroller } from './RailScroller'
+import { RAIL_ITEM_CLASS } from './ProductRail'
 
 interface ProductShowcaseProps {
     title?: string
     description?: string
-    products?: any[]
+    products?: ProductCardProduct[]
+    /** Category NAME for the "Tümünü gör" link (legacy prop). */
     category?: string
+    href?: string
+    freeShippingThreshold?: number | null
 }
 
-export default function ProductShowcase({ title = "Trend Ürünler", description, products: initialProducts, category }: ProductShowcaseProps) {
-    const { addItem, openCart } = useCartStore()
-    const [products, setProducts] = React.useState<any[]>(initialProducts || [])
-    const [loading, setLoading] = React.useState(!initialProducts)
-
-    React.useEffect(() => {
-        if (initialProducts) return
-        setLoading(true)
-        fetch('/api/products')
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) setProducts(data)
-                setLoading(false)
-            })
-            .catch(() => setLoading(false))
-    }, [])
-
-    // Auto Scroll Logic
-    React.useEffect(() => {
-        const container = document.getElementById(`carousel-${title.replace(/\s/g, '')}`)
-        if (!container) return
-
-        const scrollInterval = setInterval(() => {
-            if (container.scrollLeft + container.clientWidth >= container.scrollWidth) {
-                container.scrollTo({ left: 0, behavior: 'smooth' })
-            } else {
-                container.scrollBy({ left: 300, behavior: 'smooth' })
-            }
-        }, 7000)
-
-        return () => clearInterval(scrollInterval)
-    }, [title, products])
-
-    if (loading) {
-        return <div className="py-12 text-center">Yükleniyor...</div>
-    }
-
+/**
+ * Legacy API kept for app/product/[id]/ProductClient.tsx ("Benzer Ürünler"). It is now the same
+ * swipe rail as the home rows (the one ProductCard, prev/next buttons, no auto-scroll, no fetching).
+ * New code should use ProductRail. Works inside Server and Client Components.
+ */
+export default function ProductShowcase({ title = 'Benzer Ürünler', description, products = [], category, href, freeShippingThreshold = null }: ProductShowcaseProps) {
+    if (!products.length) return null
+    const target = href ?? (category ? `/products/?category=${encodeURIComponent(category)}` : '/products/')
     return (
-        <section className="py-4 lg:py-8 bg-slate-50">
-            <div className="container mx-auto px-4 mb-6">
-                <div className="flex flex-col gap-2">
-                    <h2 className="text-lg md:text-3xl font-bold font-heading text-slate-900 tracking-tight">
-                        {title}
-                    </h2>
-                    <div className="flex flex-row items-center gap-3 md:gap-4 justify-between">
-                        <p className="text-slate-500 text-sm md:text-lg max-w-2xl flex-1">
-                            {description || "Bu sezonun en popüler teknoloji ve aksesuar ürünlerini keşfedin."}
-                        </p>
-
-                        <div className="w-px h-4 bg-slate-300 shrink-0"></div>
-
-                        <a
-                            href={category ? `/products?category=${encodeURIComponent(category)}` : '/products'}
-                            className="flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors shrink-0"
-                        >
-                            Tümünü Gör <ArrowRight className="w-4 h-4" />
-                        </a>
-                    </div>
-                </div>
-            </div>
-
-            {/* Carousel Layout for Desktop & Mobile */}
-            <div className="relative container mx-auto px-4 group/carousel">
-                {/* Scroll Buttons - Visible on hover (Desktop) */}
-                <button
-                    onClick={() => {
-                        const container = document.getElementById(`carousel-${title.replace(/\s/g, '')}`);
-                        if (container) container.scrollBy({ left: -300, behavior: 'smooth' });
-                    }}
-                    className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 backdrop-blur shadow-lg border border-slate-100 p-3 rounded-full text-slate-800 opacity-0 group-hover/carousel:opacity-100 transition-all hover:scale-110 -ml-4"
-                >
-                    <ArrowRight className="w-5 h-5 rotate-180" />
-                </button>
-
-                <button
-                    onClick={() => {
-                        const container = document.getElementById(`carousel-${title.replace(/\s/g, '')}`);
-                        if (container) container.scrollBy({ left: 300, behavior: 'smooth' });
-                    }}
-                    className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 backdrop-blur shadow-lg border border-slate-100 p-3 rounded-full text-slate-800 opacity-0 group-hover/carousel:opacity-100 transition-all hover:scale-110 -mr-4"
-                >
-                    <ArrowRight className="w-5 h-5" />
-                </button>
-
-                <div
-                    id={`carousel-${title.replace(/\s/g, '')}`}
-                    className="flex gap-3 md:gap-6 overflow-x-auto pb-4 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide scroll-smooth"
-                >
-                    {products.map((product) => (
-                        <div key={product.id} className="min-w-[140px] md:min-w-[280px] snap-start">
-                            <div className="relative bg-white rounded-xl md:rounded-3xl p-2 md:p-4 shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 h-full flex flex-col group">
-                                {/* Image Area */}
-                                <a href={`/${product.slug}`} className="block relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-slate-100 mb-3 md:mb-4">
-                                    <div className="relative w-full h-full p-4 bg-white rounded-xl">
-                                        <Image
-                                            src={getImageUrl(parseProductImages(product.images)[0] || product.image)}
-                                            alt={product.name}
-                                            fill
-                                            className="object-contain w-full h-full transform group-hover:scale-105 transition-transform duration-500"
-                                            sizes="(max-width: 768px) 160px, 280px"
-                                        />
-                                    </div>
-                                    {/* Badge Logic - smaller and semi-transparent */}
-                                    {(product.original_price > product.price) && (
-                                        <div className="absolute top-2 left-2 z-10">
-                                            <Badge className="bg-red-500/60 text-white text-[9px] md:text-[10px] px-1.5 md:px-2 py-0.5 font-medium border-0 shadow-sm backdrop-blur-sm">
-                                                İndirim
-                                            </Badge>
-                                        </div>
-                                    )}
-                                </a>
-
-                                {/* Details */}
-                                <div className="flex flex-col flex-1">
-                                    {/* Category hidden per user request */}
-                                    <a href={`/${product.slug}`} className="block group-hover:text-primary transition-colors">
-                                        <h3 className="font-heading font-bold text-xs md:text-base lg:text-lg text-slate-900 mb-1 md:mb-2 line-clamp-2 min-h-[32px] md:min-h-[56px]">
-                                            {product.name}
-                                        </h3>
-                                    </a>
-
-                                    <div className="mt-auto flex items-center justify-between pt-2 gap-2">
-                                        <span className="text-sm md:text-lg lg:text-xl font-bold text-slate-900">
-                                            {formatPrice(product.price)}
-                                        </span>
-                                        <Button
-                                            size="icon"
-                                            className="rounded-full bg-slate-900 text-white h-8 w-8 md:h-10 md:w-10 shrink-0 hover:bg-slate-700 hover:scale-105 active:scale-95 transition-all shadow-md"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                addItem({
-                                                    id: product.id,
-                                                    name: product.name,
-                                                    price: product.price,
-                                                    image: parseProductImages(product.images)[0] || product.image,
-                                                    category: product.category,
-                                                    slug: product.slug,
-                                                    free_shipping: !!product.free_shipping
-                                                });
-                                                openCart();
-                                            }}
-                                        >
-                                            <ShoppingBag className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </section >
+        <section className="container-store py-8 lg:py-12" aria-label={title}>
+            <RailScroller label={title} header={<SectionHeader title={title} description={description} href={target} />}>
+                {products.map(p => (
+                    <li key={p.id} className={RAIL_ITEM_CLASS}>
+                        <ProductCard
+                            product={p}
+                            freeShippingThreshold={freeShippingThreshold}
+                            sizes="(max-width: 640px) 40vw, (max-width: 1024px) 30vw, 240px"
+                            className="w-full"
+                        />
+                    </li>
+                ))}
+            </RailScroller>
+        </section>
     )
 }
+
+export { ProductShowcase }
