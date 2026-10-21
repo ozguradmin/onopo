@@ -2,10 +2,32 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
+import { getActiveProducts, listProducts, type Product } from '@/lib/catalog'
+import { prepareQuery, searchItems } from '@/lib/search'
 
 export const dynamic = 'force-dynamic'
 
+const LEGACY_COLUMNS = 'id, name, slug, price, original_price, stock, images, category, free_shipping'
 
+/** Same row shape the paginated listing has always returned (images as the raw JSON string). */
+function toLegacyRow(p: Product) {
+    return {
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+        price: p.price,
+        original_price: p.original_price,
+        stock: p.stock,
+        images: JSON.stringify(p.images),
+        category: p.category,
+        free_shipping: p.free_shipping ? 1 : 0,
+    }
+}
+
+/** Rank SQL rows with lib/search (rows carry product_code for matching; it is removed before returning). */
+function rankRows(rows: any[], query: string): any[] {
+    return searchItems(rows, prepareQuery(query), { soldOutLast: true }).map(({ product_code, ...row }: any) => row)
+}
 
 export async function GET(req: NextRequest) {
     try {
@@ -18,6 +40,7 @@ export async function GET(req: NextRequest) {
         const searchSlug = searchParams.get('search_slug')
         const query = searchParams.get('q')
         const limit = searchParams.get('limit')
+        const hasQuery = query !== null && query.trim() !== ''
 
         // Single product lookup by exact slug
         if (slugParam && exactSlug) {
@@ -56,8 +79,69 @@ export async function GET(req: NextRequest) {
             return NextResponse.json(null, { status: 404 })
         }
 
+        // Compact catalogue index for the instant-search dropdown (lib/search runs on it in the browser).
+        // All active products, in-stock first; raw prices (display with roundPrice / <Price>).
+        if (searchParams.get('index') === '1') {
+            const all = await getActiveProducts()
+            const ordered = [...all.filter(p => p.in_stock), ...all.filter(p => !p.in_stock)]
+            return NextResponse.json(ordered.map(p => ({
+                id: p.id,
+                name: p.name,
+                slug: p.slug,
+                category: p.category,
+                product_code: p.product_code,
+                price: p.price,
+                original_price: p.original_price,
+                stock: p.stock,
+                image: p.image,
+                free_shipping: p.free_shipping,
+            })), {
+                headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' }
+            })
+        }
+
+        // Storefront listing (paginated object format): the same filtering, search, sorting and counting
+        // as the server-rendered listing (lib/catalog listProducts) over the FULL catalogue. Sold-out
+        // products are included after the in-stock ones (cards show "Tükendi"), so totals match the
+        // category counts. Extra optional params: sort, minPrice, maxPrice, f (facet, repeatable),
+        // discounted=true, inStock=true.
+        if (!includeAll && searchParams.get('page')) {
+            const pageNum = parseInt(searchParams.get('page') || '1', 10)
+            const size = Math.min(parseInt(limit || '24', 10) || 24, 200)
+            const numParam = (k: string) => {
+                const v = searchParams.get(k)
+                const n = v === null || v === '' ? NaN : parseFloat(v)
+                return Number.isFinite(n) ? n : null
+            }
+            const result = await listProducts({
+                q: query,
+                categoryName: category,
+                page: Number.isFinite(pageNum) && pageNum > 0 ? pageNum : 1,
+                pageSize: size > 0 ? size : 24,
+                sort: searchParams.get('sort'),
+                minPrice: numParam('minPrice'),
+                maxPrice: numParam('maxPrice'),
+                facets: searchParams.getAll('f'),
+                onlyDiscounted: searchParams.get('discounted') === 'true',
+                inStockOnly: searchParams.get('inStock') === 'true',
+            })
+            return NextResponse.json({
+                products: result.items.map(toLegacyRow),
+                totalCount: result.total,
+                page: result.page,
+                pageSize: result.pageSize,
+                totalPages: Math.ceil(result.total / result.pageSize)
+            }, {
+                headers: {
+                    'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600'
+                }
+            })
+        }
+
         // Base query - only active products, and for customers, hide out-of-stock items
-        let sql = 'SELECT id, name, slug, price, original_price, stock, images, category, free_shipping FROM products WHERE is_active = 1'
+        // (legacy array format: homepage carousels, related products, admin pickers — their cards cannot
+        // show a sold-out state, so they keep receiving in-stock products only)
+        let sql = `SELECT ${LEGACY_COLUMNS}${hasQuery ? ', product_code' : ''} FROM products WHERE is_active = 1`
 
         // For customer-facing pages, only show in-stock products
         if (!includeAll) {
@@ -71,92 +155,47 @@ export async function GET(req: NextRequest) {
             params.push(category, category)
         }
 
-        // Search query support
-        if (query) {
-            const sanitizedQuery = query
-                .replace(/ü/gi, 'u').replace(/ö/gi, 'o').replace(/ş/gi, 's')
-                .replace(/ğ/gi, 'g').replace(/ı/gi, 'i').replace(/ç/gi, 'c')
-                .replace(/[%_\\'\"]/g, ' ').replace(/[^\w\s]/g, ' ')
-                .replace(/\s+/g, ' ').trim()
-
-            const words = sanitizedQuery.split(' ').filter((w: string) => w.length >= 3).slice(0, 2)
-            if (words.length > 0) {
-                const conditions = words.map(() => `(name LIKE ? OR slug LIKE ?)`).join(' AND ')
-                sql += ` AND (${conditions})`
-                words.forEach((word: string) => {
-                    params.push(`%${word}%`, `%${word}%`)
-                })
-            }
-        }
-
         sql += ' ORDER BY id DESC'
 
-        // Server-side pagination for customer-facing requests
-        // Admin requests (includeAll=true) bypass pagination
-        const pageParam = searchParams.get('page')
-        const page = parseInt(pageParam || '1', 10)
         const pageSize = Math.min(parseInt(limit || '24', 10), 200) // Default 24, max 200
+        const runAll = async (statement: string) => {
+            const { results } = params.length > 0
+                ? await db.prepare(statement).bind(...params).all()
+                : await db.prepare(statement).all()
+            return results as any[]
+        }
 
         if (!includeAll) {
-            // If 'page' param is explicitly set, use paginated object format
-            // Otherwise (just 'limit' for homepage etc), use legacy array format
-            if (pageParam) {
-                // Get total count first (for pagination info)
-                let countSql = sql.replace('SELECT id, name, slug, price, original_price, stock, images, category, free_shipping', 'SELECT COUNT(*) as total')
-                const countResult = params.length > 0
-                    ? await db.prepare(countSql).bind(...params).first() as any
-                    : await db.prepare(countSql).first() as any
-                const totalCount = countResult?.total || 0
-
-                // Apply pagination
-                const offset = (page - 1) * pageSize
-                sql += ` LIMIT ${pageSize} OFFSET ${offset}`
-
-                const { results } = params.length > 0
-                    ? await db.prepare(sql).bind(...params).all()
-                    : await db.prepare(sql).all()
-
-                // Return paginated response (object format)
-                return NextResponse.json({
-                    products: results as any[],
-                    totalCount,
-                    page,
-                    pageSize,
-                    totalPages: Math.ceil(totalCount / pageSize)
-                }, {
-                    headers: {
-                        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600'
-                    }
-                })
-            } else {
-                // Legacy format (array) for homepage etc - just apply limit
-                sql += ` LIMIT ${pageSize}`
-
-                const { results } = params.length > 0
-                    ? await db.prepare(sql).bind(...params).all()
-                    : await db.prepare(sql).all()
-
-                return NextResponse.json(results as any[], {
+            // Legacy format (array) for homepage etc - just apply limit
+            if (hasQuery) {
+                // Search (?q=) runs in JS with lib/search: Turkish folding, all tokens must match,
+                // ranked; a query without a usable token returns [] (never the whole catalogue)
+                return NextResponse.json(rankRows(await runAll(sql), query!).slice(0, pageSize), {
                     headers: {
                         'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600'
                     }
                 })
             }
+
+            sql += ` LIMIT ${pageSize}`
+            return NextResponse.json(await runAll(sql), {
+                headers: {
+                    'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600'
+                }
+            })
         }
 
         // Admin request - return all products without pagination (array format)
-        if (limit) {
-            const limitNum = parseInt(limit, 10)
-            if (limitNum > 0) sql += ` LIMIT ${limitNum}`
-        }
-
-        const { results } = params.length > 0
-            ? await db.prepare(sql).bind(...params).all()
-            : await db.prepare(sql).all()
+        const limitNum = limit ? parseInt(limit, 10) : 0
+        if (limitNum > 0 && !hasQuery) sql += ` LIMIT ${limitNum}`
 
         // CPU Optimization: Return raw data without JSON.parse loop
         // Client handles parsing for better CPU distribution
-        const products = results as any[]
+        let products = await runAll(sql)
+        if (hasQuery) {
+            products = rankRows(products, query!)
+            if (limitNum > 0) products = products.slice(0, limitNum)
+        }
 
         // Admin response - array format for backwards compatibility
         return NextResponse.json(products, {
