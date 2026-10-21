@@ -5,6 +5,7 @@ import { getSiteSettings } from '@/lib/catalog'
 import { privatePageMetadata } from '@/lib/seo'
 import { originalImageUrl } from '@/lib/images'
 import { buttonClasses } from '@/components/ui/button'
+import { NoCacheMarker } from '@/components/status/status-islands'
 
 // /maintenance/: shown without the store header/footer (LayoutProvider). The maintenance switch is
 // site_settings.maintenance_mode, read on the server: when it is off this URL sends visitors home.
@@ -30,7 +31,7 @@ export default async function MaintenancePage() {
 
     return (
         <div className="relative flex min-h-screen flex-col bg-surface">
-            <div hidden data-onopo-nocache="" />
+            <NoCacheMarker />
             <header className="flex justify-center px-4 pt-8 lg:pt-12">
                 {logo ? (
                     // eslint-disable-next-line @next/next/no-img-element
