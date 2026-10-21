@@ -45,7 +45,7 @@ const MAX_LINKS = 4
 
 export interface SearchComboboxProps {
     variant: 'desktop' | 'mobile'
-    /** Mobile: called synchronously before the sheet opens (the header un-hides itself). */
+    /** Called synchronously on focus, before the dropdown / sheet opens (the header un-hides itself). */
     onBeforeOpen?: () => void
     className?: string
 }
@@ -191,7 +191,8 @@ export function SearchCombobox({ variant, onBeforeOpen, className }: SearchCombo
         loadIndex()
         setFocused(true)
         setDismissed(false)
-        if (isMobile && !sheetOpen) {
+        if (!isMobile) onBeforeOpen?.()
+        else if (!sheetOpen) {
             onBeforeOpen?.()
             setSheetOpen(true)
         }
@@ -345,7 +346,9 @@ export function SearchCombobox({ variant, onBeforeOpen, className }: SearchCombo
                     if (!isMobile && dismissed) setDismissed(false)
                 }}
                 className={cn(
-                    'h-11 w-full min-w-0 appearance-none rounded-card border border-transparent bg-field pl-11 pr-11 text-[15px] text-ink outline-none transition-[background-color,border-color,box-shadow] duration-150 placeholder:text-subtle',
+                    'h-11 w-full min-w-0 appearance-none rounded-card border border-transparent bg-field pl-11 pr-11 text-ink outline-none',
+                    isMobile ? 'text-base' : 'text-[15px]',
+                    'transition-[background-color,border-color,box-shadow] duration-150 placeholder:text-subtle',
                     'focus:border-brand-600 focus:bg-white focus:shadow-focus focus-visible:shadow-focus',
                     '[&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden',
                 )}

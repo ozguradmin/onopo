@@ -6,12 +6,13 @@
  *
  *   TopBar (static)        announcement bar
  *   <header> (sticky)      mobile:  [☰] [logo] ……… [👤] [🛍]   56px
- *                                   [🔍 search field]             52px, hides on scroll-down, back on scroll-up
- *                          desktop: [logo] [🔍 search ……] [👤 Hesabım] [♡] [🛍 Sepetim]   72px
- *   DesktopNav (static)    ≥1024: categories mega menu, admin header links and menus, type quick links
+ *                                   [🔍 search field]             52px  ┐ second row: slides under the first
+ *                          desktop: [logo] [🔍 search ……] [👤 Hesabım] [♡] [🛍 Sepetim]   72px      │ row on scroll-down,
+ *                                   DesktopNav: mega menu, admin links/menus, type links  48px  ┘ back on scroll-up
  *
  * The hide-on-scroll and the scrolled shadow are applied to the DOM directly from a passive,
  * rAF-throttled scroll listener (no React re-render while scrolling, transforms only: no layout shift).
+ * Collapsed, the sticky header is 56px on phones and 72px on desktop.
  * /odeme gets a reduced checkout header (logo, "Güvenli ödeme", "Alışverişe dön"), spec §13.
  */
 import * as React from "react"
@@ -28,7 +29,8 @@ import { SearchCombobox } from "@/components/search/SearchCombobox"
 import { DesktopNav } from "./MegaMenu"
 import { TopBar } from "./TopBar"
 
-const COLLAPSE_BY = 52 // height of the mobile search row
+const COLLAPSE_MOBILE = 52 // height of the mobile search row
+const COLLAPSE_DESKTOP = 48 // height of the desktop nav row
 
 export function Header({ fromShell = false, variant = 'store' }: { fromShell?: boolean; variant?: 'store' | 'checkout' }) {
     const shellChrome = useShellChrome()
@@ -56,18 +58,31 @@ function StoreHeader() {
         const setCollapsed = (next: boolean) => {
             if (next === collapsed) return
             collapsed = next
+            const by = desktop.matches ? COLLAPSE_DESKTOP : COLLAPSE_MOBILE
             header.dataset.collapsed = next ? 'true' : 'false'
-            header.style.transform = next ? `translateY(-${COLLAPSE_BY}px)` : ''
-            row1.style.transform = next ? `translateY(${COLLAPSE_BY}px)` : ''
+            header.style.transform = next ? `translateY(-${by}px)` : ''
+            row1.style.transform = next ? `translateY(${by}px)` : ''
         }
-        revealRef.current = () => setCollapsed(false)
+        // Un-hide at once (no slide) before a search opens: the mobile sheet is position:fixed inside
+        // the header, so the header must not carry a transform, not even mid-transition.
+        revealRef.current = () => {
+            if (!collapsed) return
+            header.style.transition = 'none'
+            row1.style.transition = 'none'
+            setCollapsed(false)
+            void header.offsetHeight
+            header.style.transition = ''
+            row1.style.transition = ''
+        }
 
         const update = () => {
             ticking = false
             const y = Math.max(0, window.scrollY)
             header.dataset.scrolled = y > 4 ? 'true' : 'false'
             const typing = header.contains(document.activeElement) && document.activeElement?.tagName === 'INPUT'
-            if (desktop.matches || useShellUI.getState().searchOpen || typing || y < 120) {
+            // keep it open while a menu or the search is in use, and near the top of the page
+            const menuOpen = !!header.querySelector('nav [aria-expanded="true"]')
+            if (useShellUI.getState().searchOpen || typing || menuOpen || y < 160) {
                 setCollapsed(false)
                 lastY = y
                 return
@@ -87,12 +102,16 @@ function StoreHeader() {
                 requestAnimationFrame(update)
             }
         }
+        const onBreakpoint = () => {
+            setCollapsed(false)
+            update()
+        }
         update()
         window.addEventListener('scroll', onScroll, { passive: true })
-        desktop.addEventListener('change', update)
+        desktop.addEventListener('change', onBreakpoint)
         return () => {
             window.removeEventListener('scroll', onScroll)
-            desktop.removeEventListener('change', update)
+            desktop.removeEventListener('change', onBreakpoint)
             revealRef.current = () => { }
         }
     }, [])
@@ -106,7 +125,7 @@ function StoreHeader() {
                 ref={headerRef}
                 data-site-header=""
                 className={cn(
-                    'group/header sticky top-0 bg-white transition-transform duration-200 ease-out',
+                    'group/header sticky top-0 bg-white transition-[transform,box-shadow] duration-200 ease-out data-[scrolled=true]:shadow-raised',
                     // The mobile search sheet lives inside the header: lift it above every overlay while open
                     searchOpen ? 'z-drawer' : 'z-header',
                 )}
@@ -114,9 +133,8 @@ function StoreHeader() {
                 <div
                     ref={row1Ref}
                     className={cn(
-                        'relative z-[1] bg-white transition-[transform,box-shadow] duration-200 ease-out',
-                        'lg:border-b lg:border-line',
-                        'group-data-[collapsed=true]/header:shadow-raised lg:group-data-[scrolled=true]/header:shadow-raised',
+                        'relative z-[1] bg-white transition-transform duration-200 ease-out',
+                        'lg:border-b lg:border-line group-data-[collapsed=true]/header:border-transparent',
                     )}
                 >
                     <div className="container-store flex h-14 items-center gap-1 lg:h-[72px] lg:gap-8">
@@ -133,7 +151,7 @@ function StoreHeader() {
                         </button>
                         <Logo className="mr-auto lg:mr-0" />
                         <div className="hidden min-w-0 flex-1 justify-center lg:flex">
-                            <SearchCombobox variant="desktop" className="max-w-[640px]" />
+                            <SearchCombobox variant="desktop" onBeforeOpen={reveal} className="max-w-[640px]" />
                         </div>
                         <div className="-mr-2.5 flex shrink-0 items-center lg:mr-0 lg:gap-1">
                             <AccountLink />
@@ -147,8 +165,8 @@ function StoreHeader() {
                         <SearchCombobox variant="mobile" onBeforeOpen={reveal} />
                     </div>
                 </div>
+                <DesktopNav />
             </header>
-            <DesktopNav />
         </>
     )
 }
@@ -262,7 +280,7 @@ function CartButton() {
             aria-haspopup="dialog"
             aria-expanded={isOpen}
             aria-controls="cart-drawer"
-            className={cn(ICON_BTN, 'lg:pr-3')}
+            className={cn(ICON_BTN, 'lg:pr-3 xl:gap-3')}
         >
             <span className="relative">
                 <ShoppingBag className="h-[22px] w-[22px]" aria-hidden="true" strokeWidth={1.75} />
@@ -279,7 +297,7 @@ function CartButton() {
                     </span>
                 )}
             </span>
-            <span className="hidden flex-col items-start text-left leading-tight xl:flex" aria-hidden="true">
+            <span className="hidden min-w-[76px] flex-col items-start text-left leading-tight xl:flex" aria-hidden="true">
                 <span className="text-[11px] font-medium text-muted">Sepetim</span>
                 <span className="text-sm font-bold tabular-nums text-ink">{count > 0 ? formatTL(total) : '0,00 ₺'}</span>
             </span>

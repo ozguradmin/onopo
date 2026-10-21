@@ -4,7 +4,7 @@
  * Product suggestions inside the cart drawer, from the same compact index the instant search uses
  * (GET /api/products/?index=1, loaded once and shared):
  *   - below the free-shipping threshold: "Kargo bedava için tamamla" (items that reach the threshold
- *     with the least extra spend first, then the largest items that still fit)
+ *     with the least extra spend first, then the best deals)
  *   - empty cart: the newest in-stock products
  * Adding uses the unchanged cart payload (toCartItem).
  */
@@ -38,9 +38,14 @@ export function CartSuggestions({ remaining, title }: { remaining?: number; titl
         const pool = index.items.filter(p => p.stock > 0 && !inCart.has(String(p.id)))
         if (remaining == null) return pool.slice(0, MAX)
         const price = (p: SearchIndexItem) => displayPrice(p.price)
+        const saving = (p: SearchIndexItem) => {
+            const old = p.original_price ? displayPrice(p.original_price) : 0
+            return old > price(p) ? (old - price(p)) / old : 0
+        }
+        // Products that alone reach the threshold with the least extra spend, then the best deals
         const reach = pool.filter(p => price(p) >= remaining && price(p) <= remaining + 150).sort((a, b) => price(a) - price(b))
-        const fill = pool.filter(p => price(p) < remaining).sort((a, b) => price(b) - price(a))
-        const list = [...reach.slice(0, 3), ...fill]
+        const deals = pool.filter(p => price(p) < remaining).sort((a, b) => saving(b) - saving(a) || price(a) - price(b))
+        const list = [...reach.slice(0, 3), ...deals]
         if (list.length < MAX) list.push(...pool.filter(p => !list.includes(p)).sort((a, b) => price(a) - price(b)))
         return list.slice(0, MAX)
     }, [index.items, items, remaining])

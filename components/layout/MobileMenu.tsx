@@ -5,7 +5,7 @@
  *   1. account row ("Giriş yap / Üye ol" or "Merhaba, {ad}"); /api/auth/me is asked only when the
  *      drawer opens, never on page load
  *   2. categories with icon and count (Admin › Kategoriler)
- *   3. "Ürün tipine göre" quick links (or the admin menus when they exist)
+ *   3. "Ürün tipine göre" and "Cihazına göre" quick links (or the admin menus when they exist)
  *   4. Admin › Header links
  *   5. help pages, contact (phone, WhatsApp, e-mail)
  * Opened by the header ☰ button and the bottom-nav "Kategoriler" button.
@@ -21,7 +21,7 @@ import { useShellUI } from "@/components/layout/shell-ui"
 import { Drawer } from "./Drawer"
 import { CategoryIcon } from "./CategoryIcon"
 import { ShellLink } from "./MegaMenu"
-import { buildMenuTree, PRODUCT_TYPE_LINKS, SUPPORT_LINKS, telHref, whatsappHref } from "./nav-data"
+import { buildMenuTree, CONNECTOR_LINKS, normalizeHref, PRODUCT_TYPE_LINKS, SUPPORT_LINKS, telHref, whatsappHref } from "./nav-data"
 
 type AuthState = { status: 'unknown' } | { status: 'out' } | { status: 'in'; name: string }
 
@@ -63,7 +63,11 @@ export function MobileMenu() {
     const auth = useAuthOnOpen(open)
     const closeRef = React.useRef<HTMLButtonElement>(null)
     const tree = React.useMemo(() => buildMenuTree(menus), [menus])
-    const extraLinks = settings.header_links.filter(l => l.href !== '#categories' && l.href.trim() !== '/')
+    // Admin header links, minus what the drawer already has (home, the categories, all products)
+    const extraLinks = settings.header_links.filter(l => {
+        const href = normalizeHref(l.href)
+        return l.href !== '#categories' && href !== '/' && href !== '/products/'
+    })
     const whatsapp = whatsappHref(settings.whatsapp_number)
 
     React.useEffect(() => {
@@ -147,10 +151,14 @@ export function MobileMenu() {
                             <ul>
                                 {tree.map(m => (
                                     <li key={m.id}>
-                                        <ShellLink href={m.url} onClick={closeMenu} className={cn(ROW, 'font-semibold')}>
-                                            <span className="flex-1">{m.title}</span>
-                                            <ChevronRight className="h-4 w-4 text-subtle" aria-hidden="true" />
-                                        </ShellLink>
+                                        {!m.url || m.url.trim() === '#' ? (
+                                            <p className="type-micro px-4 pb-1 pt-3 text-muted">{m.title}</p>
+                                        ) : (
+                                            <ShellLink href={m.url} onClick={closeMenu} className={cn(ROW, 'font-semibold')}>
+                                                <span className="flex-1">{m.title}</span>
+                                                <ChevronRight className="h-4 w-4 text-subtle" aria-hidden="true" />
+                                            </ShellLink>
+                                        )}
                                         {m.children.length > 0 && (
                                             <ul className="pb-1">
                                                 {m.children.map(ch => (
@@ -182,6 +190,22 @@ export function MobileMenu() {
                                             className="inline-flex h-10 items-center rounded-full border border-line px-3.5 text-sm font-medium text-ink-2 active:bg-surface"
                                         >
                                             {t.short}
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                            <h3 className="type-micro pb-2.5 pt-4 text-muted">Cihazına göre</h3>
+                            <ul className="flex flex-wrap gap-2">
+                                {CONNECTOR_LINKS.map(t => (
+                                    <li key={t.key}>
+                                        <Link
+                                            href={t.href}
+                                            prefetch={false}
+                                            rel="nofollow"
+                                            onClick={closeMenu}
+                                            className="inline-flex h-10 items-center rounded-full border border-line px-3.5 text-sm font-medium text-ink-2 active:bg-surface"
+                                        >
+                                            {t.label}
                                         </Link>
                                     </li>
                                 ))}

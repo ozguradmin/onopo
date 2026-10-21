@@ -186,7 +186,7 @@ export function DesktopNav() {
                         ),
                     )}
                 </ul>
-                <ul className="ml-auto hidden shrink-0 items-center gap-1 xl:flex" aria-label="Ürün tipleri">
+                <ul className={cn('ml-auto hidden shrink-0 items-center gap-1', tree.length > 0 ? '2xl:flex' : 'xl:flex')} aria-label="Ürün tipleri">
                     {PRODUCT_TYPE_LINKS.slice(0, 5).map(t => {
                         const Icon = TYPE_ICONS[t.key] ?? Zap
                         return (
@@ -282,53 +282,13 @@ function MegaPanel({ hasMenus, tree, onNavigate }: { hasMenus: boolean; tree: Me
                 </Link>
             </div>
 
-            {columns.length > 0 ? (
-                columns.map((col, i) => (
-                    <div key={col.id} className={cn(i === 0 ? (columns.length === 1 ? 'col-span-5' : 'col-span-3') : 'col-span-2')}>
-                        <p className="type-micro mb-3 text-muted">{col.title}</p>
-                        <ul className="flex flex-col">
-                            {col.children.map(child => (
-                                <li key={child.id}>
-                                    <ShellLink
-                                        href={child.url}
-                                        onClick={onNavigate}
-                                        className="flex min-h-10 items-center text-[15px] font-medium text-ink-2 transition-colors hover:text-brand-600"
-                                    >
-                                        {child.title}
-                                    </ShellLink>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                ))
-            ) : (
-                <>
-                    <div className="col-span-3">
-                        <p className="type-micro mb-3 text-muted">Ürün tipine göre</p>
-                        <ul className="flex flex-col">
-                            {PRODUCT_TYPE_LINKS.map(t => {
-                                const Icon = TYPE_ICONS[t.key] ?? Zap
-                                return (
-                                    <li key={t.key}>
-                                        <Link
-                                            href={t.href}
-                                            prefetch={false}
-                                            rel="nofollow"
-                                            onClick={onNavigate}
-                                            className="flex min-h-10 items-center gap-2.5 text-[15px] font-medium text-ink-2 transition-colors hover:text-brand-600"
-                                        >
-                                            <Icon className="h-[18px] w-[18px] text-brand-500" aria-hidden="true" strokeWidth={1.75} />
-                                            {t.label}
-                                        </Link>
-                                    </li>
-                                )
-                            })}
-                        </ul>
-                    </div>
-                    <div className="col-span-2">
-                        <p className="type-micro mb-3 text-muted">Cihazına göre</p>
-                        <ul className="flex flex-col">
-                            {CONNECTOR_LINKS.map(t => (
+            {columns.length < 2 && (
+                <div className="col-span-3">
+                    <p className="type-micro mb-3 text-muted">Ürün tipine göre</p>
+                    <ul className="flex flex-col">
+                        {PRODUCT_TYPE_LINKS.map(t => {
+                            const Icon = TYPE_ICONS[t.key] ?? Zap
+                            return (
                                 <li key={t.key}>
                                     <Link
                                         href={t.href}
@@ -337,21 +297,58 @@ function MegaPanel({ hasMenus, tree, onNavigate }: { hasMenus: boolean; tree: Me
                                         onClick={onNavigate}
                                         className="flex min-h-10 items-center gap-2.5 text-[15px] font-medium text-ink-2 transition-colors hover:text-brand-600"
                                     >
-                                        {t.key === 'iphone' || t.key === 'type-c' || t.key === 'micro-usb' ? (
-                                            <Smartphone className="h-[18px] w-[18px] text-brand-500" aria-hidden="true" strokeWidth={1.75} />
-                                        ) : t.key === '20w' ? (
-                                            <Zap className="h-[18px] w-[18px] text-brand-500" aria-hidden="true" strokeWidth={1.75} />
-                                        ) : (
-                                            <Cable className="h-[18px] w-[18px] text-brand-500" aria-hidden="true" strokeWidth={1.75} />
-                                        )}
+                                        <Icon className="h-[18px] w-[18px] text-brand-500" aria-hidden="true" strokeWidth={1.75} />
                                         {t.label}
                                     </Link>
                                 </li>
-                            ))}
-                        </ul>
-                    </div>
-                </>
+                            )
+                        })}
+                    </ul>
+                </div>
             )}
+            {columns.length === 0 && (
+                <div className="col-span-2">
+                    <p className="type-micro mb-3 text-muted">Cihazına göre</p>
+                    <ul className="flex flex-col">
+                        {CONNECTOR_LINKS.map(t => {
+                            const Icon = t.key === '20w' ? Zap : t.key === 'orgulu' ? Cable : Smartphone
+                            return (
+                                <li key={t.key}>
+                                    <Link
+                                        href={t.href}
+                                        prefetch={false}
+                                        rel="nofollow"
+                                        onClick={onNavigate}
+                                        className="flex min-h-10 items-center gap-2.5 text-[15px] font-medium text-ink-2 transition-colors hover:text-brand-600"
+                                    >
+                                        <Icon className="h-[18px] w-[18px] text-brand-500" aria-hidden="true" strokeWidth={1.75} />
+                                        {t.label}
+                                    </Link>
+                                </li>
+                            )
+                        })}
+                    </ul>
+                </div>
+            )}
+            {/* Admin › Menüler items with children become columns (Cihaz, Markalar, …) */}
+            {columns.map((col, i) => (
+                <div key={col.id} className={cn(columns.length === 2 && i === 0 ? 'col-span-3' : 'col-span-2')}>
+                    <p className="type-micro mb-3 text-muted">{col.title}</p>
+                    <ul className="flex flex-col">
+                        {col.children.map(child => (
+                            <li key={child.id}>
+                                <ShellLink
+                                    href={child.url}
+                                    onClick={onNavigate}
+                                    className="flex min-h-10 items-center text-[15px] font-medium text-ink-2 transition-colors hover:text-brand-600"
+                                >
+                                    {child.title}
+                                </ShellLink>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ))}
 
             <div className="col-span-3">
                 <div className="relative flex h-full min-h-[220px] flex-col justify-between overflow-hidden rounded-sheet bg-ink p-6 text-white">
