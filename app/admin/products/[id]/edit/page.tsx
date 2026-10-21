@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Upload, Loader2, X, Plus, ArrowRight } from 'lucide-react'
 import { CurrencyInput } from '@/components/ui/currency-input'
+import { uploadImageVariants } from '@/lib/imageVariants'
 
 export default function EditProductPage() {
     const router = useRouter()
@@ -107,6 +108,7 @@ export default function EditProductPage() {
                 const res = await fetch('/api/admin/upload', { method: 'POST', body: data })
                 if (!res.ok) throw new Error('Upload failed')
                 const result = await res.json()
+                void uploadImageVariants(file, result.url) // resized WebP copies; never blocks saving
                 return result.url
             })
 

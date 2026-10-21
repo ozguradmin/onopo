@@ -16,17 +16,23 @@ export default function AdminDashboard() {
 
     React.useEffect(() => {
         Promise.all([
-            fetch('/api/products').then(r => r.json()).catch(() => []),
+            // includeAll: every active product (the plain list is the storefront's: in stock only, 24 items)
+            fetch('/api/products?includeAll=true').then(r => r.json()).catch(() => []),
             fetch('/api/orders').then(r => r.json()).catch(() => []),
             fetch('/api/analytics?range=day').then(r => r.json()).catch(() => ({ totalViews: 0 })),
             fetch('/api/site-settings').then(r => r.json()).catch(() => ({}))
         ]).then(([prods, ords, analytics, settings]) => {
-            setProducts(prods || [])
-            setOrders(ords || [])
-            const revenue = (ords || []).reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0)
+            const productList = Array.isArray(prods) ? prods : []
+            const orderList = Array.isArray(ords) ? ords : []
+            setProducts(productList)
+            setOrders(orderList)
+            // Revenue only counts orders that were not cancelled or failed
+            const revenue = orderList
+                .filter((o: any) => o.status !== 'cancelled' && o.payment_status !== 'failed')
+                .reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0)
             setStats({
-                totalProducts: prods?.length || 0,
-                totalOrders: ords?.length || 0,
+                totalProducts: productList.length,
+                totalOrders: orderList.length,
                 totalRevenue: revenue,
                 todayViews: analytics?.totalViews || 0
             })

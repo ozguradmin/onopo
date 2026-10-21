@@ -4,6 +4,21 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Shield, Lock, Mail, ArrowLeft } from 'lucide-react'
+import { safeRedirectPath } from '@/lib/safeRedirect'
+
+// 2FA codes are valid for 5 minutes (app/api/auth/login/route.ts)
+const CODE_VALID_SECONDS = 300
+
+// Where to go after login: ?redirect= (set by AdminLayout), only if it is an admin page on this site
+function adminRedirectTarget(): string {
+    if (typeof window === 'undefined') return '/admin'
+    const target = safeRedirectPath(new URLSearchParams(window.location.search).get('redirect'), '/admin')
+    return /^\/admin(\/|$|\?)/.test(target) && !/^\/admin\/login(\/|$|\?)/.test(target) ? target : '/admin'
+}
+
+function formatCountdown(seconds: number): string {
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
 
 export default function AdminLoginPage() {
     const router = useRouter()
@@ -20,7 +35,7 @@ export default function AdminLoginPage() {
     const [userId, setUserId] = React.useState<number | null>(null)
     const [code, setCode] = React.useState('')
     const [emailHint, setEmailHint] = React.useState('')
-    const [countdown, setCountdown] = React.useState(60)
+    const [countdown, setCountdown] = React.useState(CODE_VALID_SECONDS)
 
     // Countdown timer for 2FA
     React.useEffect(() => {
@@ -31,12 +46,16 @@ export default function AdminLoginPage() {
     }, [requires2FA, countdown])
 
     const handleForgotPassword = async () => {
+        if (!email.trim()) {
+            alert('Önce giriş formuna yönetici e-posta adresinizi yazın.')
+            return
+        }
         setForgotLoading(true)
         try {
             const res = await fetch('/api/admin/forgot-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: 'ozgurglr256@gmail.com' })
+                body: JSON.stringify({ email: email.trim() })
             })
             const data = await res.json()
             if (res.ok) {
@@ -75,21 +94,23 @@ export default function AdminLoginPage() {
                 setRequires2FA(true)
                 setUserId(data.userId)
                 setEmailHint(data.emailHint || '')
-                setCountdown(60)
+                setCountdown(CODE_VALID_SECONDS)
                 setLoading(false)
                 return
             }
 
             // No 2FA - Check if user is admin
-            const meRes = await fetch('/api/auth/me')
+            const meRes = await fetch('/api/auth/me', { cache: 'no-store' })
             if (meRes.ok) {
                 const meData = await meRes.json()
                 if (meData.user?.role === 'admin') {
-                    router.push('/admin')
+                    router.replace(adminRedirectTarget())
                     router.refresh()
                 } else {
                     setError('Bu hesap admin yetkisine sahip değil.')
                 }
+            } else {
+                setError('Oturum doğrulanamadı. Lütfen tekrar deneyin.')
             }
 
         } catch (err: any) {
@@ -117,8 +138,8 @@ export default function AdminLoginPage() {
                 throw new Error(data.error || 'Doğrulama hatası')
             }
 
-            // 2FA successful - redirect to admin
-            router.push('/admin')
+            // 2FA successful - redirect to admin (the auth cookie is already set)
+            router.replace(adminRedirectTarget())
             router.refresh()
 
         } catch (err: any) {
@@ -140,7 +161,7 @@ export default function AdminLoginPage() {
 
             const data = await res.json()
             if (res.ok && data.requires2FA) {
-                setCountdown(60)
+                setCountdown(CODE_VALID_SECONDS)
                 setEmailHint(data.emailHint || '')
             } else {
                 throw new Error(data.error || 'Kod gönderilemedi')
@@ -193,7 +214,7 @@ export default function AdminLoginPage() {
                             <div className="text-center">
                                 {countdown > 0 ? (
                                     <p className="text-sm text-slate-500">
-                                        Kod <span className="font-semibold text-indigo-600">{countdown}</span> saniye içinde geçerliliğini yitirecek
+                                        Kod <span className="font-semibold text-indigo-600">{formatCountdown(countdown)}</span> içinde geçerliliğini yitirecek
                                     </p>
                                 ) : (
                                     <button
@@ -314,7 +335,7 @@ export default function AdminLoginPage() {
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl">
                         <h2 className="text-xl font-bold mb-2">Şifremi Unuttum</h2>
-                        <p className="text-sm text-slate-500 mb-6">Şifre yenileme bağlantısı ozgurglr256@gmail.com adresine gönderilecektir. Bağlantı 30 dakika geçerlidir.</p>
+                        <p className="text-sm text-slate-500 mb-6">Şifre yenileme bağlantısı, giriş formuna yazdığınız yönetici hesabı için Site Ayarları'ndaki yönetici e-posta adresine gönderilecektir. Bağlantı 30 dakika geçerlidir.</p>
 
                         <div className="space-y-4">
                             <Button

@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
+import { uploadImageVariants } from '@/lib/imageVariants'
 import {
     GripVertical,
     Plus,
@@ -263,7 +264,8 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
 
     React.useEffect(() => {
         if (section.type === 'products' || section.type === 'new_products') {
-            fetch('/api/products').then(r => r.json()).then(data => setProducts(Array.isArray(data) ? data : []))
+            // includeAll: the picker must offer every active product, not the storefront's first 24 in stock
+            fetch('/api/products?includeAll=true').then(r => r.json()).then(data => setProducts(Array.isArray(data) ? data : []))
             fetch('/api/categories?hideEmpty=true').then(r => r.json()).then(data => setCategories(Array.isArray(data) ? data : []))
         }
     }, [section.type])
@@ -422,6 +424,7 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
                                             })
                                             const data = await res.json()
                                             if (data.url) {
+                                                void uploadImageVariants(file, data.url) // resized WebP copies; never blocks saving
                                                 setConfig({ ...config, image_url: data.url })
                                             }
                                         } catch (err) {

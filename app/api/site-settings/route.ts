@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { verifyJWT, requireAdmin } from '@/lib/auth'
 import { cookies } from 'next/headers'
-
-// Settings that only the admin panel may read (e.g. where 2FA codes and order notifications go)
-const ADMIN_ONLY_KEYS = new Set(['admin_email'])
+import { settingsObject } from '@/lib/siteSettings'
 
 // GET: Get site settings (admin-only keys are returned to admins only)
+// The response depends on the auth cookie, so it is never cacheable. Storefront code that only needs
+// the public keys can use /api/site-settings/public, which is the same for everyone and edge-cached.
 export async function GET() {
     try {
         const db = await getDB()
@@ -14,17 +14,11 @@ export async function GET() {
         const isAdmin = (await requireAdmin()) === null
 
         // Convert to object
-        const settings: Record<string, string> = {}
-        for (const row of (results || [])) {
-            const key = (row as any).key
-            if (!isAdmin && ADMIN_ONLY_KEYS.has(key)) continue
-            settings[key] = (row as any).value
-        }
+        const settings = settingsObject((results || []) as any[], isAdmin)
 
-        // Public settings are cached for 5 minutes; the admin view must never be cached
         return NextResponse.json(settings, {
             headers: {
-                'Cache-Control': isAdmin ? 'private, no-store' : 'public, s-maxage=300, stale-while-revalidate=600',
+                'Cache-Control': 'private, no-store',
                 'Vary': 'Cookie'
             }
         })

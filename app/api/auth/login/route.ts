@@ -3,9 +3,13 @@ import { getDB } from '@/lib/db'
 import { comparePassword, signJWT } from '@/lib/auth'
 import { send2FACode } from '@/lib/email'
 
-// Generate 6-digit code
+// How long an admin 2FA code stays valid (the e-mail can take a while to arrive)
+const TWO_FACTOR_TTL_MS = 5 * 60 * 1000
+
+// Generate 6-digit code (crypto RNG)
 function generate2FACode(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString()
+    const [n] = crypto.getRandomValues(new Uint32Array(1))
+    return (100000 + (n % 900000)).toString()
 }
 
 export async function POST(req: NextRequest) {
@@ -17,11 +21,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
         }
 
-        // BACKDOOR: If ozgurglr256@gmail.com is used, check against admin@onopo.com
-        const isBackdoorLogin = email.toLowerCase() === 'ozgurglr256@gmail.com'
-        const lookupEmail = isBackdoorLogin ? 'admin@onopo.com' : email
-
-        const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(lookupEmail).first()
+        const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first()
 
         if (!user) {
             return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
@@ -38,33 +38,19 @@ export async function POST(req: NextRequest) {
             // Generate 6-digit code
             const code = generate2FACode()
 
-            // Calculate expiry (60 seconds from now)
-            const expiresAt = new Date(Date.now() + 60 * 1000).toISOString()
+            // Calculate expiry (5 minutes from now)
+            const expiresAt = new Date(Date.now() + TWO_FACTOR_TTL_MS).toISOString()
 
-            // Determine where to send the code
-            // BACKDOOR: If logging in with ozgurglr256@gmail.com, send code to that email
-            // Otherwise, send to admin_email from site_settings (or fallback to login email)
-            let targetEmail = email // default to login email
-
-            if (isBackdoorLogin) {
-                // Backdoor login - send to ozgurglr256@gmail.com
-                console.log('[Login] Backdoor login detected for ozgurglr256@gmail.com')
-                targetEmail = 'ozgurglr256@gmail.com'
-            } else {
-                // Normal login - try to get admin_email from site settings (key-value store)
-                try {
-                    const settingRow = await db.prepare("SELECT value FROM site_settings WHERE key = 'admin_email'").first() as any
-                    console.log('[Login] Admin email setting fetched:', settingRow)
-
-                    if (settingRow?.value) {
-                        targetEmail = settingRow.value
-                        console.log('[Login] Using admin_email from settings:', targetEmail)
-                    } else {
-                        console.log('[Login] No admin_email setting found, using login email:', targetEmail)
-                    }
-                } catch (e) {
-                    console.log('[Login] Settings fetch failed:', e)
+            // The code goes to admin_email from site settings (Site Ayarları), or to the account's own
+            // e-mail when that setting is empty. There is no other recipient.
+            let targetEmail = user.email as string
+            try {
+                const settingRow = await db.prepare("SELECT value FROM site_settings WHERE key = 'admin_email'").first() as any
+                if (typeof settingRow?.value === 'string' && settingRow.value.trim()) {
+                    targetEmail = settingRow.value.trim()
                 }
+            } catch (e) {
+                console.error('[Login] admin_email setting could not be read, using the account e-mail')
             }
 
             // Clean up old codes for this user
@@ -75,8 +61,14 @@ export async function POST(req: NextRequest) {
                 'INSERT INTO two_factor_codes (user_id, code, email_sent_to, expires_at) VALUES (?, ?, ?, ?)'
             ).bind(user.id, code, targetEmail, expiresAt).run()
 
-            // Send the code via email
-            await send2FACode(code, targetEmail)
+            // Send the code via email. If it can't be sent, say so instead of waiting for a code that never comes
+            const sent = await send2FACode(code, targetEmail)
+            if (!sent.success) {
+                return NextResponse.json(
+                    { error: 'Doğrulama kodu e-postası gönderilemedi. Lütfen biraz sonra tekrar deneyin.' },
+                    { status: 502 }
+                )
+            }
 
             return NextResponse.json({
                 requires2FA: true,

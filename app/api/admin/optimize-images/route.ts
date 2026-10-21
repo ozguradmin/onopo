@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyJWT } from '@/lib/auth'
+import { verifyJWT, requireAdmin } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import { getDB } from '@/lib/db'
 
@@ -74,8 +74,11 @@ export async function POST(req: NextRequest) {
     }
 }
 
-// GET endpoint to check optimization status
+// GET endpoint to check optimization status (admin only, like everything under /api/admin)
 export async function GET() {
+    const denied = await requireAdmin()
+    if (denied) return denied
+
     try {
         const db = await getDB()
         const { results } = await db.prepare('SELECT id, images FROM products WHERE is_active = 1').all() as any

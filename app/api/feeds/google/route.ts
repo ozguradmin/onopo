@@ -1,6 +1,8 @@
 // Google Merchant Center Product Feed - RSS 2.0 / Atom XML Format
 import { getDB } from '@/lib/db'
 import { stripHtml } from '@/lib/stripHtml'
+import { parseShippingSettings, shippingCost as computeShippingCost } from '@/lib/pricing'
+import { absoluteImageUrl, canonicalOrigin, escapeXml, feedPrices, parseImages, productPageUrl } from '@/lib/feeds'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,8 +55,10 @@ export async function GET() {
             `SELECT free_shipping_threshold, shipping_cost FROM shipping_settings LIMIT 1`
         ).first()
 
-        const freeThreshold = shippingSettings ? parseFloat(shippingSettings.free_shipping_threshold) : 500.00
-        const shippingCost = shippingSettings ? parseFloat(shippingSettings.shipping_cost) : 100.00
+        const shipping = parseShippingSettings(shippingSettings)
+
+        // Google needs absolute, canonical URLs: https://onopostore.com/<slug>/ and absolute image links
+        const origin = canonicalOrigin(settings.site_url)
 
         // Determine currency
         let currency = 'TRY'
@@ -71,40 +75,38 @@ export async function GET() {
 
         // Build XML items
         const xmlItems = products.map((product: any) => {
-            const images = product.images ? JSON.parse(product.images) : []
-            const imageUrl = images[0] || ''
-            const productUrl = `${settings.site_url}/${product.slug}`
+            const images = parseImages(product.images)
+            const imageUrl = absoluteImageUrl(images[0], origin)
+            const productUrl = productPageUrl(origin, product.slug, product.id)
             const availability = product.stock > 0 ? 'in_stock' : 'out_of_stock'
+
+            // Prices exactly as the checkout charges them (lib/pricing.ts). g:price is the regular price;
+            // g:sale_price only when the crossed-out original price is really higher.
+            const { price, listPrice } = feedPrices(product.price, product.original_price)
 
             // Clean description
             const cleanDescription = stripHtml(product.description || '', 5000)
 
-            // Shipping Logic
-            let shippingPriceValue = 0
-            if (!product.free_shipping) {
-                if (product.price < freeThreshold) {
-                    shippingPriceValue = shippingCost
-                }
-            }
+            // Shipping for one unit, as the order API computes it
+            const shippingPriceValue = computeShippingCost(price, Number(product.free_shipping) === 1, shipping)
 
             return `  <item>
     <g:id>${product.id}</g:id>
     <g:title><![CDATA[${escapeCDATA(product.name)}]]></g:title>
     <g:description><![CDATA[${escapeCDATA(cleanDescription)}]]></g:description>
-    <g:link>${productUrl}</g:link>
-    <g:image_link>${imageUrl}</g:image_link>
+    <g:link>${escapeXml(productUrl)}</g:link>
+    <g:image_link>${escapeXml(imageUrl)}</g:image_link>
     <g:brand><![CDATA[${escapeCDATA(settings.site_name)}]]></g:brand>
     <g:condition>new</g:condition>
     <g:availability>${availability}</g:availability>
-    <g:price>${product.price.toFixed(2)} ${currency}</g:price>
+    <g:price>${(listPrice ?? price).toFixed(2)} ${currency}</g:price>
     <g:shipping>
       <g:country>TR</g:country>
       <g:service>Standard</g:service>
       <g:price>${shippingPriceValue.toFixed(2)} ${currency}</g:price>
     </g:shipping>
-    ${product.original_price && product.original_price > product.price ? `<g:sale_price>${product.price.toFixed(2)} ${currency}</g:sale_price>` : ''}
+    ${listPrice ? `<g:sale_price>${price.toFixed(2)} ${currency}</g:sale_price>` : ''}
     ${product.product_code ? `<g:mpn>${escapeXml(product.product_code)}</g:mpn>` : ''}
-    <g:google_product_category>1</g:google_product_category>
   </item>`
         }).join('\n')
 
@@ -112,7 +114,7 @@ export async function GET() {
 <rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
   <channel>
     <title>${escapeXml(settings.site_name)} - Ürün Kataloğu</title>
-    <link>${settings.site_url}</link>
+    <link>${origin}</link>
     <description>${escapeXml(settings.site_name)} ürün kataloğu - Google Merchant Center</description>
 ${xmlItems}
   </channel>
@@ -128,15 +130,6 @@ ${xmlItems}
         console.error('Google Feed Error:', error)
         return new Response('Feed error', { status: 500 })
     }
-}
-
-function escapeXml(str: string): string {
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&apos;')
 }
 
 function escapeCDATA(str: string): string {

@@ -33,46 +33,31 @@ const nextConfig: NextConfig = {
       },
     ]
   },
-  // Headers for security and caching
+  // Security headers for every response. There is deliberately no blanket Cache-Control here:
+  // config headers override what route handlers set, and a site-wide 'public' value used to mark
+  // personal, admin and payment responses as cacheable. Public routes send their own Cache-Control,
+  // /_next/static is cached by public/_headers (static assets never reach the Worker) and the
+  // edge cache in worker.ts only stores an allowlist of anonymous public GETs.
   async headers() {
+    const securityHeaders = [
+      { key: 'X-DNS-Prefetch-Control', value: 'on' },
+      { key: 'X-XSS-Protection', value: '1; mode=block' },
+      { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+    ]
+    const noStore = [{ key: 'Cache-Control', value: 'private, no-store' }]
+    // APIs whose responses are personal, admin-only, payment/auth/order related, integrations or cron
+    const privateApis = 'admin|auth|orders|birfatura|payment|cron|user|favorites|coupons|installment-token|analytics|migrations|upload|fix-db|seed-pages'
+    // Pages that belong to one visitor (account, checkout, admin)
+    const privatePages = 'admin|odeme|profile|orders|login|register|siparis-basarili|siparis-hata'
     return [
-      {
-        // Static assets - cache for 1 year
-        source: '/_next/static/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable'
-          }
-        ]
-      },
-
-      {
-        // All pages - allow CDN caching with stale-while-revalidate
-        source: '/:path*',
-        headers: [
-          {
-            key: 'X-DNS-Prefetch-Control',
-            value: 'on'
-          },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block'
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'SAMEORIGIN'
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff'
-          },
-          {
-            key: 'Cache-Control',
-            value: 'public, s-maxage=120, stale-while-revalidate=300'
-          }
-        ]
-      }
+      { source: '/:path*', headers: securityHeaders },
+      { source: `/api/:area(${privateApis})`, headers: noStore },
+      { source: `/api/:area(${privateApis})/:rest*`, headers: noStore },
+      // Answers admins with admin_email on the same URL: never cacheable (public subset: /api/site-settings/public)
+      { source: '/api/site-settings', headers: noStore },
+      { source: `/:page(${privatePages})`, headers: noStore },
+      { source: `/:page(${privatePages})/:rest*`, headers: noStore },
     ]
   },
   // Disable powered by header

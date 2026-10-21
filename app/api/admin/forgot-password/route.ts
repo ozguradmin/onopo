@@ -3,11 +3,9 @@ import { getDB } from '@/lib/db'
 import { createPasswordResetToken } from '@/lib/auth'
 import { sendAdminPasswordReset } from '@/lib/email'
 
-// The admin account (ozgurglr256@gmail.com logs in as admin@onopo.com, see /api/auth/login)
-const ADMIN_ACCOUNT_EMAIL = 'admin@onopo.com'
-// Where the reset link is sent
-const RESET_MAIL_TO = 'ozgurglr256@gmail.com'
-const ACCEPTED_EMAILS = [RESET_MAIL_TO, ADMIN_ACCOUNT_EMAIL]
+// The link is sent to admin_email from site settings (where the 2FA codes go), or to the admin
+// account's own e-mail when that setting is empty. The e-mail typed on the login page must be the
+// admin account's e-mail or that admin_email; nothing is hard-coded.
 
 const RESET_EXPIRES_MINUTES = 30
 // Ignore repeated requests within this window so the endpoint can't be used to flood the inbox
@@ -20,25 +18,33 @@ export async function POST(req: NextRequest) {
     try {
         const { email } = await req.json().catch(() => ({}))
 
-        if (typeof email !== 'string' || !ACCEPTED_EMAILS.includes(email.trim().toLowerCase())) {
+        if (typeof email !== 'string' || !email.trim()) {
             // Don't reveal if email exists or not for security
             return NextResponse.json({ success: true, message: GENERIC_MESSAGE })
         }
+        const typedEmail = email.trim().toLowerCase()
 
         const db = await getDB()
+
+        const adminEmailRow = await db.prepare(
+            "SELECT value FROM site_settings WHERE key = 'admin_email'"
+        ).first() as any
+        const adminEmail = typeof adminEmailRow?.value === 'string' ? adminEmailRow.value.trim() : ''
+
+        // The admin account the link resets: the one whose e-mail was typed, or, when admin_email was
+        // typed, the oldest admin account
+        const typedAdminEmail = adminEmail !== '' && typedEmail === adminEmail.toLowerCase()
+        const user = typedAdminEmail
+            ? await db.prepare("SELECT id, email, password_hash FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").first() as any
+            : await db.prepare("SELECT id, email, password_hash FROM users WHERE role = 'admin' AND lower(email) = ? LIMIT 1").bind(typedEmail).first() as any
+        if (!user) {
+            return NextResponse.json({ success: true, message: GENERIC_MESSAGE })
+        }
 
         const lastSent = await db.prepare(
             "SELECT value FROM site_settings WHERE key = 'admin_reset_last_sent'"
         ).first() as any
         if (lastSent?.value && Date.now() - Number(lastSent.value) < RESEND_COOLDOWN_MS) {
-            return NextResponse.json({ success: true, message: GENERIC_MESSAGE })
-        }
-
-        const user = await db.prepare(
-            "SELECT id, password_hash FROM users WHERE email = ? AND role = 'admin'"
-        ).bind(ADMIN_ACCOUNT_EMAIL).first() as any
-        if (!user) {
-            console.error('Forgot password: admin account not found')
             return NextResponse.json({ success: true, message: GENERIC_MESSAGE })
         }
 
@@ -50,7 +56,7 @@ export async function POST(req: NextRequest) {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'
         const resetUrl = `${baseUrl}/admin/reset-password?token=${encodeURIComponent(token)}`
 
-        const result = await sendAdminPasswordReset(resetUrl, RESET_EXPIRES_MINUTES, RESET_MAIL_TO)
+        const result = await sendAdminPasswordReset(resetUrl, RESET_EXPIRES_MINUTES, adminEmail || user.email)
         if (!result.success) {
             return NextResponse.json({ error: 'Şifre sıfırlama e-postası gönderilemedi. Lütfen daha sonra tekrar deneyin.' }, { status: 502 })
         }

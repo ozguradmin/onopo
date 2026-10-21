@@ -9,13 +9,8 @@ export async function GET() {
     try {
         const db = await getDB()
 
-        // First ensure the column exists
-        try {
-            await db.prepare(`ALTER TABLE payment_settings ADD COLUMN taksit_token TEXT`).run()
-        } catch (e) {
-            // Column already exists, ignore
-        }
-
+        // No DDL on this public GET: payment_settings.taksit_token exists in production
+        // (the /api/admin/payment-settings POST adds it on a fresh database)
         const settings = await db.prepare('SELECT taksit_token, merchant_id FROM payment_settings LIMIT 1').first() as any
 
         if (!settings || !settings.merchant_id) {

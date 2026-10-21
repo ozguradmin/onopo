@@ -5,6 +5,7 @@ import { X, Upload, Loader2, ArrowLeft, ArrowRight, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import { VariationsSection, Variation } from './VariationsSection'
+import { uploadImageVariants } from '@/lib/imageVariants'
 
 interface ProductEditModalProps {
     isOpen: boolean
@@ -106,6 +107,7 @@ export function ProductEditModal({ isOpen, onClose, productId, onSuccess }: Prod
                 const res = await fetch('/api/admin/upload', { method: 'POST', body: data })
                 if (!res.ok) throw new Error('Upload failed')
                 const result = await res.json()
+                void uploadImageVariants(file, result.url) // resized WebP copies; never blocks saving
                 return result.url
             })
 

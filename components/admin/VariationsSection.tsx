@@ -4,6 +4,7 @@ import * as React from 'react'
 import { Plus, X, Upload, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CurrencyInput } from '@/components/ui/currency-input'
+import { uploadImageVariants } from '@/lib/imageVariants'
 
 export interface Variation {
     id?: number
@@ -67,6 +68,7 @@ export function VariationsSection({ variations, onChange }: VariationsSectionPro
             const res = await fetch('/api/admin/upload', { method: 'POST', body: formData })
             if (!res.ok) throw new Error('Upload failed')
             const result = await res.json()
+            void uploadImageVariants(file, result.url) // resized WebP copies; never blocks saving
             updateVariation(index, 'image_url', result.url)
         } catch (error) {
             console.error('Upload error:', error)
