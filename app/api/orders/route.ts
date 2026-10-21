@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
-import { roundPrice } from '@/lib/roundPrice'
+import * as pricing from '@/lib/pricing'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import { sendAdminNewOrderNotification, sendOrderConfirmation } from '@/lib/email'
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
             cartLines.push({ ...parsed, quantity })
         }
 
-        const productStmt = db.prepare('SELECT id, name, price, free_shipping, is_active FROM products WHERE id = ?')
+        const productStmt = db.prepare('SELECT id, name, price, free_shipping, is_active, stock FROM products WHERE id = ?')
         const variationStmt = db.prepare('SELECT id, product_id, name, value, price_modifier FROM product_variations WHERE id = ?')
         const productIds = [...new Set(cartLines.map(line => line.productId))]
         const variationIds = [...new Set(cartLines.flatMap(line => line.variationIds))]
@@ -111,7 +111,8 @@ export async function POST(req: NextRequest) {
             else variationsById.set(row.id, row)
         })
 
-        // Calculate items total with rounded prices
+        // Calculate items total with rounded prices (lib/pricing.ts is the single source of truth;
+        // the cart drawer and checkout use the same functions)
         let itemsTotal = 0
         let hasFreeShippingItem = false
         const orderItems = []
@@ -122,8 +123,14 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: 'Sepetinizdeki bir ürün artık satışta değil. Lütfen sepetinizi güncelleyin.' }, { status: 400 })
             }
 
+            // Stock is a manual in-stock flag (sales don't decrement it): 0 or less means not for sale.
+            // Checked before the order and the PayTR token are created.
+            if (!(Number(product.stock) > 0)) {
+                return NextResponse.json({ error: `${product.name} stokta yok. Lütfen ürünü sepetinizden çıkarın.` }, { status: 400 })
+            }
+
             // Same price the product page shows: base price + selected variation modifiers
-            let unitPrice = Number(product.price)
+            const priceModifiers = []
             const variantValues = []
             const variationGroups = new Set()
             for (const variationId of line.variationIds) {
@@ -132,16 +139,17 @@ export async function POST(req: NextRequest) {
                     return NextResponse.json({ error: 'Sepetinizdeki bir ürünün seçenekleri değişmiş. Lütfen ürünü sepetten çıkarıp yeniden ekleyin.' }, { status: 400 })
                 }
                 variationGroups.add(variation.name)
-                unitPrice += Number(variation.price_modifier) || 0
+                priceModifiers.push(variation.price_modifier)
                 variantValues.push(variation.value)
             }
 
-            const roundedPrice = roundPrice(unitPrice)
+            const rawPrice = pricing.rawUnitPrice(product.price, priceModifiers)
+            const roundedPrice = pricing.unitPrice(rawPrice)
             if (roundedPrice <= 0) {
                 return NextResponse.json({ error: 'Sepetinizdeki bir ürünün fiyatı geçersiz' }, { status: 400 })
             }
 
-            itemsTotal += roundedPrice * line.quantity
+            itemsTotal += pricing.lineTotal(rawPrice, line.quantity)
             if (Number(product.free_shipping) === 1) hasFreeShippingItem = true
             orderItems.push({
                 product_id: product.id,
@@ -153,19 +161,13 @@ export async function POST(req: NextRequest) {
 
         // Fetch shipping settings
         const shippingSettings = await db.prepare('SELECT free_shipping_threshold, shipping_cost FROM shipping_settings LIMIT 1').first()
-        const freeThreshold = shippingSettings ? parseFloat(shippingSettings.free_shipping_threshold) : 500.00
-        const shippingCostDef = shippingSettings ? parseFloat(shippingSettings.shipping_cost) : 100.00
-
-        let shippingCost = 0
 
         // Free shipping if:
         // 1. Any item has free_shipping (from the products table), OR
         // 2. Total is above the free shipping threshold
-        if (!hasFreeShippingItem && itemsTotal < freeThreshold) {
-            shippingCost = shippingCostDef
-        }
+        const shippingCost = pricing.shippingCost(itemsTotal, hasFreeShippingItem, pricing.parseShippingSettings(shippingSettings))
 
-        const totalAmount = itemsTotal + shippingCost
+        const totalAmount = pricing.orderTotal(itemsTotal, shippingCost)
 
         // Get Payment Settings EARLY to store provider in shipping_address
         const settings = await db.prepare('SELECT * FROM payment_settings WHERE is_active = 1 LIMIT 1').first() as any

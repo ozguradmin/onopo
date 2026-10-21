@@ -4,13 +4,13 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { useCartStore, CartItem } from '@/store/cart-store'
+import { useCartStore, CartItem, COUPONS_ENABLED, cartLineTotal } from '@/store/cart-store'
 import { formatPrice } from '@/lib/formatPrice'
 import { ArrowLeft, ShoppingBag, Check, Truck, CreditCard, User, Mail, Phone, MapPin, FileText, Ticket, X, Building2 } from 'lucide-react'
 
 export default function CheckoutPage() {
     const router = useRouter()
-    const { items, totalPrice, clearCart, coupon, applyCoupon, removeCoupon, fetchShippingSettings, getShippingCost } = useCartStore()
+    const { items, getSubtotal, clearCart, coupon, applyCoupon, removeCoupon, fetchShippingSettings, getShippingCost } = useCartStore()
     const [hydrated, setHydrated] = React.useState(false)
     const [loading, setLoading] = React.useState(false)
     const [error, setError] = React.useState('')
@@ -18,7 +18,8 @@ export default function CheckoutPage() {
 
     // Calculate totals safe for render
     // Use hydration check to avoid hydration mismatch
-    const subtotal = hydrated ? totalPrice() : 0
+    // Same pricing as the order API (lib/pricing.ts): this is exactly what PayTR charges (coupons are not applied)
+    const subtotal = hydrated ? getSubtotal() : 0
     const shippingCost = hydrated ? getShippingCost() : 0
     const finalTotal = subtotal + shippingCost
 
@@ -218,6 +219,11 @@ export default function CheckoutPage() {
         } finally {
             setLoading(false)
         }
+    }
+
+    // Wait for the persisted cart before deciding the cart is empty (avoids a 'Sepetiniz Boş' flash)
+    if (!hydrated) {
+        return <div className="min-h-screen bg-slate-50" />
     }
 
     // Empty cart check
@@ -603,7 +609,7 @@ export default function CheckoutPage() {
                                 disabled={loading}
                                 className="w-full h-14 text-lg bg-slate-900 text-white hover:bg-slate-800 rounded-xl"
                             >
-                                {loading ? 'İşleniyor...' : `Siparişi Tamamla - ${formatPrice(finalTotal)}`}
+                                {loading ? 'İşleniyor...' : `Siparişi Tamamla - ${formatPrice(finalTotal, false)}`}
                             </Button>
                         </form>
                     </div>
@@ -628,14 +634,14 @@ export default function CheckoutPage() {
                                                 {item.name}
                                             </Link>
                                             <p className="text-sm text-slate-500">Adet: {item.quantity}</p>
-                                            <p className="text-sm font-bold text-slate-900">{formatPrice(item.price * item.quantity)}</p>
+                                            <p className="text-sm font-bold text-slate-900">{formatPrice(cartLineTotal(item), false)}</p>
                                         </div>
                                     </div>
                                 ))}
                             </div>
 
-                            {/* Coupon Input */}
-                            <div className="mb-6 border-b border-slate-100 pb-6">
+                            {/* Coupon Input - hidden: the order API does not apply coupons (COUPONS_ENABLED in store/cart-store.ts) */}
+                            {COUPONS_ENABLED && <div className="mb-6 border-b border-slate-100 pb-6">
                                 {coupon ? (
                                     <div className="flex items-center justify-between bg-green-50 p-3 rounded-xl border border-green-100">
                                         <div className="flex items-center gap-2">
@@ -674,25 +680,25 @@ export default function CheckoutPage() {
                                     </div>
                                 )}
                                 {couponError && <p className="text-xs text-red-500 mt-2">{couponError}</p>}
-                            </div>
+                            </div>}
 
                             <div className="space-y-2">
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-500">Ara Toplam</span>
-                                    <span className="text-slate-900">{formatPrice(subtotal)}</span>
+                                    <span className="text-slate-900">{formatPrice(subtotal, false)}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-500">Kargo</span>
                                     {shippingCost === 0 ? (
                                         <span className="text-green-600">Ücretsiz</span>
                                     ) : (
-                                        <span className="text-slate-900">{formatPrice(shippingCost)}</span>
+                                        <span className="text-slate-900">{formatPrice(shippingCost, false)}</span>
                                     )}
                                 </div>
-                                {coupon && (
+                                {COUPONS_ENABLED && coupon && (
                                     <div className="flex justify-between text-sm text-green-600">
                                         <span>İndirim ({coupon.code})</span>
-                                        <span>-{formatPrice(calculateDiscount())}</span>
+                                        <span>-{formatPrice(calculateDiscount(), false)}</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-100">

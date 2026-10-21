@@ -1,6 +1,16 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { roundPrice } from '@/lib/roundPrice'
+import { itemsTotal, lineTotal, parseShippingSettings, shippingCost, ShippingSettings, DEFAULT_SHIPPING_SETTINGS } from '@/lib/pricing'
+
+// Coupons are not applied by the order API (it charges items + shipping only, see lib/pricing.ts)
+// and no coupon exists, so the coupon box stays hidden in the cart drawer and checkout until
+// coupons are implemented end to end (order API, PayTR basket, BirFatura lines).
+export const COUPONS_ENABLED = false
+
+// Line total exactly as the order API charges it (rounded unit price x quantity)
+export function cartLineTotal(item: Pick<CartItem, 'price' | 'quantity'>): number {
+    return lineTotal(item.price, item.quantity)
+}
 
 export interface Product {
     id: number | string
@@ -20,7 +30,7 @@ interface CartState {
     items: CartItem[]
     isOpen: boolean
     coupon: { code: string, discountType: 'fixed' | 'percent', discountValue: number } | null
-    shippingSettings: { freeThreshold: number, shippingCost: number }
+    shippingSettings: ShippingSettings
     fetchShippingSettings: () => Promise<void>
     addItem: (product: Product) => void
     removeItem: (productId: number | string) => void
@@ -35,6 +45,7 @@ interface CartState {
     totalPrice: () => number
     getSubtotal: () => number
     getShippingCost: () => number
+    getTotal: () => number
 }
 
 export const useCartStore = create<CartState>()(
@@ -43,22 +54,14 @@ export const useCartStore = create<CartState>()(
             items: [],
             isOpen: false,
             coupon: null,
-            shippingSettings: {
-                freeThreshold: 500,
-                shippingCost: 100
-            },
+            shippingSettings: { ...DEFAULT_SHIPPING_SETTINGS },
 
             fetchShippingSettings: async () => {
                 try {
                     const res = await fetch('/api/shipping-settings')
                     const data = await res.json()
                     if (data && !data.error) {
-                        set({
-                            shippingSettings: {
-                                freeThreshold: parseFloat(data.free_shipping_threshold),
-                                shippingCost: parseFloat(data.shipping_cost)
-                            }
-                        })
+                        set({ shippingSettings: parseShippingSettings(data) })
                     }
                 } catch (error) {
                     console.error('Failed to fetch shipping settings', error)
@@ -114,9 +117,9 @@ export const useCartStore = create<CartState>()(
             totalItems: () => get().items.reduce((total, item) => total + item.quantity, 0),
 
             getSubtotal: () => {
-                // Use roundPrice to calculate subtotal based on DISPLAY price (e.g. 0.57 becomes 0.99)
-                // This ensures "What you see is what you pay"
-                return get().items.reduce((total, item) => total + (roundPrice(item.price) * item.quantity), 0)
+                // Same arithmetic as the order API (lib/pricing.ts): rounded unit price x quantity,
+                // summed in cart order and never rounded again. "What you see is what you pay"
+                return itemsTotal(get().items)
             },
 
             getShippingCost: () => {
@@ -125,19 +128,18 @@ export const useCartStore = create<CartState>()(
                 if (subtotal === 0) return 0
 
                 // Eğer herhangi bir üründe ücretsiz kargo varsa, tüm sepet ücretsiz
-                if (items.some(item => item.free_shipping)) {
-                    return 0
-                }
-
-                const settings = get().shippingSettings
-                return subtotal >= settings.freeThreshold ? 0 : settings.shippingCost
+                return shippingCost(subtotal, items.some(item => item.free_shipping), get().shippingSettings)
             },
+
+            // What the order API will charge: items + shipping
+            getTotal: () => get().getSubtotal() + get().getShippingCost(),
 
             totalPrice: () => {
                 const subtotal = get().getSubtotal()
                 let total = subtotal
 
-                const coupon = get().coupon
+                // The server ignores coupons, so a (stale) coupon must not change the shown amount
+                const coupon = COUPONS_ENABLED ? get().coupon : null
                 if (coupon) {
                     if (coupon.discountType === 'percent') {
                         total = total * (1 - coupon.discountValue / 100)

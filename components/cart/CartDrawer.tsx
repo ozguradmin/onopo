@@ -5,13 +5,13 @@ import { motion, AnimatePresence } from "framer-motion"
 import { X, Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from 'next/link'
-import { useCartStore } from "@/store/cart-store"
+import { useCartStore, COUPONS_ENABLED, cartLineTotal } from "@/store/cart-store"
 import { cn } from "@/lib/utils"
 import { formatPrice } from "@/lib/formatPrice"
 
 export function CartDrawer() {
     const [mounted, setMounted] = React.useState(false)
-    const { isOpen, closeCart, items, removeItem, updateQuantity, totalPrice, coupon, applyCoupon, removeCoupon } = useCartStore()
+    const { isOpen, closeCart, items, removeItem, updateQuantity, totalPrice, coupon, applyCoupon, removeCoupon, totalItems, getSubtotal, getShippingCost, fetchShippingSettings } = useCartStore()
     const [couponCode, setCouponCode] = React.useState('')
     const [verifying, setVerifying] = React.useState(false)
     const [couponError, setCouponError] = React.useState('')
@@ -20,6 +20,11 @@ export function CartDrawer() {
     React.useEffect(() => {
         setMounted(true)
     }, [])
+
+    // Totals below come from the same pricing as the order API (lib/pricing.ts), so the shipping settings are needed
+    React.useEffect(() => {
+        if (isOpen) fetchShippingSettings()
+    }, [isOpen, fetchShippingSettings])
 
     // Prevent scrolling when cart is open - MUST be before any early returns
     React.useEffect(() => {
@@ -82,7 +87,7 @@ export function CartDrawer() {
                         {/* Header */}
                         <div className="flex items-center justify-between p-6 border-b border-slate-200">
                             <h2 className="text-xl font-heading font-bold flex items-center gap-2 text-slate-900">
-                                <ShoppingBag className="w-5 h-5" /> Sepetim ({items.length})
+                                <ShoppingBag className="w-5 h-5" /> Sepetim ({totalItems()})
                             </h2>
                             <Button variant="ghost" size="icon" onClick={closeCart} className="rounded-full hover:bg-slate-100 text-slate-700">
                                 <X className="w-5 h-5" />
@@ -129,7 +134,7 @@ export function CartDrawer() {
                                                 >
                                                     {item.name}
                                                 </Link>
-                                                <p className="ml-4 text-slate-900 font-bold">{formatPrice(item.price * item.quantity)}</p>
+                                                <p className="ml-4 text-slate-900 font-bold">{formatPrice(cartLineTotal(item), false)}</p>
                                             </div>
                                             <p className="mt-1 text-sm text-slate-500 line-clamp-1">{item.category}</p>
 
@@ -172,8 +177,8 @@ export function CartDrawer() {
                         {/* Footer - FIXED CONTRAST */}
                         {items.length > 0 && (
                             <div className="border-t border-slate-200 p-6 bg-white">
-                                {/* Coupon Input */}
-                                <div className="mb-4">
+                                {/* Coupon Input - hidden: the order API does not apply coupons (COUPONS_ENABLED in store/cart-store.ts) */}
+                                {COUPONS_ENABLED && <div className="mb-4">
                                     {coupon ? (
                                         <div className="flex items-center justify-between bg-green-50 p-2 rounded-lg border border-green-100 mb-2">
                                             <div className="flex items-center gap-2">
@@ -207,21 +212,25 @@ export function CartDrawer() {
                                         </div>
                                     )}
                                     {couponError && <p className="text-[10px] text-red-500 mt-1">{couponError}</p>}
-                                </div>
+                                </div>}
 
                                 <div className="flex justify-between text-sm text-slate-500 mb-1">
                                     <p>Ara Toplam</p>
-                                    <p>{formatPrice(items.reduce((total, item) => total + (item.price || 0) * item.quantity, 0))}</p>
+                                    <p>{formatPrice(getSubtotal(), false)}</p>
                                 </div>
-                                {coupon && (
+                                <div className="flex justify-between text-sm text-slate-500 mb-1">
+                                    <p>Kargo</p>
+                                    <p>{getShippingCost() === 0 ? 'Ücretsiz' : formatPrice(getShippingCost(), false)}</p>
+                                </div>
+                                {COUPONS_ENABLED && coupon && (
                                     <div className="flex justify-between text-sm text-green-600 mb-2">
                                         <p>İndirim ({coupon.code})</p>
-                                        <p>-{formatPrice(items.reduce((total, item) => total + (item.price || 0) * item.quantity, 0) - totalPrice())}</p>
+                                        <p>-{formatPrice(getSubtotal() - totalPrice(), false)}</p>
                                     </div>
                                 )}
                                 <div className="flex justify-between text-lg font-bold text-slate-900 mb-6">
                                     <p>Toplam</p>
-                                    <p>{formatPrice(totalPrice())}</p>
+                                    <p>{formatPrice(totalPrice() + getShippingCost(), false)}</p>
                                 </div>
 
                                 <a href="/odeme" onClick={closeCart}>
