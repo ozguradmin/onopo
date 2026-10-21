@@ -29,8 +29,21 @@ export interface ProductCardProduct {
     free_shipping?: boolean | number | null
 }
 
+/** Real review statistics of a product (lib/reviews getReviewStatsMap). */
+export interface ProductCardRating {
+    average: number
+    count: number
+}
+
 export interface ProductCardProps {
     product: ProductCardProduct
+    /**
+     * Star row (owner decision 2026-10-22). Pass `stats.get(id) ?? null` from getReviewStatsMap():
+     *   { average, count } with count > 0 → the real average and count
+     *   null (no reviews)               → 5 filled stars, "5,0" and "(0)"
+     *   undefined (not passed)          → no star row (the caller does not know the reviews)
+     */
+    rating?: ProductCardRating | null
     /** Above the fold: eager load + fetchpriority=high (first 4 cards of a listing, first 2 of a row). */
     priority?: boolean
     /**
@@ -78,6 +91,7 @@ export function ProductCard({
     sizes = PRODUCT_CARD_SIZES,
     headingLevel = 'h3',
     showAddButton = true,
+    rating,
     className,
 }: ProductCardProps) {
     const images = imagesOf(product)
@@ -165,11 +179,15 @@ export function ProductCard({
                 )}
             </div>
 
-            {/* Body */}
-            <div className="flex flex-1 flex-col gap-1.5 p-2.5 lg:p-3">
-                {eyebrow && <p className="type-micro truncate text-muted">{eyebrow}</p>}
+            {/* Body: text on top, price block pinned to the bottom so prices line up across a row */}
+            <div className="flex flex-1 flex-col p-2.5 lg:p-3">
+                {eyebrow ? (
+                    <p className="type-micro truncate text-muted">{eyebrow}</p>
+                ) : (
+                    <span className="block h-4" aria-hidden="true" />
+                )}
 
-                <Heading className="type-card-title min-h-10 text-ink">
+                <Heading className="type-card-title mt-1 min-h-10 text-ink">
                     <Link
                         href={href}
                         prefetch={false}
@@ -181,28 +199,75 @@ export function ProductCard({
                 </Heading>
 
                 {chips.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
+                    <div className="mt-1.5 flex flex-wrap gap-1">
                         {chips.map(c => (
                             <Badge key={c} variant="neutral">{c}</Badge>
                         ))}
                     </div>
                 )}
 
-                <Price price={product.price} originalPrice={product.original_price ?? null} size="card" className="mt-0.5" />
+                <div className="mt-auto flex flex-col gap-1.5 pt-2">
+                    {rating !== undefined && <RatingStars rating={rating} />}
 
-                {freeShipping && !soldOut && (
-                    <p className="flex items-center gap-1 text-xs font-semibold leading-4 text-success">
-                        <Check className="h-3.5 w-3.5" aria-hidden="true" /> Kargo bedava
-                    </p>
-                )}
+                    <Price price={product.price} originalPrice={product.original_price ?? null} size="card" />
 
-                {showAddButton && (
-                    <div className="mt-auto hidden pt-1.5 lg:block">
-                        <QuickAddButton product={cartProduct} variant="full" />
-                    </div>
-                )}
+                    {freeShipping && !soldOut && (
+                        <p className="flex items-center gap-1 text-xs font-semibold leading-4 text-success">
+                            <Check className="h-3.5 w-3.5" aria-hidden="true" /> Kargo bedava
+                        </p>
+                    )}
+
+                    {showAddButton && (
+                        <div className="hidden pt-1 lg:block">
+                            <QuickAddButton product={cartProduct} variant="full" />
+                        </div>
+                    )}
+                </div>
             </div>
         </article>
+    )
+}
+
+const STAR_PATH = 'M10 1.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8L10 14.8l-5.2 2.7 1-5.8L1.6 7.6l5.8-.8L10 1.5z'
+
+function formatRating(n: number): string {
+    return n.toFixed(1).replace('.', ',')
+}
+
+/**
+ * Subtle 5-star row: real average and count when the product has reviews, otherwise 5 filled stars
+ * with "5,0" and "(0)" (owner decision). Server-friendly; also used by the product page if needed.
+ * Never feeds JSON-LD: aggregateRating comes only from real reviews (lib/reviews).
+ */
+export function RatingStars({ rating, size = 'sm', className }: { rating: ProductCardRating | null; size?: 'sm' | 'md'; className?: string }) {
+    const real = rating != null && rating.count > 0
+    const average = real ? Math.min(5, Math.max(0, rating!.average)) : 5
+    const count = real ? rating!.count : 0
+    const pct = Math.round((average / 5) * 100)
+    const star = size === 'md' ? 'h-4 w-4' : 'h-3 w-3'
+    const label = real
+        ? `5 üzerinden ${formatRating(average)} puan, ${count} değerlendirme`
+        : 'Henüz değerlendirme yok'
+    const row = (filled: boolean) => (
+        <span className="flex" aria-hidden="true">
+            {[0, 1, 2, 3, 4].map(i => (
+                <svg key={i} viewBox="0 0 20 20" className={cn(star, 'shrink-0', filled ? 'fill-current' : 'fill-none stroke-current')} strokeWidth={filled ? 0 : 1.4}>
+                    <path d={STAR_PATH} />
+                </svg>
+            ))}
+        </span>
+    )
+    return (
+        <p className={cn('flex items-center gap-1.5 leading-4', size === 'md' ? 'text-sm' : 'text-xs', className)}>
+            <span role="img" aria-label={label} className="relative inline-flex text-line-strong">
+                {row(false)}
+                <span className="absolute inset-y-0 left-0 overflow-hidden text-warning" style={{ width: `${pct}%` }}>
+                    {row(true)}
+                </span>
+            </span>
+            <span className="font-semibold tabular-nums text-ink-2" aria-hidden="true">{formatRating(average)}</span>
+            <span className="tabular-nums text-muted" aria-hidden="true">({count})</span>
+        </p>
     )
 }
 
