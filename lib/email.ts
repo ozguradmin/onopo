@@ -339,7 +339,7 @@ export const twoFactorTemplate = (code: string) => ({
                 </div>
                 
                 <p style="font-size: 14px; color: #64748b; text-align: center;">
-                    ⏰ Bu kod <strong>60 saniye</strong> içinde geçerliliğini yitirecektir.
+                    ⏰ Bu kod <strong>5 dakika</strong> içinde geçerliliğini yitirecektir.
                 </p>
                 
                 <p style="font-size: 14px; color: #94a3b8; margin-top: 30px;">
@@ -359,13 +359,14 @@ export const twoFactorTemplate = (code: string) => ({
 export async function send2FACode(code: string, toEmail: string) {
     try {
         const template = twoFactorTemplate(code)
-        await resend.emails.send({
+        const { error } = await resend.emails.send({
             from: FROM_EMAIL,
             to: toEmail,
             subject: template.subject,
             html: template.html
         })
-        console.log('2FA code email sent to:', toEmail)
+        if (error) throw error
+        console.log('2FA code email sent')
         return { success: true }
     } catch (error) {
         console.error('Failed to send 2FA code:', error)

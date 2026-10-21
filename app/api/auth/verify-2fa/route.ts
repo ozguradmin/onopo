@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { signJWT } from '@/lib/auth'
 
+// Wrong codes allowed per login before the pending code is cancelled (a new login sends a new code)
+const MAX_FAILED_ATTEMPTS = 5
+// Failed attempts are recorded as used rows with this marker code (no schema change needed);
+// /api/auth/login deletes them together with the old codes when it sends a new code.
+const FAILED_MARKER = 'FAILED'
+
 export async function POST(req: NextRequest) {
     try {
         const db = await getDB()
@@ -17,6 +23,23 @@ export async function POST(req: NextRequest) {
         ).bind(userId, code).first() as any
 
         if (!twoFactorRecord) {
+            // Count wrong codes against the pending code, so the 5-minute window can't be used to guess
+            // the 6-digit code. Nothing is written when the user has no pending code.
+            const pending = await db.prepare(
+                'SELECT id FROM two_factor_codes WHERE user_id = ? AND used = 0 LIMIT 1'
+            ).bind(userId).first()
+            if (pending) {
+                await db.prepare(
+                    'INSERT INTO two_factor_codes (user_id, code, email_sent_to, expires_at, used) VALUES (?, ?, ?, ?, 1)'
+                ).bind(userId, FAILED_MARKER, '', new Date().toISOString()).run()
+                const failed = await db.prepare(
+                    'SELECT COUNT(*) AS n FROM two_factor_codes WHERE user_id = ? AND code = ?'
+                ).bind(userId, FAILED_MARKER).first() as any
+                if (Number(failed?.n) >= MAX_FAILED_ATTEMPTS) {
+                    await db.prepare('UPDATE two_factor_codes SET used = 1 WHERE user_id = ? AND used = 0').bind(userId).run()
+                    return NextResponse.json({ error: 'Çok fazla hatalı deneme. Lütfen tekrar giriş yapın.' }, { status: 429 })
+                }
+            }
             return NextResponse.json({ error: 'Geçersiz doğrulama kodu' }, { status: 401 })
         }
 

@@ -5,11 +5,16 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ShoppingBag } from 'lucide-react'
 import { Suspense } from 'react'
+import { safeRedirectPath } from '@/lib/safeRedirect'
+
+// Admin 2FA codes are valid for 5 minutes (app/api/auth/login/route.ts)
+const CODE_VALID_SECONDS = 300
 
 function LoginForm() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const redirectData = searchParams.get('redirect')
+    // Only same-origin relative paths: no open redirect or javascript: URL after login
+    const redirectData = safeRedirectPath(searchParams.get('redirect'))
 
     const [email, setEmail] = React.useState('')
     const [password, setPassword] = React.useState('')
@@ -21,7 +26,7 @@ function LoginForm() {
     const [userId, setUserId] = React.useState<number | null>(null)
     const [code, setCode] = React.useState('')
     const [emailHint, setEmailHint] = React.useState('')
-    const [countdown, setCountdown] = React.useState(60)
+    const [countdown, setCountdown] = React.useState(CODE_VALID_SECONDS)
 
     // Countdown timer for 2FA
     React.useEffect(() => {
@@ -63,12 +68,12 @@ function LoginForm() {
                 setRequires2FA(true)
                 setUserId(data.userId)
                 setEmailHint(data.emailHint)
-                setCountdown(60)
+                setCountdown(CODE_VALID_SECONDS)
                 return
             }
 
             // Success - direct login (non-admin)
-            window.location.href = redirectData || '/'
+            window.location.href = redirectData
 
         } catch (err: any) {
             setError(err.message)
@@ -96,7 +101,7 @@ function LoginForm() {
             }
 
             // Success
-            window.location.href = redirectData || '/'
+            window.location.href = redirectData
 
         } catch (err: any) {
             setError(err.message)
@@ -126,7 +131,7 @@ function LoginForm() {
             if (data.requires2FA) {
                 setUserId(data.userId)
                 setEmailHint(data.emailHint)
-                setCountdown(60)
+                setCountdown(CODE_VALID_SECONDS)
             }
 
         } catch (err: any) {
@@ -238,7 +243,7 @@ function LoginForm() {
                                 </li>
                                 <li className="flex items-center gap-3">
                                     <div className="h-2 w-2 rounded-full bg-green-400" />
-                                    60 saniyelik geçerlilik
+                                    5 dakikalık geçerlilik
                                 </li>
                                 <li className="flex items-center gap-3">
                                     <div className="h-2 w-2 rounded-full bg-green-400" />
