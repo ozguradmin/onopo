@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readJsonBody } from '@/lib/api-request'
 import { getDB } from '@/lib/db'
 import * as pricing from '@/lib/pricing'
 import { verifyJWT } from '@/lib/auth'
@@ -28,7 +29,9 @@ function isFilled(value: unknown): boolean {
 export async function POST(req: NextRequest) {
     try {
         const db = await getDB()
-        const body = await req.json()
+        const parsed = await readJsonBody(req)
+        if (!parsed.ok) return parsed.response
+        const body = parsed.body
         const { items, customerInfo } = body
 
         // Auth check (Optional - guest checkout allowed)

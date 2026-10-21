@@ -3,7 +3,7 @@ import { getDB } from '@/lib/db'
 import { stripHtml } from '@/lib/stripHtml'
 import { requireAdmin } from '@/lib/auth'
 import { parseShippingSettings, shippingCost as computeShippingCost } from '@/lib/pricing'
-import { absoluteImageUrl, canonicalOrigin, feedPrices, parseImages } from '@/lib/feeds'
+import { canonicalOrigin, exportImageUrl, feedPrices, parseImages } from '@/lib/feeds'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,7 +64,7 @@ export async function GET() {
         // CSV Rows
         const rows = products.map(product => {
             const images = parseImages(product.images)
-            const imageUrl = absoluteImageUrl(images[0], origin)
+            const imageUrl = exportImageUrl(images[0], origin, isAdmin)
             const { price: chargedPrice, listPrice } = feedPrices(product.price, product.original_price)
 
             // Clean description for CSV

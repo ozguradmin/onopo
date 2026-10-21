@@ -44,8 +44,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
                     // Better to check if it matches existing ID
                 }
 
-                // Update Order Status
-                await db.prepare("UPDATE orders SET status = 'approved', payment_status = 'paid' WHERE id = ?").bind(orderId).run()
+                // Update Order Status. PayTR re-sends the notification until it reads 'OK'; an order that is
+                // already paid is left alone (no status change back to approved, no second e-mails).
+                const update = await db.prepare(
+                    "UPDATE orders SET status = 'approved', payment_status = 'paid' WHERE id = ? AND payment_status IS NOT 'paid'"
+                ).bind(orderId).run() as any
+                const changes = update?.meta?.changes
+                if (typeof changes === 'number' && changes === 0) return new NextResponse('OK')
 
                 // Send Emails (Awaited)
                 try {
@@ -75,7 +80,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
                     orderId = merchant_oid.split('T')[0].substring(2)
                 }
                 // Set BOTH status and payment_status to prevent showing in admin
-                await db.prepare("UPDATE orders SET status = 'cancelled', payment_status = 'failed' WHERE id = ?").bind(orderId).run()
+                // (a re-sent notification for an order that is already cancelled/failed writes nothing)
+                await db.prepare(
+                    "UPDATE orders SET status = 'cancelled', payment_status = 'failed' WHERE id = ? AND NOT (status IS 'cancelled' AND payment_status IS 'failed')"
+                ).bind(orderId).run()
                 return new NextResponse('OK')
             }
         }

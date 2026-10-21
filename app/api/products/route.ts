@@ -157,7 +157,9 @@ export async function GET(req: NextRequest) {
 
         sql += ' ORDER BY id DESC'
 
-        const pageSize = Math.min(parseInt(limit || '24', 10), 200) // Default 24, max 200
+        // Default 24, max 200; a non-numeric or non-positive limit (?limit=abc) means the default
+        const parsedLimit = parseInt(limit || '', 10)
+        const pageSize = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 200) : 24
         const runAll = async (statement: string) => {
             const { results } = params.length > 0
                 ? await db.prepare(statement).bind(...params).all()
@@ -186,7 +188,7 @@ export async function GET(req: NextRequest) {
         }
 
         // Admin request - return all products without pagination (array format)
-        const limitNum = limit ? parseInt(limit, 10) : 0
+        const limitNum = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 0
         if (limitNum > 0 && !hasQuery) sql += ` LIMIT ${limitNum}`
 
         // CPU Optimization: Return raw data without JSON.parse loop

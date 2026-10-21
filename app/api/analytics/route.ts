@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readJsonBody } from '@/lib/api-request'
 import { getDB } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth'
 
@@ -75,7 +76,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const db = await getDB()
-        const { page, product_id } = await req.json()
+        const parsed = await readJsonBody(req)
+        if (!parsed.ok) return parsed.response
+        const { page, product_id } = parsed.body
 
         const userAgent = req.headers.get('user-agent') || ''
 

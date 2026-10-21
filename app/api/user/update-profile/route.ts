@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readJsonBody } from '@/lib/api-request'
 import { verifyJWT } from '@/lib/auth'
 import { getDB } from '@/lib/db'
 
@@ -16,7 +17,9 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
         }
 
-        const { phone, address, city, district, postal_code } = await req.json()
+        const parsed = await readJsonBody(req)
+        if (!parsed.ok) return parsed.response
+        const { phone, address, city, district, postal_code } = parsed.body
 
         const db = await getDB()
 

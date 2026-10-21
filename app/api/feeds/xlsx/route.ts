@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx'
 import { stripHtml } from '@/lib/stripHtml'
 import { requireAdmin } from '@/lib/auth'
 import { parseShippingSettings, shippingCost as computeShippingCost } from '@/lib/pricing'
-import { absoluteImageUrl, canonicalOrigin, feedPrices, parseImages } from '@/lib/feeds'
+import { canonicalOrigin, exportImageUrl, feedPrices, parseImages } from '@/lib/feeds'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,7 +49,7 @@ export async function GET() {
         // Prepare data for Excel
         const data = products.map((product: any) => {
             const images = parseImages(product.images)
-            const imageUrl = absoluteImageUrl(images[0], origin)
+            const imageUrl = exportImageUrl(images[0], origin, isAdmin)
             const { price: chargedPrice, listPrice } = feedPrices(product.price, product.original_price)
 
             // Clean description

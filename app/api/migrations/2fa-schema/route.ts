@@ -1,4 +1,5 @@
 import { requireAdmin } from '@/lib/auth'
+import { postOnly } from '@/lib/api-request'
 import { NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
@@ -29,18 +30,9 @@ async function runMigration() {
     return { success: true, message: 'Two-factor authentication table created successfully' }
 }
 
-// GET method for easy browser access
-export async function GET() {
-    const denied = await requireAdmin()
-    if (denied) return denied
-
-    try {
-        const result = await runMigration()
-        return NextResponse.json(result)
-    } catch (error: any) {
-        console.error('2FA migration error:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+// GET changes nothing (a link or prefetch must never alter the database); this runs on an admin POST
+export function GET() {
+    return postOnly()
 }
 
 export async function POST() {
@@ -48,32 +40,7 @@ export async function POST() {
     if (denied) return denied
 
     try {
-        const db = await getDB()
-
-        // Create two_factor_codes table for 2FA authentication
-        await db.prepare(`
-            CREATE TABLE IF NOT EXISTS two_factor_codes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                code TEXT NOT NULL,
-                email_sent_to TEXT NOT NULL,
-                expires_at TEXT NOT NULL,
-                used INTEGER DEFAULT 0,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            )
-        `).run()
-
-        // Create index for faster lookups
-        await db.prepare(`
-            CREATE INDEX IF NOT EXISTS idx_2fa_user_code ON two_factor_codes(user_id, code, used)
-        `).run()
-
-        return NextResponse.json({
-            success: true,
-            message: 'Two-factor authentication table created successfully'
-        })
-
+        return NextResponse.json(await runMigration())
     } catch (error: any) {
         console.error('2FA migration error:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })

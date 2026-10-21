@@ -1,8 +1,11 @@
 import { requireAdmin } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
+import { postOnly } from '@/lib/api-request'
 
-export async function GET() {
+// Creates the CMS pages help/shipping/policy/terms only where they are missing. An existing page is never
+// overwritten: the owner edits them in Admin › Sayfalar. Admin POST only.
+export async function POST() {
     const denied = await requireAdmin()
     if (denied) return denied
 
@@ -66,63 +69,23 @@ export async function GET() {
             }
         ]
 
+        const inserted: string[] = []
+        const skipped: string[] = []
         for (const page of pages) {
-            await db.prepare(
-                'INSERT OR IGNORE INTO pages (slug, title, content) VALUES (?, ?, ?)'
-            ).bind(page.slug, page.title, page.content).run()
+            const result = await db.prepare(
+                'INSERT OR IGNORE INTO pages (slug, title, content, updated_at) VALUES (?, ?, ?, ?)'
+            ).bind(page.slug, page.title, page.content, new Date().toISOString()).run() as any
+            if (Number(result?.meta?.changes) > 0) inserted.push(page.slug)
+            else skipped.push(page.slug)
         }
 
-        const helpContent = `# Yardım Merkezi
-Sıkça Sorulan Sorular
-
-## Siparişimi nasıl takip edebilirim?
-Sipariş onay e-postanızda yer alan takip numarasıyla kargo firmasının web sitesinden siparişinizi takip edebilirsiniz.
-
-## İade süreci nasıl işliyor?
-Ürününüzü teslim aldıktan sonra 14 gün içinde iade talebinde bulunabilirsiniz. Ürünün kullanılmamış ve orijinal ambalajında olması gerekmektedir.
-
-## Ödeme seçenekleri nelerdir?
-Kredi kartı, banka kartı ve havale/EFT ile ödeme yapabilirsiniz. Tüm ödemeleriniz 256-bit SSL ile şifrelenmektedir.
-
-## İletişim
-Email: destek@onopo.com
-Telefon: 0850 123 45 67
-Çalışma Saatleri: Hafta içi 09:00 - 18:00`
-
-        // Insert Help Page
-        await db.prepare('INSERT OR REPLACE INTO pages (slug, title, content, updated_at) VALUES (?, ?, ?, ?)').bind(
-            'help',
-            'Yardım Merkezi',
-            helpContent,
-            new Date().toISOString()
-        ).run()
-
-        // Insert Shipping Page
-        await db.prepare('INSERT OR REPLACE INTO pages (slug, title, content, updated_at) VALUES (?, ?, ?, ?)').bind(
-            'shipping',
-            'Kargo ve İade',
-            '# Kargo ve Teslimat\n\nSiparişleriniz 24 saat içinde kargoya verilir...',
-            new Date().toISOString()
-        ).run()
-
-        // Insert Policy Page
-        await db.prepare('INSERT OR REPLACE INTO pages (slug, title, content, updated_at) VALUES (?, ?, ?, ?)').bind(
-            'policy',
-            'Gizlilik Politikası',
-            '# Gizlilik Politikası\n\nVerileriniz güvende...',
-            new Date().toISOString()
-        ).run()
-
-        // Insert Terms Page
-        await db.prepare('INSERT OR REPLACE INTO pages (slug, title, content, updated_at) VALUES (?, ?, ?, ?)').bind(
-            'terms',
-            'Kullanım Koşulları',
-            '# Kullanım Koşulları\n\nSiteyi kullanarak...',
-            new Date().toISOString()
-        ).run()
-
-        return NextResponse.json({ success: true, message: 'Pages seeded' })
+        return NextResponse.json({ success: true, message: 'Pages seeded', inserted, skipped })
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
+}
+
+// GET changes nothing (a link or prefetch must never alter the database); this runs on an admin POST
+export function GET() {
+    return postOnly()
 }

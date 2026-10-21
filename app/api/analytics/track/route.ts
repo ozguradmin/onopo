@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
-
-// Crawlers, link previewers, uptime checkers and HTTP libraries are not page views
-const BOT_USER_AGENT = /bot|crawl|spider|slurp|facebookexternalhit|embedly|preview|headless|lighthouse|pagespeed|curl|wget|python|go-http|java\/|okhttp|axios|node-fetch|undici|httpclient|libwww|monitor|uptime/i
+import { isBotUserAgent } from '@/lib/bot-user-agent'
 
 export async function POST(req: Request) {
     try {
+        // Crawlers, link previewers, uptime checkers and HTTP libraries are not page views
         const userAgent = req.headers.get('user-agent') || ''
-        if (!userAgent || BOT_USER_AGENT.test(userAgent)) {
+        if (isBotUserAgent(userAgent)) {
             return NextResponse.json({ success: true })
         }
 

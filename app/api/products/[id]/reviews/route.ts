@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readJsonBody } from '@/lib/api-request'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
@@ -53,7 +54,9 @@ export async function POST(
             return NextResponse.json({ error: 'Geçersiz oturum' }, { status: 401 })
         }
 
-        const { rating, comment } = await req.json()
+        const parsed = await readJsonBody(req)
+        if (!parsed.ok) return parsed.response
+        const { rating, comment } = parsed.body
 
         if (!rating || rating < 1 || rating > 5) {
             return NextResponse.json({ error: 'Rating must be between 1 and 5' }, { status: 400 })

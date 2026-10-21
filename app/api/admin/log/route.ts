@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readJsonBody } from '@/lib/api-request'
 
 export async function POST(req: NextRequest) {
     try {
-        const body = await req.json()
+        const parsed = await readJsonBody(req)
+        if (!parsed.ok) return parsed.response
+        const body = parsed.body
         const { message, level, details } = body
 
         console.log(`[CLIENT-LOG] [${level || 'INFO'}] ${message}`, details || '')
