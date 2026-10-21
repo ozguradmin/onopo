@@ -1,5 +1,6 @@
 // Custom worker entry: wraps the OpenNext worker and adds
-//   - the canonical-host redirect (http -> https, www -> apex) for page GETs,
+//   - the canonical-host redirect (http -> https, www -> apex) for page GETs (not for /sitemap.xml and
+//     /robots.txt on www, which Akakçe reads there),
 //   - a conservative edge cache for anonymous public GETs (rules in lib/edge-cache.ts),
 //   - the cron (scheduled) handler.
 // See https://opennext.js.org/cloudflare/howtos/custom-worker
@@ -17,7 +18,9 @@ import {
     canonicalRedirect,
     hasAuthCookie,
     isCacheableRequest,
+    isStorableBody,
     isStorableResponse,
+    needsBodyCheck,
     shouldBumpCacheVersion,
 } from './lib/edge-cache'
 
@@ -138,8 +141,17 @@ async function serveFromEdgeCache(request: Request, url: URL, env: Env, ctx: Ctx
         console.error('[edge-cache] match failed', error)
     }
 
-    const response: Response = await handler.fetch(request, env, ctx)
+    let response: Response = await handler.fetch(request, env, ctx)
     if (!isStorableResponse(response)) return withCacheStatus(response, 'BYPASS')
+
+    // HTML is read once so its body can be checked (no-cache marker, product page block). Only misses of
+    // allowlisted anonymous pages are buffered; their data is loaded before the HTML streams anyway.
+    const contentType = response.headers.get('content-type')
+    if (needsBodyCheck(contentType)) {
+        const body = await response.text()
+        response = new Response(body, response)
+        if (!isStorableBody(url.pathname, contentType, body)) return withCacheStatus(response, 'BYPASS')
+    }
 
     ctx.waitUntil(cache.put(key, toStoredCopy(response.clone())).catch(error => {
         console.error('[edge-cache] put failed', error)

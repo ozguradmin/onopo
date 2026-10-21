@@ -7,6 +7,8 @@
 //   - path on the allowlist below and not on the deny list
 //   - origin answered 200, without Set-Cookie, with a cacheable content type and no explicit
 //     'private' / 'no-store' (the Next.js default header of dynamic pages is not an explicit opt-out)
+//   - HTML only: the body has no data-onopo-nocache marker, and a /<slug>/ page contains the product
+//     page's id="product-info" block (isStorableBody)
 // Entries live for EDGE_CACHE_TTL_SECONDS. The key contains the deployed build id and the content
 // version (site_settings.cache_version), which worker.ts bumps after every successful admin/content write
 // and after the daily price cron, so edits show up at once (within the ~10 s version memo per isolate).
@@ -23,15 +25,24 @@ export const CANONICAL_HOST = 'onopostore.com'
 // preview URLs) is left alone.
 const REDIRECT_HOSTS = new Set([CANONICAL_HOST, `www.${CANONICAL_HOST}`])
 
+// Crawler files served on www as they are: the Akakçe bot reads https://www.onopostore.com/sitemap.xml
+// (HEAD + GET) and may not follow a redirect
+const CRAWLER_FILES = new Set(['/sitemap.xml', '/robots.txt'])
+
 /**
  * 301 target for http:// and www requests, or null.
  * Only GET/HEAD outside /api/: PayTR and BirFatura callbacks, the Google Merchant feed fetch from www
  * and customers' checkout POSTs on www must keep working untouched.
+ * /sitemap.xml and /robots.txt stay on the host they were asked on (only http is upgraded to https).
  */
 export function canonicalRedirect(url: URL, method: string): string | null {
     if (method !== 'GET' && method !== 'HEAD') return null
     if (!REDIRECT_HOSTS.has(url.hostname)) return null
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return null
+    if (CRAWLER_FILES.has(url.pathname)) {
+        if (url.protocol === 'https:' && !url.port) return null
+        return `https://${url.hostname}${url.pathname}${url.search}`
+    }
     if (url.protocol === 'https:' && url.hostname === CANONICAL_HOST && !url.port) return null
     return `https://${CANONICAL_HOST}${url.pathname}${url.search}`
 }
@@ -62,6 +73,9 @@ const PAGE_ALLOW = [
 
 // Product pages /<slug>/ (slugs are lowercase a-z, 0-9 and '-')
 const PRODUCT_SLUG = /^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/
+
+// Single-segment pages on PAGE_ALLOW that are not product pages
+const NON_PRODUCT_PAGES = new Set(['products', 'help', 'policy', 'shipping', 'terms'])
 
 const API_ALLOW = [
     /^\/api\/categories\/?$/,
@@ -128,6 +142,35 @@ export function isStorableResponse(res: ResponseLike): boolean {
     if (cacheControl && cacheControl !== NEXT_DYNAMIC_DEFAULT && /(^|[\s,])(private|no-store)([\s,=]|$)/.test(cacheControl)) {
         return false
     }
+    return true
+}
+
+// Pages that must never be stored (error states, client-side fallbacks after a data failure, maintenance)
+// render <div hidden data-onopo-nocache="" /> somewhere in their HTML
+export const NO_CACHE_MARKER = 'data-onopo-nocache'
+// Every product page renders the hidden Akakçe block (components/seo/ProductMachineData.tsx)
+export const PRODUCT_PAGE_MARKER = 'id="product-info"'
+
+/** /<slug>/ paths that can only be product pages (not a reserved route, not a known listing/CMS page). */
+export function isProductSlugPath(pathname: string): boolean {
+    const slug = PRODUCT_SLUG.exec(pathname)
+    return !!slug && !RESERVED_SEGMENTS.has(slug[1]) && !NON_PRODUCT_PAGES.has(slug[1])
+}
+
+/** Whether isStorableBody has to see the body before the response may be stored (HTML only). */
+export function needsBodyCheck(contentType: string | null): boolean {
+    return /^text\/html\b/i.test(contentType || '')
+}
+
+/**
+ * Body rules, checked after isStorableResponse for HTML: never store a page carrying the no-cache marker,
+ * and store a /<slug>/ page only when it really is a product page (a soft 404 or a failed product render
+ * must not be served from the cache for 10 minutes).
+ */
+export function isStorableBody(pathname: string, contentType: string | null, body: string): boolean {
+    if (!needsBodyCheck(contentType)) return true
+    if (body.includes(NO_CACHE_MARKER)) return false
+    if (isProductSlugPath(pathname)) return body.includes(PRODUCT_PAGE_MARKER)
     return true
 }
 
