@@ -106,12 +106,16 @@ function StoreHeader() {
             setCollapsed(false)
             update()
         }
+        // Keyboard focus must never land on the hidden second row
+        const onFocusIn = () => revealRef.current()
         update()
         window.addEventListener('scroll', onScroll, { passive: true })
         desktop.addEventListener('change', onBreakpoint)
+        header.addEventListener('focusin', onFocusIn)
         return () => {
             window.removeEventListener('scroll', onScroll)
             desktop.removeEventListener('change', onBreakpoint)
+            header.removeEventListener('focusin', onFocusIn)
             revealRef.current = () => { }
         }
     }, [])

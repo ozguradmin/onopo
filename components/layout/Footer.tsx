@@ -244,7 +244,7 @@ function FooterColumn({
 function FooterLink({ href, children }: { href: string; children: React.ReactNode }) {
     return (
         <li>
-            <Link href={href} prefetch={false} className="inline-flex min-h-10 items-center text-white/75 transition-colors hover:text-white lg:min-h-0">
+            <Link href={href} prefetch={false} className="inline-flex min-h-11 items-center text-white/75 transition-colors hover:text-white lg:min-h-0">
                 {children}
             </Link>
         </li>

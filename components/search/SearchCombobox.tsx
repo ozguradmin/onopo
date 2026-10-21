@@ -335,6 +335,7 @@ export function SearchCombobox({ variant, onBeforeOpen, className }: SearchCombo
                 onChange={e => {
                     setValue(e.target.value)
                     setDismissed(false)
+                    setActive(-1)
                 }}
                 onFocus={onFocus}
                 onBlur={() => {
@@ -363,7 +364,7 @@ export function SearchCombobox({ variant, onBeforeOpen, className }: SearchCombo
                         setDismissed(false)
                         inputRef.current?.focus()
                     }}
-                    className="absolute right-1 inline-flex h-9 w-9 items-center justify-center rounded-thumb text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                    className="absolute right-0 inline-flex h-11 w-11 items-center justify-center rounded-card text-muted transition-colors hover:text-ink"
                 >
                     <X className="h-[18px] w-[18px]" aria-hidden="true" />
                 </button>
@@ -541,7 +542,7 @@ function SearchPopup(props: SearchPopupProps) {
                             <span
                                 key={`p-${i}`}
                                 {...common(i, opt)}
-                                className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-white px-3.5 text-sm font-medium text-ink-2 transition-colors hover:border-line-strong aria-selected:border-brand-600 aria-selected:bg-brand-50 aria-selected:text-brand-700"
+                                className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-white px-3.5 text-sm font-medium text-ink-2 transition-colors hover:border-line-strong aria-selected:border-brand-600 aria-selected:bg-brand-50 aria-selected:text-brand-700"
                             >
                                 <TrendingUp className="h-4 w-4 text-brand-500" aria-hidden="true" />
                                 {opt.kind === 'query' ? opt.query : ''}

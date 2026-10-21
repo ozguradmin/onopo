@@ -257,7 +257,7 @@ function CartLine({
                         type="button"
                         onClick={onRemove}
                         aria-label={`Sepetten çıkar: ${item.name}`}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-thumb px-2 text-[13px] font-medium text-muted transition-colors hover:bg-sale-50 hover:text-danger"
+                        className="relative inline-flex h-9 items-center gap-1.5 rounded-thumb px-2 text-[13px] font-medium text-muted transition-colors before:absolute before:-inset-1 before:content-[''] hover:bg-sale-50 hover:text-danger"
                     >
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
                         Kaldır
