@@ -6,12 +6,17 @@
  * - No mount gate, no spinner, no remount: the server HTML already contains the header, the page and
  *   the footer, and the element around the page never changes type, so pages mount exactly once.
  * - Chrome by path: /admin/* and /maintenance get no store header/footer (admin has its own layout).
+ *   /odeme gets the reduced checkout header and footer and no bottom nav (spec §13).
  * - Maintenance mode comes from site_settings (server data, passed in `data`). When it is on, every
  *   path except /admin/*, /maintenance, /login and /register renders the maintenance message in the
- *   server HTML (API routes never pass through layouts, so they are unaffected).
- * - Cart: rehydrates the persisted zustand store once on mount (the store uses skipHydration).
+ *   server HTML (API routes never pass through layouts, so they are unaffected). That HTML carries the
+ *   edge-cache "do not store" marker.
+ * - Cart: rehydrates the persisted zustand store once on mount (the store uses skipHydration), then
+ *   seeds its shipping rule from the server data (the drawer and /odeme still re-read
+ *   /api/shipping-settings, so the totals always equal what the order API charges).
  * - Analytics: one POST /api/analytics/track per store page view, also on client-side navigations
  *   (same body as before: { page: pathname }).
+ * - Optional `returnDays` (CMS return window from getSiteSeo) feeds the trust badges; default 14.
  */
 import * as React from 'react'
 import { usePathname } from 'next/navigation'
@@ -20,28 +25,62 @@ import { Header } from "@/components/layout/Header"
 import { Footer } from "@/components/layout/Footer"
 import { CartDrawer } from "@/components/cart/CartDrawer"
 import { MobileNav } from "@/components/layout/MobileNav"
+import { MobileMenu } from "@/components/layout/MobileMenu"
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary'
-import { ShellChromeContext, StoreDataProvider } from '@/components/layout/store-data'
+import { DEFAULT_SHELL_FACTS, ShellChromeContext, ShellFactsContext, StoreDataProvider } from '@/components/layout/store-data'
 import { useCartStore } from "@/store/cart-store"
 import type { PublicSiteSettings, StorefrontData } from '@/lib/catalog'
 
 const MAINTENANCE_EXEMPT = ['/maintenance', '/login', '/register']
+
+/** Tells the edge cache in worker.ts not to store this response (error and fallback renders). */
+function NoEdgeCache() {
+    return <div hidden data-onopo-nocache="" />
+}
 
 function normalizePath(pathname: string | null): string {
     if (!pathname) return '/'
     return pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
 }
 
-export function LayoutProvider({ data, children }: { data: StorefrontData; children: React.ReactNode }) {
+export function LayoutProvider({
+    data,
+    returnDays,
+    children,
+}: {
+    data: StorefrontData
+    /** Return window in days from the CMS shipping page (getSiteSeo().returnPolicy?.days). */
+    returnDays?: number | null
+    children: React.ReactNode
+}) {
     const path = normalizePath(usePathname())
     const isAdmin = path === '/admin' || path.startsWith('/admin/')
     const isMaintenancePage = path === '/maintenance'
+    const isCheckout = path === '/odeme'
     const showMaintenance = data.settings.maintenance_mode && !isAdmin && !MAINTENANCE_EXEMPT.includes(path)
     const showChrome = !isAdmin && !isMaintenancePage && !showMaintenance
+    // An empty category list means the layout data could not be loaded (the store always has
+    // categories with products): never let the edge cache keep that render.
+    const degraded = showChrome && data.categories.length === 0
 
-    // The cart store is created with skipHydration; load the saved cart once in the browser
+    const facts = React.useMemo(
+        () => ({ returnDays: returnDays && returnDays > 0 && returnDays <= 365 ? Math.round(returnDays) : DEFAULT_SHELL_FACTS.returnDays }),
+        [returnDays],
+    )
+
+    // The cart store is created with skipHydration: load the saved cart once in the browser, then use
+    // the server's shipping rule until the drawer / checkout re-read /api/shipping-settings.
+    const shipping = data.shipping
     React.useEffect(() => {
-        useCartStore.persist.rehydrate()
+        Promise.resolve(useCartStore.persist.rehydrate()).finally(() => {
+            if (shipping.freeShippingThreshold >= 0 && shipping.shippingCost >= 0) {
+                useCartStore.setState({
+                    shippingSettings: { freeThreshold: shipping.freeShippingThreshold, shippingCost: shipping.shippingCost },
+                })
+            }
+        })
+        // once per page load
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     // Page-view tracking (was in Footer on mount; now also counts client-side navigations)
@@ -59,40 +98,46 @@ export function LayoutProvider({ data, children }: { data: StorefrontData; child
     }, [path, showChrome])
 
     const Main = isAdmin ? 'div' : 'main'
+    const variant = isCheckout ? 'checkout' : 'store'
 
     return (
         <StoreDataProvider value={data}>
-            <ShellChromeContext.Provider value={showChrome}>
-                {showChrome && (
-                    <a
-                        href="#main-content"
-                        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-card focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink focus:shadow-overlay"
-                    >
-                        İçeriğe geç
-                    </a>
-                )}
-                {showChrome && <Header fromShell />}
-                {showChrome && <CartDrawer />}
-                <Main id="main-content" className={showChrome ? 'min-h-[60vh]' : undefined}>
-                    {showMaintenance ? (
-                        <MaintenanceView settings={data.settings} />
-                    ) : (
-                        <GlobalErrorBoundary resetKey={path} variant="page">
-                            {children}
-                        </GlobalErrorBoundary>
+            <ShellFactsContext.Provider value={facts}>
+                <ShellChromeContext.Provider value={showChrome}>
+                    {degraded && <NoEdgeCache />}
+                    {showChrome && (
+                        <a
+                            href="#main-content"
+                            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-card focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink focus:shadow-overlay"
+                        >
+                            İçeriğe geç
+                        </a>
                     )}
-                </Main>
-                {showChrome && <Footer fromShell />}
-                {showChrome && <MobileNav fromShell />}
-            </ShellChromeContext.Provider>
+                    {showChrome && <Header fromShell variant={variant} />}
+                    {showChrome && <CartDrawer />}
+                    {showChrome && !isCheckout && <MobileMenu />}
+                    <Main id="main-content" className={showChrome ? 'min-h-[60vh]' : undefined}>
+                        {showMaintenance ? (
+                            <MaintenanceView settings={data.settings} />
+                        ) : (
+                            <GlobalErrorBoundary resetKey={path} variant="page">
+                                {children}
+                            </GlobalErrorBoundary>
+                        )}
+                    </Main>
+                    {showChrome && <Footer fromShell variant={variant} />}
+                    {showChrome && !isCheckout && <MobileNav fromShell />}
+                </ShellChromeContext.Provider>
+            </ShellFactsContext.Provider>
         </StoreDataProvider>
     )
 }
 
-/** Server-rendered maintenance message (no client check, no spinner). */
+/** Server-rendered maintenance message (no client check, no spinner). Never stored by the edge cache. */
 function MaintenanceView({ settings }: { settings: PublicSiteSettings }) {
     return (
         <div className="flex min-h-screen items-center justify-center bg-ink px-4 py-16 text-white">
+            <NoEdgeCache />
             <div className="max-w-lg text-center">
                 <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-sheet bg-white/10" aria-hidden="true">
                     <Wrench className="h-8 w-8" />
