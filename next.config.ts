@@ -50,8 +50,12 @@ const nextConfig: NextConfig = {
     const privateApis = 'admin|auth|orders|birfatura|payment|cron|user|favorites|coupons|installment-token|analytics|migrations|upload|fix-db|seed-pages'
     // Pages that belong to one visitor (account, checkout, admin)
     const privatePages = 'admin|odeme|profile|orders|login|register|siparis-basarili|siparis-hata'
+    // JSON/API responses are never indexed. Not on /api/images/* (stored product image URLs must stay
+    // indexable for image search) and /api/feeds/* (Merchant/Akakçe feeds are left as they are).
+    const noIndex = [{ key: 'X-Robots-Tag', value: 'noindex' }]
     return [
       { source: '/:path*', headers: securityHeaders },
+      { source: '/api/:path((?!images(?:/|$)|feeds(?:/|$)).*)', headers: noIndex },
       { source: `/api/:area(${privateApis})`, headers: noStore },
       { source: `/api/:area(${privateApis})/:rest*`, headers: noStore },
       // Answers admins with admin_email on the same URL: never cacheable (public subset: /api/site-settings/public)
