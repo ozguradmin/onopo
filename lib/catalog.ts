@@ -28,6 +28,7 @@ import {
     scoreSearch,
     type PreparedQuery,
 } from '@/lib/search'
+import { categoryPath } from '@/lib/seo'
 
 // ---------------------------------------------------------------------------------------------
 // Types
@@ -565,9 +566,9 @@ export async function getRelatedProducts(product: Pick<Product, 'id' | 'name' | 
 // Categories
 // ---------------------------------------------------------------------------------------------
 
-/** Listing URL for a category. Change here when a dedicated category route ships. */
+/** Listing URL for a category: its /kategori/<slug>/ page (legacy ?category=<name> links redirect there). */
 export function categoryHref(category: { name: string; slug?: string }): string {
-    return `/products/?category=${encodeURIComponent(category.name)}`
+    return category.slug ? categoryPath(category.slug) : `/products/?category=${encodeURIComponent(category.name)}`
 }
 
 /** Same matching rule as the legacy /api/categories count: product.category equals the name OR the slug. */
@@ -797,9 +798,10 @@ export const getHomepageSections = cache(async (): Promise<HomeSection[]> => {
             }
             if (s.type === 'products') list = shuffled(list)
             s.products = list.slice(0, num(cfg.limit) || 8)
-            s.viewAllHref = cfg.selection_type === 'category' && cfg.category
-                ? categoryHref({ name: String(cfg.category) })
-                : '/products/'
+            const viewAllCategory = cfg.selection_type === 'category' && cfg.category ? await findCategory(String(cfg.category)) : null
+            s.viewAllHref = viewAllCategory
+                ? categoryHref(viewAllCategory)
+                : cfg.selection_type === 'category' && cfg.category ? categoryHref({ name: String(cfg.category) }) : '/products/'
         } else if (s.type === 'hero') {
             s.slides = await getHeroSlides()
         } else if (s.type === 'categories') {

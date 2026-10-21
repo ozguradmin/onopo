@@ -10,6 +10,7 @@ import { countAccountOrders, getFavoriteProductIds, getSessionUser } from '@/lib
 import { getActiveProducts, getShippingSettings, type Product } from '@/lib/catalog'
 import { formatDateTR } from '@/lib/format'
 import { privatePageMetadata } from '@/lib/seo'
+import { getReviewStatsMapSafe } from '@/lib/reviews'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
@@ -36,6 +37,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
 
     if (tab === 'favorites') {
         const shipping = await getShippingSettings()
+        const ratings = favorites.length > 0 ? await getReviewStatsMapSafe() : null
         return (
             <AccountShell
                 user={user}
@@ -61,6 +63,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
                                     priority={i < 3}
                                     headingLevel="h2"
                                     freeShippingThreshold={shipping.freeShippingThreshold}
+                                    rating={ratings ? ratings.get(product.id) ?? null : undefined}
                                     sizes="(max-width: 640px) 46vw, (max-width: 1024px) 31vw, 280px"
                                     className="w-full"
                                 />

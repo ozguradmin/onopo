@@ -335,7 +335,7 @@ export default function AdminLoginPage() {
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl">
                         <h2 className="text-xl font-bold mb-2">Şifremi Unuttum</h2>
-                        <p className="text-sm text-slate-500 mb-6">Şifre yenileme bağlantısı, giriş formuna yazdığınız yönetici hesabı için Site Ayarları'ndaki yönetici e-posta adresine gönderilecektir. Bağlantı 30 dakika geçerlidir.</p>
+                        <p className="text-sm text-slate-500 mb-6">Şifre yenileme bağlantısı, yönetici hesabının kayıtlı kurtarma e-posta adresine gönderilecektir. Bağlantı 30 dakika geçerlidir.</p>
 
                         <div className="space-y-4">
                             <Button

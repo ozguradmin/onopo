@@ -59,7 +59,7 @@ export default async function RootLayout({
       <body className={`${jakarta.variable} font-sans antialiased bg-canvas text-ink pb-16 md:pb-0`}>
         <JsonLd data={[organizationJsonLd(site), websiteJsonLd(site)]} />
         <GlobalErrorBoundary variant="root">
-          <LayoutProvider data={data}>
+          <LayoutProvider data={data} returnDays={site.returnPolicy?.days ?? null}>
             {children}
           </LayoutProvider>
         </GlobalErrorBoundary>

@@ -147,7 +147,9 @@ export function isStorableResponse(res: ResponseLike): boolean {
 
 // Pages that must never be stored (error states, client-side fallbacks after a data failure, maintenance)
 // render <div hidden data-onopo-nocache="" /> somewhere in their HTML
-export const NO_CACHE_MARKER = 'data-onopo-nocache'
+// Matched as the rendered HTML attribute (with =""): the same name can appear in RSC/JSON payloads of
+// pages that only reference it (e.g. the client-side 404 view), and those pages must stay cacheable.
+export const NO_CACHE_MARKER = 'data-onopo-nocache=""'
 // Every product page renders the hidden Akakçe block (components/seo/ProductMachineData.tsx)
 export const PRODUCT_PAGE_MARKER = 'id="product-info"'
 

@@ -2,6 +2,7 @@ import * as React from 'react'
 import { ProductCard, type ProductCardProduct } from '@/components/product/ProductCard'
 import { SectionHeader } from '@/components/ui/SectionHeader'
 import { cn } from '@/lib/utils'
+import { getReviewStatsMapSafe } from '@/lib/reviews'
 import { RailScroller } from './RailScroller'
 
 /** Card slot widths: ~2.3 cards on a 390px phone, ~3.3 on tablets, 4 at lg, 5 at xl (no peeking on desktop). */
@@ -28,7 +29,7 @@ export interface ProductRailProps {
  * then a swipeable scroll-snap rail of the one ProductCard. Server Component; only the prev/next
  * buttons are a client island.
  */
-export function ProductRail({
+export async function ProductRail({
     id,
     title,
     description,
@@ -40,6 +41,8 @@ export function ProductRail({
     className,
 }: ProductRailProps) {
     if (!products.length) return null
+    // Star row on every card (owner decision); hidden only if the reviews query fails
+    const ratings = await getReviewStatsMapSafe()
     const headingId = `${id}-title`
     const eager = Math.min(2, Math.max(0, priorityCount))
     return (
@@ -56,6 +59,7 @@ export function ProductRail({
                             product={p}
                             priority={i < eager}
                             freeShippingThreshold={freeShippingThreshold}
+                            rating={ratings ? ratings.get(p.id) ?? null : undefined}
                             sizes={RAIL_IMAGE_SIZES}
                             headingLevel="h3"
                             className="w-full"

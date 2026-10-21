@@ -44,7 +44,7 @@ export function Breadcrumb({ items, jsonLd = false, className }: { items: Breadc
                     {items.map((item, i) => {
                         const last = i === items.length - 1
                         return (
-                            <li key={`${i}-${item.label}`} className="flex min-w-0 items-center gap-1">
+                            <li key={`${i}-${item.label}`} className={cn("flex items-center gap-1", last ? "min-w-0" : "shrink-0")}>
                                 {item.href && !last ? (
                                     <Link href={item.href} prefetch={false} className="rounded-sm underline-offset-2 hover:text-ink hover:underline">
                                         {item.label}

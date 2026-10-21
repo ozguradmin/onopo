@@ -52,3 +52,16 @@ export const getReviewStatsMap = cache(async (): Promise<Map<number, ReviewStats
 export async function getReviewStats(productId: number): Promise<ReviewStats | null> {
     return (await getReviewStatsMap()).get(Number(productId)) ?? null
 }
+
+/**
+ * Same map, or null when D1 fails. For places that only decorate cards (home rails, related products,
+ * favourites): without the map, ProductCard simply shows no star row.
+ */
+export async function getReviewStatsMapSafe(): Promise<Map<number, ReviewStats> | null> {
+    try {
+        return await getReviewStatsMap()
+    } catch (err) {
+        console.error('getReviewStatsMap failed, hiding card stars:', err)
+        return null
+    }
+}

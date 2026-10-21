@@ -34,7 +34,7 @@ export function SectionHeader({ title, description, href, linkLabel = 'Tümünü
                 <Link
                     href={href}
                     prefetch={false}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-thumb py-1 text-sm font-semibold text-brand-600 underline-offset-4 hover:text-brand-700 hover:underline"
+                    className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-thumb py-1 text-sm font-semibold text-brand-600 underline-offset-4 hover:text-brand-700 hover:underline"
                 >
                     {linkLabel}
                     <ArrowRight className="h-4 w-4" aria-hidden="true" />

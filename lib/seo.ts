@@ -52,7 +52,7 @@ export const DEFAULT_OG_IMAGE = {
 export const PRODUCT_TITLE_MAX = 60 - SITE.titleSuffix.length
 
 /** Query parameters on listing pages that create filtered/sorted/search variants (noindex,follow). */
-export const LISTING_FILTER_PARAMS = ['q', 'search', 'f', 'sort', 'minPrice', 'maxPrice', 'brand'] as const
+export const LISTING_FILTER_PARAMS = ['q', 'search', 'f', 'sort', 'minPrice', 'maxPrice', 'brand', 'discounted', 'inStock'] as const
 
 /** Parameters that make a listing noindex,follow: the filters above plus a ?category= that did not redirect (unknown or empty category). */
 export const LISTING_NOINDEX_PARAMS = [...LISTING_FILTER_PARAMS, 'category'] as const

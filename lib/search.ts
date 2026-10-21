@@ -156,6 +156,17 @@ function boundaryOk(word: string, at: number, token: string): boolean {
     return !/[0-9]/.test(before) && !/[0-9]/.test(after)
 }
 
+/** Folded words that name the same thing in product titles (charger = aleti / cihazı / adaptörü / başlığı). */
+const SYNONYM_GROUPS: string[][] = [
+    ['aleti', 'alet', 'cihazi', 'cihaz', 'adaptoru', 'adaptor', 'basligi', 'baslik'],
+]
+
+/** The other words of the token's synonym group (empty when it has none). */
+function synonymsOf(token: string): string[] {
+    const group = SYNONYM_GROUPS.find(g => g.includes(token))
+    return group ? group.filter(w => w !== token) : []
+}
+
 /** 3 = whole word, 2 = word starts with token, 1 = substring (tokens ≥ 3 chars only), 0 = no match. */
 function matchWords(words: string[], token: string): number {
     // Inside a multi-word query a single character must be a whole word: "usb c" / "type c".
@@ -199,6 +210,15 @@ export function scoreSearch(item: SearchableFields, query: PreparedQuery): numbe
             if (m > 0) best = Math.max(best, m * 10 * f.weight)
         }
         if (best === 0 && token.length >= 3 && !isDigits(token) && doc.compact.includes(token)) best = 8
+        if (best === 0) {
+            // "şarj aleti" should also find "Şarj Cihazı / Adaptörü / Başlığı": same product, other words
+            for (const syn of synonymsOf(token)) {
+                for (const f of doc.fields) {
+                    const m = matchWords(f.words, syn)
+                    if (m > 0) best = Math.max(best, m * 8 * f.weight)
+                }
+            }
+        }
         if (best === 0) return 0
         total += best
     }

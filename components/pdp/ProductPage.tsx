@@ -14,6 +14,7 @@ import { brandOf, specChips } from '@/lib/search'
 import { discountPercent, formatDateTR, formatTL, MIN_DISCOUNT_BADGE_PERCENT } from '@/lib/format'
 import { productImageSrcSet, productImageUrl } from '@/lib/images'
 import type { ProductPageData } from '@/lib/product-data'
+import { getReviewStatsMapSafe } from '@/lib/reviews'
 import { ProductGallery } from './ProductGallery'
 import { BuyBox } from './BuyBox'
 import { InfoSection } from './InfoSection'
@@ -39,8 +40,9 @@ function whatsappLink(numberRaw: string | null | undefined, text: string): strin
  * Machine data for Akakçe and Google (Product JSON-LD + hidden #product-info, BreadcrumbList) is
  * rendered once, here, on the server.
  */
-export function ProductPage({ data, site }: { data: ProductPageData; site: SiteSeo }) {
+export async function ProductPage({ data, site }: { data: ProductPageData; site: SiteSeo }) {
     const { product, reviews, reviewStats, variations, related, category, shipping, maxInstallments, settings } = data
+    const relatedRatings = related.length > 0 ? await getReviewStatsMapSafe() : null
     const soldOut = !product.in_stock
     const parsed = parseDescription(product.description, product.name)
 
@@ -364,7 +366,7 @@ export function ProductPage({ data, site }: { data: ProductPageData; site: SiteS
                             <ProductRail label="Benzer ürünler">
                                 {related.map(p => (
                                     <ProductRailItem key={p.id}>
-                                        <ProductCard product={p} freeShippingThreshold={threshold} sizes={RAIL_SIZES} headingLevel="h3" />
+                                        <ProductCard product={p} freeShippingThreshold={threshold} rating={relatedRatings ? relatedRatings.get(p.id) ?? null : undefined} sizes={RAIL_SIZES} headingLevel="h3" />
                                     </ProductRailItem>
                                 ))}
                             </ProductRail>
