@@ -2,16 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { createPasswordResetToken } from '@/lib/auth'
 import { sendAdminPasswordReset } from '@/lib/email'
+import { ADMIN_ACCOUNT_EMAIL, isLoginAlias, normalizeEmail } from '@/lib/login-alias'
 
-// The link is sent to admin_email from site settings (where the 2FA codes go), or to the admin
-// account's own e-mail when that setting is empty. The e-mail typed on the login page must be the
-// admin account's e-mail or that admin_email; nothing is hard-coded.
+// Resets the admin account (ADMIN_ACCOUNT_EMAIL). Accepted e-mails: the login alias (lib/login-alias.ts)
+// and the admin account's own e-mail. The link goes to the login alias address.
 
 const RESET_EXPIRES_MINUTES = 30
 // Ignore repeated requests within this window so the endpoint can't be used to flood the inbox
 const RESEND_COOLDOWN_MS = 2 * 60 * 1000
 
 const GENERIC_MESSAGE = 'Eğer bu e-posta kayıtlıysa, şifre sıfırlama bağlantısı gönderildi.'
+
+// When the admin account's own e-mail was typed, the alias address is not in the request. Logins with the
+// alias store it as the 2FA recipient (two_factor_codes.email_sent_to), so the latest such row gives it.
+async function findAliasAddress(db: any, userId: number): Promise<string | null> {
+    const { results } = await db.prepare(
+        "SELECT email_sent_to FROM two_factor_codes WHERE user_id = ? AND email_sent_to != '' ORDER BY id DESC LIMIT 20"
+    ).bind(userId).all() as { results: { email_sent_to: string }[] }
+    for (const row of results || []) {
+        if (await isLoginAlias(row.email_sent_to)) return normalizeEmail(row.email_sent_to)
+    }
+    return null
+}
 
 // Sends a time-limited, single-use reset link. The password itself is not changed here.
 export async function POST(req: NextRequest) {
@@ -22,30 +34,38 @@ export async function POST(req: NextRequest) {
             // Don't reveal if email exists or not for security
             return NextResponse.json({ success: true, message: GENERIC_MESSAGE })
         }
-        const typedEmail = email.trim().toLowerCase()
-
-        const db = await getDB()
-
-        const adminEmailRow = await db.prepare(
-            "SELECT value FROM site_settings WHERE key = 'admin_email'"
-        ).first() as any
-        const adminEmail = typeof adminEmailRow?.value === 'string' ? adminEmailRow.value.trim() : ''
-
-        // The admin account the link resets: the one whose e-mail was typed, or, when admin_email was
-        // typed, the oldest admin account
-        const typedAdminEmail = adminEmail !== '' && typedEmail === adminEmail.toLowerCase()
-        const user = typedAdminEmail
-            ? await db.prepare("SELECT id, email, password_hash FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").first() as any
-            : await db.prepare("SELECT id, email, password_hash FROM users WHERE role = 'admin' AND lower(email) = ? LIMIT 1").bind(typedEmail).first() as any
-        if (!user) {
+        const typedEmail = normalizeEmail(email)
+        const typedAlias = await isLoginAlias(typedEmail)
+        if (!typedAlias && typedEmail !== ADMIN_ACCOUNT_EMAIL) {
             return NextResponse.json({ success: true, message: GENERIC_MESSAGE })
         }
+
+        const db = await getDB()
 
         const lastSent = await db.prepare(
             "SELECT value FROM site_settings WHERE key = 'admin_reset_last_sent'"
         ).first() as any
         if (lastSent?.value && Date.now() - Number(lastSent.value) < RESEND_COOLDOWN_MS) {
             return NextResponse.json({ success: true, message: GENERIC_MESSAGE })
+        }
+
+        const user = await db.prepare(
+            "SELECT id, password_hash FROM users WHERE email = ? AND role = 'admin'"
+        ).bind(ADMIN_ACCOUNT_EMAIL).first() as any
+        if (!user) {
+            console.error('Forgot password: admin account not found')
+            return NextResponse.json({ success: true, message: GENERIC_MESSAGE })
+        }
+
+        // The login alias address; if it can't be known (admin e-mail typed and no alias login on record),
+        // admin_email from site settings, else the admin account's own e-mail
+        let recipient = typedAlias ? typedEmail : await findAliasAddress(db, user.id)
+        if (!recipient) {
+            const adminEmailRow = await db.prepare(
+                "SELECT value FROM site_settings WHERE key = 'admin_email'"
+            ).first() as any
+            const adminEmail = typeof adminEmailRow?.value === 'string' ? adminEmailRow.value.trim() : ''
+            recipient = adminEmail || ADMIN_ACCOUNT_EMAIL
         }
 
         await db.prepare(
@@ -56,7 +76,7 @@ export async function POST(req: NextRequest) {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'
         const resetUrl = `${baseUrl}/admin/reset-password?token=${encodeURIComponent(token)}`
 
-        const result = await sendAdminPasswordReset(resetUrl, RESET_EXPIRES_MINUTES, adminEmail || user.email)
+        const result = await sendAdminPasswordReset(resetUrl, RESET_EXPIRES_MINUTES, recipient)
         if (!result.success) {
             return NextResponse.json({ error: 'Şifre sıfırlama e-postası gönderilemedi. Lütfen daha sonra tekrar deneyin.' }, { status: 502 })
         }

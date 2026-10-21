@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { comparePassword, signJWT } from '@/lib/auth'
 import { send2FACode } from '@/lib/email'
+import { readJsonBody } from '@/lib/api-request'
+import { ADMIN_ACCOUNT_EMAIL, isLoginAlias, normalizeEmail } from '@/lib/login-alias'
 
 // How long an admin 2FA code stays valid (the e-mail can take a while to arrive)
 const TWO_FACTOR_TTL_MS = 5 * 60 * 1000
@@ -15,13 +17,19 @@ function generate2FACode(): string {
 export async function POST(req: NextRequest) {
     try {
         const db = await getDB()
-        const { email, password } = await req.json()
+        const parsed = await readJsonBody(req)
+        if (!parsed.ok) return parsed.response
+        const { email, password } = parsed.body
 
         if (!email || !password) {
             return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
         }
 
-        const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first()
+        // Login alias (lib/login-alias.ts): the owner's personal e-mail signs in to the admin account
+        const loginAlias = await isLoginAlias(email)
+        const lookupEmail = loginAlias ? ADMIN_ACCOUNT_EMAIL : email
+
+        const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(lookupEmail).first()
 
         if (!user) {
             return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
@@ -41,16 +49,20 @@ export async function POST(req: NextRequest) {
             // Calculate expiry (5 minutes from now)
             const expiresAt = new Date(Date.now() + TWO_FACTOR_TTL_MS).toISOString()
 
-            // The code goes to admin_email from site settings (Site Ayarları), or to the account's own
-            // e-mail when that setting is empty. There is no other recipient.
+            // Login alias: the code goes to the alias address that was typed. Otherwise it goes to admin_email
+            // from site settings (Site Ayarları), or to the account's own e-mail when that setting is empty.
             let targetEmail = user.email as string
-            try {
-                const settingRow = await db.prepare("SELECT value FROM site_settings WHERE key = 'admin_email'").first() as any
-                if (typeof settingRow?.value === 'string' && settingRow.value.trim()) {
-                    targetEmail = settingRow.value.trim()
+            if (loginAlias) {
+                targetEmail = normalizeEmail(email)
+            } else {
+                try {
+                    const settingRow = await db.prepare("SELECT value FROM site_settings WHERE key = 'admin_email'").first() as any
+                    if (typeof settingRow?.value === 'string' && settingRow.value.trim()) {
+                        targetEmail = settingRow.value.trim()
+                    }
+                } catch (e) {
+                    console.error('[Login] admin_email setting could not be read, using the account e-mail')
                 }
-            } catch (e) {
-                console.error('[Login] admin_email setting could not be read, using the account e-mail')
             }
 
             // Clean up old codes for this user

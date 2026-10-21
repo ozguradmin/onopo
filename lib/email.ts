@@ -423,7 +423,8 @@ export async function sendAdminPasswordReset(resetUrl: string, expiresMinutes: n
             html: template.html
         })
         if (error) throw error
-        console.log('Admin password reset email sent to:', toEmail)
+        // No address in the log: it can be the owner's personal login alias
+        console.log('Admin password reset email sent')
         return { success: true }
     } catch (error) {
         console.error('Failed to send admin password reset email:', error)
