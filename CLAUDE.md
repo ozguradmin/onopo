@@ -17,9 +17,9 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - `main`'e her push GitHub Actions'ı tetikler (`.github/workflows/deploy.yml`): OpenNext build → `schema.sql`
   (sadece `CREATE TABLE IF NOT EXISTS`) → `wrangler deploy`. Yani **push = canlıya çıkış**.
   Kullanıcıdan açık onay almadan push etme. Sadece doküman değişikliğinde commit mesajına `[skip ci]` ekle.
-- Next.js 15'in resmi desteği 2026-10-21'de bitti; OpenNext bu yüzden build'i durdurur. Build komutu
-  `--dangerouslyUseUnsupportedNextVersion` bayrağıyla çalışır (deploy.yml'de ve yerelde). Desteklenen bir Next.js
-  sürümüne geçilince bayrak kaldırılmalı. Next 15 artık güvenlik yaması almıyor.
+- Next.js 16 + OpenNext 1.20 + wrangler 4.151 (Node 22 gerekir; deploy.yml Node 22 kullanır).
+  `npm run build` = `next build --webpack`: Turbopack, iyzipay'deki dinamik `require`'ı çözemiyor.
+  OpenNext, desteği bitmiş Next sürümlerini build etmez (Next 16'nın desteği 2027-10'da biter).
 - Deploy adımında Cloudflare `assets-upload-session` **10013** hatası verirse geçicidir:
   `gh run rerun <id> -R ozguradmin/onopo --failed`.
 - Deploy sonrası doğrulama: `curl https://onopostore.com/` içindeki `_next/static/<BUILD_ID>/` yeni build'le eşleşmeli,
@@ -31,7 +31,7 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   Wrangler'ı bu token ile çalıştır (OAuth girişine gerek yok):
   `set -a; . ./.env; set +a; node node_modules/wrangler/bin/wrangler.js whoami`
 - `.dev.vars` (gitignore'da): yerel worker için `BIRFATURA_TOKEN`.
-- Build: `npx opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion` → yerel çalıştırma: `npx wrangler dev --local --port 8811`.
+- Build: `npx opennextjs-cloudflare build` → yerel çalıştırma: `npx wrangler dev --local --port 8811`.
   Başka bir `wrangler dev` aynı portu tutuyorsa istekler eski build'e gider; boş port kullan.
 - `tsc` `components/products/ProductsClient.tsx`'te eski tip hataları verir; `next.config.ts` build'de tip hatalarını yok sayar.
 
