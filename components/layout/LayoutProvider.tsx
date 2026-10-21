@@ -1,96 +1,116 @@
 "use client"
 
+/**
+ * Store shell, rendered by the server root layout (app/layout.tsx) with data loaded on the server.
+ *
+ * - No mount gate, no spinner, no remount: the server HTML already contains the header, the page and
+ *   the footer, and the element around the page never changes type, so pages mount exactly once.
+ * - Chrome by path: /admin/* and /maintenance get no store header/footer (admin has its own layout).
+ * - Maintenance mode comes from site_settings (server data, passed in `data`). When it is on, every
+ *   path except /admin/*, /maintenance, /login and /register renders the maintenance message in the
+ *   server HTML (API routes never pass through layouts, so they are unaffected).
+ * - Cart: rehydrates the persisted zustand store once on mount (the store uses skipHydration).
+ * - Analytics: one POST /api/analytics/track per store page view, also on client-side navigations
+ *   (same body as before: { page: pathname }).
+ */
 import * as React from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
+import { Wrench, Mail } from 'lucide-react'
 import { Header } from "@/components/layout/Header"
 import { Footer } from "@/components/layout/Footer"
 import { CartDrawer } from "@/components/cart/CartDrawer"
 import { MobileNav } from "@/components/layout/MobileNav"
+import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary'
+import { ShellChromeContext, StoreDataProvider } from '@/components/layout/store-data'
 import { useCartStore } from "@/store/cart-store"
+import type { PublicSiteSettings, StorefrontData } from '@/lib/catalog'
 
-export function LayoutProvider({ children }: { children: React.ReactNode }) {
-    const pathname = usePathname()
-    const router = useRouter()
-    const isAdmin = pathname.startsWith('/admin')
-    const isMaintenancePage = pathname === '/maintenance'
-    const isLoginPage = pathname === '/login' || pathname === '/register'
+const MAINTENANCE_EXEMPT = ['/maintenance', '/login', '/register']
 
-    // CRITICAL: Use mounted state to prevent hydration mismatch
-    const [mounted, setMounted] = React.useState(false)
-    const [maintenanceMode, setMaintenanceMode] = React.useState(false)
-    const [checked, setChecked] = React.useState(false)
+function normalizePath(pathname: string | null): string {
+    if (!pathname) return '/'
+    return pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
+}
 
-    // Set mounted on client only AND hydrate Zustand store
+export function LayoutProvider({ data, children }: { data: StorefrontData; children: React.ReactNode }) {
+    const path = normalizePath(usePathname())
+    const isAdmin = path === '/admin' || path.startsWith('/admin/')
+    const isMaintenancePage = path === '/maintenance'
+    const showMaintenance = data.settings.maintenance_mode && !isAdmin && !MAINTENANCE_EXEMPT.includes(path)
+    const showChrome = !isAdmin && !isMaintenancePage && !showMaintenance
+
+    // The cart store is created with skipHydration; load the saved cart once in the browser
     React.useEffect(() => {
-        setMounted(true)
-        // Hydrate the cart store from localStorage after mount
         useCartStore.persist.rehydrate()
     }, [])
 
+    // Page-view tracking (was in Footer on mount; now also counts client-side navigations)
     React.useEffect(() => {
-        if (!mounted) return
-
-        // Skip maintenance check for admin, login, and maintenance pages
-        if (isAdmin || isMaintenancePage || isLoginPage) {
-            setChecked(true)
-            return
+        if (!showChrome) return
+        try {
+            fetch('/api/analytics/track', {
+                method: 'POST',
+                body: JSON.stringify({ page: window.location.pathname }),
+                keepalive: true,
+            }).catch(() => { })
+        } catch {
+            // never let analytics break the page
         }
+    }, [path, showChrome])
 
-        // Check maintenance mode from site settings
-        fetch('/api/site-settings')
-            .then(r => r.json())
-            .then(settings => {
-                const isInMaintenance = settings.maintenance_mode === 'true' || settings.maintenance_mode === true
-                setMaintenanceMode(isInMaintenance)
-                setChecked(true)
-
-                if (isInMaintenance && !isAdmin && !isMaintenancePage) {
-                    router.push('/maintenance')
-                }
-            })
-            .catch(() => {
-                setChecked(true) // Allow access if settings fetch fails
-            })
-    }, [mounted, pathname, isAdmin, isMaintenancePage, isLoginPage, router])
-
-    // Always render the same structure on first server render to prevent hydration issues
-    // During SSR and initial client render, show a minimal loading state
-    if (!mounted) {
-        return (
-            <div className="min-h-screen bg-slate-50">
-                {children}
-            </div>
-        )
-    }
-
-    // Show loading while checking maintenance status (only after mounted)
-    if (!checked && !isAdmin && !isMaintenancePage) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50">
-                <div className="animate-spin w-8 h-8 border-4 border-slate-300 border-t-slate-900 rounded-full"></div>
-            </div>
-        )
-    }
-
-    if (isAdmin) {
-        // Admin pages - no header/footer/nav
-        return <>{children}</>
-    }
-
-    // Maintenance page - no header/footer
-    if (isMaintenancePage) {
-        return <>{children}</>
-    }
+    const Main = isAdmin ? 'div' : 'main'
 
     return (
-        <>
-            <Header />
-            <CartDrawer />
-            <main className="min-h-screen pt-16">
-                {children}
-            </main>
-            <Footer />
-            <MobileNav />
-        </>
+        <StoreDataProvider value={data}>
+            <ShellChromeContext.Provider value={showChrome}>
+                {showChrome && (
+                    <a
+                        href="#main-content"
+                        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-card focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink focus:shadow-overlay"
+                    >
+                        İçeriğe geç
+                    </a>
+                )}
+                {showChrome && <Header fromShell />}
+                {showChrome && <CartDrawer />}
+                <Main id="main-content" className={showChrome ? 'min-h-[60vh]' : undefined}>
+                    {showMaintenance ? (
+                        <MaintenanceView settings={data.settings} />
+                    ) : (
+                        <GlobalErrorBoundary resetKey={path} variant="page">
+                            {children}
+                        </GlobalErrorBoundary>
+                    )}
+                </Main>
+                {showChrome && <Footer fromShell />}
+                {showChrome && <MobileNav fromShell />}
+            </ShellChromeContext.Provider>
+        </StoreDataProvider>
+    )
+}
+
+/** Server-rendered maintenance message (no client check, no spinner). */
+function MaintenanceView({ settings }: { settings: PublicSiteSettings }) {
+    return (
+        <div className="flex min-h-screen items-center justify-center bg-ink px-4 py-16 text-white">
+            <div className="max-w-lg text-center">
+                <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-sheet bg-white/10" aria-hidden="true">
+                    <Wrench className="h-8 w-8" />
+                </div>
+                <h1 className="type-h1">{settings.site_name} kısa bir bakımda</h1>
+                <p className="mt-3 text-base leading-7 text-white/80">
+                    Sitemizi sizin için güncelliyoruz. Çok kısa süre içinde tekrar buradayız, anlayışınız için teşekkür ederiz.
+                </p>
+                {settings.footer_email && (
+                    <a
+                        href={`mailto:${settings.footer_email}`}
+                        className="mt-6 inline-flex items-center gap-2 rounded-card bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20"
+                    >
+                        <Mail className="h-4 w-4" aria-hidden="true" />
+                        {settings.footer_email}
+                    </a>
+                )}
+            </div>
+        </div>
     )
 }
