@@ -1,95 +1,334 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens — storefront spec v1 §4–§6 (docs/FRONTEND.md → "Design tokens").
+ *
+ * Colour utilities: bg-ink, text-muted, border-line, bg-brand-600, text-sale, bg-success-50 …
+ * Radius:  rounded-chip (6) · rounded-thumb (8) · rounded-card (12) · rounded-sheet (16)
+ *          (Tailwind's own rounded-md/lg/xl/2xl keep their default 6/8/12/16 px values; the admin panel
+ *           relies on them, so the spec's radius scale lives under these semantic names instead.)
+ * Shadow:  shadow-card · shadow-raised · shadow-overlay · shadow-focus (Tailwind's shadow-sm/md/lg unchanged)
+ * Font:    one variable family (Plus Jakarta Sans) exposed as --font-sans by next/font in app/layout.tsx.
+ */
 @theme {
+  /* neutrals */
+  --color-canvas: #FFFFFF;
+  --color-surface: #F6F7F9;
+  --color-surface-2: #EEF1F4;
+  --color-field: #F3F5F8;         /* search/input background */
+  --color-line: #E6E9EE;
+  --color-line-strong: #CBD2DA;
+  --color-ink: #0B1220;
+  --color-ink-2: #273142;
+  --color-muted: #5B6573;
+  --color-subtle: #8A94A3;
+
+  /* brand (logo "STORE" cyan) */
+  --color-brand-50: #E6F6FC;
+  --color-brand-100: #CCEDF8;
+  --color-brand-500: #0090C8;
+  --color-brand-600: #0077A8;
+  --color-brand-700: #005F87;
+
+  /* semantic */
+  --color-sale: #D92D20;
+  --color-sale-50: #FEF3F2;
+  --color-success: #067647;
+  --color-success-50: #ECFDF3;
+  --color-warning: #B54708;
+  --color-warning-50: #FFFAEB;
+  --color-danger: #B42318;
+  --color-whatsapp: #0E7A6E;
+
+  /* category accents (tiles/badges only) */
+  --color-cat-tech: #0077A8;
+  --color-cat-gaming: #6D28D9;
+  --color-cat-beauty: #BE185D;
+
+  /* legacy names still used by existing components and the admin panel (do not use in new code) */
   --color-primary: #0F172A;
   --color-primary-foreground: #FFFFFF;
   --color-secondary: #3B82F6;
   --color-secondary-foreground: #FFFFFF;
   --color-accent: #F43F5E;
   --color-accent-foreground: #FFFFFF;
-
   --color-background: #FFFFFF;
   --color-foreground: #1E293B;
-
-  --color-surface: #F8FAFC;
-  --color-surface-foreground: #1E293B;
-
-  --color-muted: #F1F5F9;
   --color-muted-foreground: #64748B;
+  --color-border: #E6E9EE;
 
-  --font-sans: var(--font-inter);
-  --font-heading: var(--font-space-grotesk);
+  /* elevation */
+  --shadow-card: 0 1px 2px rgb(11 18 32 / .06);
+  --shadow-raised: 0 4px 12px rgb(11 18 32 / .08);
+  --shadow-overlay: 0 12px 32px rgb(11 18 32 / .12);
+  --shadow-focus: 0 0 0 3px rgb(0 119 168 / .25);
 
-  --animate-accordion-down: accordion-down 0.2s ease-out;
-  --animate-accordion-up: accordion-up 0.2s ease-out;
+  /* radius */
+  --radius-chip: 6px;
+  --radius-thumb: 8px;
+  --radius-card: 12px;
+  --radius-sheet: 16px;
 
-  @keyframes accordion-down {
-    from {
-      height: 0
-    }
+  /* motion */
+  --ease-sheet: cubic-bezier(.2, .8, .2, 1);
 
-    to {
-      height: var(--radix-accordion-content-height)
-    }
+  /* layout */
+  --container-store: 1280px;
+}
+
+/* --font-heading is an alias of the single body family (kept for existing `font-heading` classes) */
+@theme inline {
+  --font-heading: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+/* Layout utilities                                                                                */
+/* ---------------------------------------------------------------------------------------------- */
+
+/* Page container: max 1280px, gutters 16 / 24 (md) / 32 (lg) */
+@utility container-store {
+  width: 100%;
+  max-width: var(--container-store);
+  margin-inline: auto;
+  padding-inline: 16px;
+
+  @media (width >= 48rem) {
+    padding-inline: 24px;
   }
 
-  @keyframes accordion-up {
-    from {
-      height: var(--radix-accordion-content-height)
-    }
-
-    to {
-      height: 0
-    }
+  @media (width >= 64rem) {
+    padding-inline: 32px;
   }
 }
 
-/* Custom Utilities for Glassmorphism & Hide Scrollbar */
-@layer utilities {
-  .glass {
-    @apply backdrop-blur-md bg-white/70 border border-white/20 shadow-lg;
+/* Vertical section rhythm: 32px mobile, 56px desktop */
+@utility section-y {
+  padding-block: 32px;
+
+  @media (width >= 64rem) {
+    padding-block: 56px;
+  }
+}
+
+/* Product grid: 2 / 3 / 4 columns with 12 / 16 / 24px gaps (home: 4 at lg; listing with sidebar: use grid-cols overrides) */
+@utility product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+
+  @media (width >= 48rem) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
   }
 
-  .glass-dark {
-    @apply backdrop-blur-md bg-slate-900/70 border border-slate-800/50 shadow-lg;
+  @media (width >= 64rem) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 24px;
   }
+}
 
-  .no-scrollbar::-webkit-scrollbar {
+/* ---------------------------------------------------------------------------------------------- */
+/* Typography scale (spec §5): mobile → desktop at lg                                              */
+/* ---------------------------------------------------------------------------------------------- */
+
+@utility type-display {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+
+  @media (width >= 64rem) {
+    font-size: 44px;
+    line-height: 52px;
+  }
+}
+
+@utility type-h1 {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+
+  @media (width >= 64rem) {
+    font-size: 30px;
+    line-height: 38px;
+  }
+}
+
+@utility type-h2 {
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
+
+  @media (width >= 64rem) {
+    font-size: 24px;
+    line-height: 32px;
+  }
+}
+
+@utility type-h3 {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+
+  @media (width >= 64rem) {
+    font-size: 18px;
+    line-height: 26px;
+  }
+}
+
+@utility type-body {
+  font-size: 15px;
+  line-height: 24px;
+}
+
+@utility type-small {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* Eyebrows and badges: uppercase is only allowed here (lang="tr" handles İ/I) */
+@utility type-micro {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@utility type-card-title {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+@utility type-price {
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+@utility type-price-lg {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+
+  @media (width >= 64rem) {
+    font-size: 32px;
+    line-height: 38px;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hide scrollbars on horizontal rows (keeps scrolling) */
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
     display: none;
   }
+}
 
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
   }
 }
 
-:root {
-  --background: #FFFFFF;
-  --foreground: #0F172A;
-  /* Slate-900 for better contrast */
+/* Skeleton shimmer (disabled under reduced motion) */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
 }
 
-/* Dark mode is now opt-in via .dark class, default is Light Mode */
-.dark {
-  --background: #020617;
-  --foreground: #F8FAFC;
+@utility skeleton {
+  background-color: var(--color-surface-2);
+  background-image: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / .55) 50%, transparent 100%);
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
 }
 
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-inter), sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ---------------------------------------------------------------------------------------------- */
+/* Base                                                                                            */
+/* ---------------------------------------------------------------------------------------------- */
+
+@layer base {
+  :root {
+    --background: #FFFFFF;
+    --foreground: #0B1220;
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Visible keyboard focus everywhere (components may add --shadow-focus on inputs) */
+  :where(a, button, [role="button"], input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+  }
+
+  :where(input, select, textarea):focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  /* Prices and counters never jump */
+  :where([data-price], .price) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background-color: var(--color-brand-100);
+    color: var(--color-ink);
+  }
 }
 
-/* Prevent auto-zoom on mobile devices */
+/* Prevent iOS zoom on focus: inputs are at least 16px on small screens */
 @media screen and (max-width: 768px) {
 
   input,
   select,
   textarea {
     font-size: 16px !important;
+  }
+}
+
+/* Respect reduced motion: no marquee, autoplay, shimmer or transforms */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .skeleton {
+    animation: none !important;
+    background-image: none !important;
   }
 }
