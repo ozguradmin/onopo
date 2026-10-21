@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
-// Combined endpoint: product + reviews + variations in ONE worker invocation
-// This replaces 3 separate API calls from ProductClient
+// Combined endpoint: product + reviews + variations in ONE worker invocation.
+// The product page is server-rendered now (components/pdp); this public endpoint keeps its response
+// shape for any other caller. Inactive products answer 404, like the product page itself.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
         // Run all 3 queries with a single getDB() call
         const [productResult, reviewsResult, variationsResult] = await Promise.all([
-            db.prepare('SELECT * FROM products WHERE id = ?').bind(id).first(),
+            db.prepare('SELECT * FROM products WHERE id = ? AND is_active = 1').bind(id).first(),
             db.prepare(`
                 SELECT r.*, u.full_name as user_name 
                 FROM reviews r 
