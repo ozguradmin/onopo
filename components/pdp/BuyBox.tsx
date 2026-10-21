@@ -154,10 +154,10 @@ export function BuyBox({ product, variations, freeShippingThreshold, maxInstallm
     return (
         <div className="flex flex-col">
             {/* Price */}
-            <Price price={finalPrice} originalPrice={product.original_price} size="lg" showDiscountBadge showSaving />
+            <Price price={finalPrice} originalPrice={product.original_price} size="lg" showDiscountBadge showSaving={!soldOut} />
 
             {/* Installments */}
-            {(installmentInfo || maxInstallments) && (
+            {!soldOut && (installmentInfo || maxInstallments) && (
                 <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-5 text-ink-2">
                     <CreditCard className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
                     <span>{installmentInfo || `Kredi kartına ${maxInstallments} aya varan taksit`}</span>
