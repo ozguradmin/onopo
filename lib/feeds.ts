@@ -30,6 +30,14 @@ export function absoluteImageUrl(image: string | null | undefined, origin: strin
     return url.startsWith('/') ? `${origin}${url}` : url
 }
 
+// 'Görsel URL' column of the CSV/XLSX exports: the admin export keeps the stored value
+// ('/api/images/<key>') so that re-importing the file stores the same form; public exports get the
+// absolute URL
+export function exportImageUrl(image: string | null | undefined, origin: string, forAdmin: boolean): string {
+    if (forAdmin) return typeof image === 'string' ? image : ''
+    return absoluteImageUrl(image, origin)
+}
+
 export function parseImages(images: unknown): string[] {
     if (Array.isArray(images)) return images.filter(i => typeof i === 'string')
     if (typeof images !== 'string' || !images) return []
