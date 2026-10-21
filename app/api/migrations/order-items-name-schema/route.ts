@@ -1,10 +1,11 @@
 import { requireAdmin } from '@/lib/auth'
+import { postOnly } from '@/lib/api-request'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
     const denied = await requireAdmin()
     if (denied) return denied
 
@@ -25,4 +26,9 @@ export async function GET(req: NextRequest) {
         }
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
+}
+
+// GET changes nothing (a link or prefetch must never alter the database); this runs on an admin POST
+export function GET() {
+    return postOnly()
 }

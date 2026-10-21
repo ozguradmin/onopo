@@ -1,4 +1,5 @@
 import { requireAdmin } from '@/lib/auth'
+import { postOnly } from '@/lib/api-request'
 import { NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 
@@ -21,18 +22,9 @@ async function runMigration() {
     return { success: true, message: 'Admin email column added to site_settings' }
 }
 
-// GET method for easy browser access
-export async function GET() {
-    const denied = await requireAdmin()
-    if (denied) return denied
-
-    try {
-        const result = await runMigration()
-        return NextResponse.json(result)
-    } catch (error: any) {
-        console.error('Admin email migration error:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+// GET changes nothing (a link or prefetch must never alter the database); this runs on an admin POST
+export function GET() {
+    return postOnly()
 }
 
 export async function POST() {
