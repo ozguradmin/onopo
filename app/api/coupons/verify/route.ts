@@ -1,10 +1,13 @@
 
 import { NextRequest, NextResponse } from 'next/server'
+import { readJsonBody } from '@/lib/api-request'
 import { getDB } from '@/lib/db'
 
 export async function POST(req: NextRequest) {
     try {
-        const body = await req.json()
+        const parsed = await readJsonBody(req)
+        if (!parsed.ok) return parsed.response
+        const body = parsed.body
         const { code, cartTotal, items } = body
 
         if (!code) {

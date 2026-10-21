@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readJsonBody } from '@/lib/api-request'
 import { getDB } from '@/lib/db'
 import { signJWT } from '@/lib/auth'
 
@@ -11,7 +12,9 @@ const FAILED_MARKER = 'FAILED'
 export async function POST(req: NextRequest) {
     try {
         const db = await getDB()
-        const { userId, code } = await req.json()
+        const parsed = await readJsonBody(req)
+        if (!parsed.ok) return parsed.response
+        const { userId, code } = parsed.body
 
         if (!userId || !code) {
             return NextResponse.json({ error: 'Kullanıcı ID ve kod zorunludur' }, { status: 400 })

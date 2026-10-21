@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readJsonBody } from '@/lib/api-request'
 import { getDB } from '@/lib/db'
 import { hashPassword, signJWT } from '@/lib/auth'
 import { sendWelcomeEmail } from '@/lib/email'
@@ -8,7 +9,9 @@ import { sendWelcomeEmail } from '@/lib/email'
 export async function POST(req: NextRequest) {
     try {
         const db = await getDB()
-        const { email, password, name, phone, address, city, district, postal_code } = await req.json()
+        const parsed = await readJsonBody(req)
+        if (!parsed.ok) return parsed.response
+        const { email, password, name, phone, address, city, district, postal_code } = parsed.body
 
         if (!email || !password) {
             return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })

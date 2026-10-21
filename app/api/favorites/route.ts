@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readJsonBody } from '@/lib/api-request'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
@@ -70,7 +71,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 401 })
         }
 
-        const { productId } = await req.json()
+        const parsed = await readJsonBody(req)
+        if (!parsed.ok) return parsed.response
+        const { productId } = parsed.body
         if (!productId) {
             return NextResponse.json({ error: 'Product ID gerekli' }, { status: 400 })
         }
