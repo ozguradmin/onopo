@@ -24,6 +24,13 @@ export function variantKey(originalKey: string, width: number): string {
     return `v/${width}/${originalKey}.webp`
 }
 
+// Product and hero images sit on white cards: flattening transparency onto white keeps the WebP
+// small (same choice as the batch-generated variants of the existing images)
+function flattenOnWhite(context: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D, width: number, height: number) {
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, width, height)
+}
+
 async function encodeWebp(bitmap: ImageBitmap, maxWidth: number): Promise<Blob | null> {
     // Never upscale: small originals get same-size WebP copies so every width exists
     const width = Math.min(maxWidth, bitmap.width)
@@ -33,6 +40,7 @@ async function encodeWebp(bitmap: ImageBitmap, maxWidth: number): Promise<Blob |
         const canvas = new OffscreenCanvas(width, height)
         const context = canvas.getContext('2d')
         if (!context) return null
+        flattenOnWhite(context, width, height)
         context.drawImage(bitmap, 0, 0, width, height)
         const blob = await canvas.convertToBlob({ type: 'image/webp', quality: WEBP_QUALITY })
         return blob.type === 'image/webp' ? blob : null
@@ -43,6 +51,7 @@ async function encodeWebp(bitmap: ImageBitmap, maxWidth: number): Promise<Blob |
     canvas.height = height
     const context = canvas.getContext('2d')
     if (!context) return null
+    flattenOnWhite(context, width, height)
     context.drawImage(bitmap, 0, 0, width, height)
     const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/webp', WEBP_QUALITY))
     // Browsers without a WebP encoder silently return PNG: skip rather than store a mislabelled file
