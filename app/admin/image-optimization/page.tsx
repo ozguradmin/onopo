@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Loader2, CheckCircle, Image as ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
@@ -11,10 +11,10 @@ export default function ImageOptimizationPage() {
     const [stats, setStats] = useState({ total: 0, optimized: 0, saved: '0 MB' })
     const [products, setProducts] = useState<any[]>([])
 
-    // Fetch products
-    useState(() => {
+    // Fetch every active product (includeAll: the plain list is the storefront's first 24 in stock)
+    useEffect(() => {
         if (typeof window !== 'undefined') {
-            fetch('/api/products')
+            fetch('/api/products?includeAll=true')
                 .then(res => res.json())
                 .then(data => {
                     if (Array.isArray(data)) {
@@ -25,7 +25,7 @@ export default function ImageOptimizationPage() {
                 })
                 .catch(() => { })
         }
-    })
+    }, [])
 
     const handleOptimize = async () => {
         setOptimizing(true)

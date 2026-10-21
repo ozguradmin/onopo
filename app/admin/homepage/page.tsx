@@ -263,7 +263,8 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
 
     React.useEffect(() => {
         if (section.type === 'products' || section.type === 'new_products') {
-            fetch('/api/products').then(r => r.json()).then(data => setProducts(Array.isArray(data) ? data : []))
+            // includeAll: the picker must offer every active product, not the storefront's first 24 in stock
+            fetch('/api/products?includeAll=true').then(r => r.json()).then(data => setProducts(Array.isArray(data) ? data : []))
             fetch('/api/categories?hideEmpty=true').then(r => r.json()).then(data => setCategories(Array.isArray(data) ? data : []))
         }
     }, [section.type])
