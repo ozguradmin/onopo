@@ -59,13 +59,14 @@ export async function POST(req: NextRequest) {
 
         // The login alias address; if it can't be known (admin e-mail typed and no alias login on record),
         // admin_email from site settings, else the admin account's own e-mail
-        let recipient = typedAlias ? typedEmail : await findAliasAddress(db, user.id)
-        if (!recipient) {
+        const aliasAddress = typedAlias ? typedEmail : await findAliasAddress(db, user.id)
+        let recipient: string = aliasAddress || ADMIN_ACCOUNT_EMAIL
+        if (!aliasAddress) {
             const adminEmailRow = await db.prepare(
                 "SELECT value FROM site_settings WHERE key = 'admin_email'"
             ).first() as any
             const adminEmail = typeof adminEmailRow?.value === 'string' ? adminEmailRow.value.trim() : ''
-            recipient = adminEmail || ADMIN_ACCOUNT_EMAIL
+            if (adminEmail) recipient = adminEmail
         }
 
         await db.prepare(
