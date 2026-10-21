@@ -301,11 +301,23 @@ export function canonicalUrl(path: string, query?: Record<string, string | numbe
             params.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(v))}`)
         }
     }
-    return `${SITE_URL}${encodeURI(decodeSafe(p))}${params.length ? `?${params.join('&')}` : ''}`
+    return `${SITE_URL}${reencode(p)}${params.length ? `?${params.join('&')}` : ''}`
 }
 
-function decodeSafe(s: string): string {
-    try { return decodeURI(s) } catch { return s }
+/**
+ * Percent-encodes a path exactly once, segment by segment, whether its segments arrive encoded
+ * (productPath() output: "a%26b") or raw ("şarj", "a b"). decodeURI + encodeURI would turn an
+ * already-encoded reserved character (%26, %2F, %3F …) into %2526.
+ */
+function reencode(path: string): string {
+    return path
+        .split('/')
+        .map((seg) => {
+            let raw = seg
+            try { raw = decodeURIComponent(seg) } catch { /* a literal '%': encode it as is */ }
+            return encodeURIComponent(raw)
+        })
+        .join('/')
 }
 
 /**
@@ -342,7 +354,9 @@ export function parseImages(images: unknown): string[] {
 
 /** URL safe to write raw into XML (Next's sitemap writer does not escape). */
 export function xmlSafeUrl(url: string): string {
-    return encodeURI(decodeSafe(url)).replace(/&/g, '%26').replace(/'/g, '%27')
+    const m = url.match(/^(https?:\/\/[^/?#]+)([^?#]*)(.*)$/i)
+    const safe = m ? `${m[1]}${reencode(m[2])}${m[3]}` : reencode(url)
+    return safe.replace(/&/g, '%26').replace(/'/g, '%27')
 }
 
 /** D1 "YYYY-MM-DD HH:MM:SS" (UTC) -> ISO 8601, or null. */
@@ -992,7 +1006,8 @@ export const rootMetadata: Metadata = {
     openGraph: {
         type: 'website',
         locale: SITE.locale,
-        url: `${SITE_URL}/`,
+        // No og:url here: every page that inherits this object would tell Facebook it is the home page
+        // (the og:url twin of the old layout canonical). buildMetadata() sets the page's own og:url.
         siteName: SITE.name,
         title: SITE.defaultTitle,
         description: SITE.defaultDescription,
