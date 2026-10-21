@@ -22,7 +22,7 @@ import {
     type ShippingSettings,
 } from '@/lib/catalog'
 import { getReviewStatsMap, type ReviewStats } from '@/lib/reviews'
-import { FACETS, normalizeText, prepareQuery } from '@/lib/search'
+import { FACETS, foldTr, matchesFacet, normalizeText, prepareQuery, searchItems } from '@/lib/search'
 import { categoryPath, detectProductTypes } from '@/lib/seo'
 import { formatNumberTR } from '@/lib/format'
 import { EMPTY_LISTING_STATE, isNarrowed, listingHref, type ListingState } from '@/components/listing/listing-state'
@@ -193,7 +193,7 @@ async function suggestQuery(q: string, base: ListProductsParams): Promise<{ q: s
 // Search text that names a quick filter
 // ---------------------------------------------------------------------------------------------
 
-async function findFacetHint(state: ListingState, basePath: string, categorySlug: string | null, total: number): Promise<ListingData['facetHint']> {
+async function findFacetHint(state: ListingState, basePath: string, category: Category | null, total: number): Promise<ListingData['facetHint']> {
     const qn = normalizeText(state.q)
     if (qn.length < 4) return null
     const facet = FACETS.find(f => {
@@ -202,7 +202,8 @@ async function findFacetHint(state: ListingState, basePath: string, categorySlug
         return qn === label || qn === f.key.replace(/-/g, ' ') || ` ${label} `.includes(` ${qn} `)
     })
     if (!facet) return null
-    const count = (await listProducts({ categorySlug, facets: [facet.key], page: 1, pageSize: 1 })).total
+    const pool = (await getActiveProducts()).filter(p => !category || inCategory(p, category))
+    const count = pool.filter(p => matchesFacet(p.name, facet.key)).length
     if (count <= total) return null
     return {
         key: facet.key,
@@ -216,6 +217,28 @@ async function findFacetHint(state: ListingState, basePath: string, categorySlug
 // Loader
 // ---------------------------------------------------------------------------------------------
 
+/** Same rule as lib/catalog: product.category equals the category name or slug (Turkish-folded). */
+function inCategory(p: Pick<Product, 'category'>, c: { name: string; slug: string }): boolean {
+    const pc = foldTr(p.category).trim()
+    return pc !== '' && (pc === foldTr(c.name).trim() || pc === foldTr(c.slug).trim())
+}
+
+/**
+ * Every product a listProducts() query matches (all pages, in listing order) plus the first answer
+ * (totals, facet counts, price range). listProducts computes the facet counts on every call, so the
+ * listing asks once and slices the page itself instead of asking again for each count.
+ */
+async function listAll(params: ListProductsParams): Promise<{ first: ListProductsResult; items: Product[] }> {
+    const first = await listProducts({ ...params, page: 1, pageSize: 200 })
+    const items = [...first.items]
+    for (let page = 2; items.length < first.total && page <= 50; page++) {
+        const next = await listProducts({ ...params, page, pageSize: 200 })
+        if (!next.items.length) break
+        items.push(...next.items)
+    }
+    return { first, items }
+}
+
 async function loadListingUncached(basePath: string, categorySlug: string | null, stateJson: string): Promise<ListingData> {
     const state: ListingState = { ...EMPTY_LISTING_STATE, ...(JSON.parse(stateJson) as ListingState) }
     const [settings, shipping, categories] = await Promise.all([
@@ -227,8 +250,17 @@ async function loadListingUncached(basePath: string, categorySlug: string | null
     const base = filterParams(state)
 
     // Main query (throws when D1 is down: the page must fail with 500, never render an empty 200)
-    const result = await listProducts({ ...base, categorySlug, page: state.page, pageSize })
-    const category = categorySlug ? result.category : null
+    const { first, items: matched } = await listAll({ ...base, categorySlug })
+    const total = first.total
+    const start = (state.page - 1) * pageSize
+    const result: ListProductsResult = {
+        ...first,
+        items: matched.slice(start, start + pageSize),
+        page: state.page,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    }
+    const category = categorySlug ? first.category : null
 
     // Ratings only decorate the cards: a failure hides the stars instead of failing the page
     let ratings: Map<number, ReviewStats> | null = null
@@ -240,22 +272,17 @@ async function loadListingUncached(basePath: string, categorySlug: string | null
 
     // Panel counts, all with the current search and filters
     const narrowed = isNarrowed(state)
-    const countWith = async (extra: Partial<ListProductsParams>) =>
-        (await listProducts({ ...base, categorySlug, page: 1, pageSize: 1, ...extra })).total
-    const [discountedCount, categoryCounts, allCount] = await Promise.all([
-        state.discounted ? Promise.resolve(result.total) : countWith({ onlyDiscounted: true }),
-        Promise.all(
-            categories.map(async c =>
-                narrowed ? (await listProducts({ ...base, categorySlug: c.slug, page: 1, pageSize: 1 })).total : c.product_count,
-            ),
-        ),
-        categorySlug
-            ? narrowed
-                ? listProducts({ ...base, page: 1, pageSize: 1 }).then(r => r.total)
-                : getActiveProducts().then(list => list.length)
-            : Promise.resolve(result.total),
-    ])
-    const inStockCount = state.inStock ? result.total : result.inStockTotal
+    const active = await getActiveProducts()
+    let categoryCounts: number[]
+    let allCount: number
+    if (narrowed) {
+        const wide = categorySlug ? (await listAll(base)).items : matched
+        categoryCounts = categories.map(c => wide.filter(p => inCategory(p, c)).length)
+        allCount = wide.length
+    } else {
+        categoryCounts = categories.map(c => c.product_count)
+        allCount = categorySlug ? active.length : total
+    }
 
     const panel: PanelData = {
         categories: categories
@@ -269,26 +296,25 @@ async function loadListingUncached(basePath: string, categorySlug: string | null
             .filter(c => c.count > 0 || c.active),
         allCount,
         allHref: categoryLinkHref(null, state),
-        facets: result.facets,
-        priceRange: result.priceRange,
-        discountedCount,
-        inStockCount,
-        total: result.total,
+        facets: first.facets,
+        priceRange: first.priceRange,
+        discountedCount: state.discounted ? total : matched.filter(p => p.discount_percent > 0).length,
+        inStockCount: state.inStock ? total : first.inStockTotal,
+        total,
     }
 
     // Empty states: spelling suggestion, popular searches with results, a few products
     let suggestion: ListingData['suggestion'] = null
     let popularSearches: PopularSearch[] = []
     let fallbackProducts: Product[] = []
-    if (result.total === 0) {
+    if (total === 0) {
         if (state.q) suggestion = await suggestQuery(state.q, { ...base, categorySlug })
-        const counts = await Promise.all(POPULAR_SEARCHES.map(s => listProducts({ q: s.q, page: 1, pageSize: 1 }).then(r => r.total)))
-        popularSearches = POPULAR_SEARCHES.map((s, i) => ({ ...s, count: counts[i] })).filter(s => s.count > 0)
+        popularSearches = POPULAR_SEARCHES.map(s => ({ ...s, count: searchItems(active, s.q).length })).filter(s => s.count > 0)
         fallbackProducts = await getNewestProducts(4)
     }
 
     const allCategories = categories.map(c => ({ name: c.name, slug: c.slug, count: c.product_count }))
-    const facetHint = state.q ? await findFacetHint(state, basePath, categorySlug, result.total) : null
+    const facetHint = state.q ? await findFacetHint(state, basePath, category, total) : null
 
     return { basePath, state, pageSize, result, category, panel, ratings, shipping, settings, suggestion, popularSearches, fallbackProducts, facetHint, allCategories }
 }
