@@ -7,6 +7,8 @@ import { sendTrackingUpdate } from '@/lib/email'
 export const dynamic = 'force-dynamic'
 
 // GET: Get single order
+// Admins get the full order. Everyone else (the checkout page polls this while a guest pays)
+// only gets the payment state, so order ids can't be walked to read customer details.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params
@@ -15,6 +17,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         const order = await db.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first()
         if (!order) {
             return NextResponse.json({ error: 'Sipariş bulunamadı' }, { status: 404 })
+        }
+
+        const cookieStore = await cookies()
+        const token = cookieStore.get('auth_token')?.value
+        const payload = token ? await verifyJWT(token) : null
+        if (!payload || payload.role !== 'admin') {
+            return NextResponse.json({ id: order.id, status: order.status, payment_status: order.payment_status })
         }
 
         // Fetch items
