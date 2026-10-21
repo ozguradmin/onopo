@@ -4,6 +4,7 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Plus, Trash2, Upload, Loader2, Save, GripVertical } from 'lucide-react'
+import { uploadImageVariants } from '@/lib/imageVariants'
 
 interface Slide {
     id?: number
@@ -63,6 +64,7 @@ export default function HeroEditorPage() {
             const res = await fetch('/api/admin/upload', { method: 'POST', body: data })
             if (!res.ok) throw new Error()
             const result = await res.json()
+            void uploadImageVariants(file, result.url) // resized WebP copies; never blocks saving
             updateSlide(index, { image_url: result.url })
         } catch {
             alert('Görsel yüklenemedi')
