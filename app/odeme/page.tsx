@@ -1,15 +1,105 @@
 'use client'
 
 import * as React from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import { Button, buttonClasses } from '@/components/ui/button'
 import { useCartStore, CartItem, COUPONS_ENABLED, cartLineTotal } from '@/store/cart-store'
-import { formatPrice } from '@/lib/formatPrice'
-import { ArrowLeft, ShoppingBag, Check, Truck, CreditCard, User, Mail, Phone, MapPin, FileText, Ticket, X, Building2 } from 'lucide-react'
+import { formatNumberTR, formatTL } from '@/lib/format'
+import { unitPrice } from '@/lib/pricing'
+import { originalImageUrl, productImageUrl } from '@/lib/images'
+import { cn } from '@/lib/utils'
+import { FallbackImage } from '@/components/ui/FallbackImage'
+import { Field, FormAlert, checkboxClass, inputClass, textareaClass } from '@/components/forms/Field'
+import { CheckoutSkeleton } from '@/components/checkout/CheckoutSkeleton'
+import { TrustNote } from '@/components/checkout/TrustNote'
+import { ArrowLeft, ShoppingBag, Check, CreditCard, Lock, ChevronDown, Ticket, X, Truck, RefreshCw } from 'lucide-react'
+
+/*
+ * Checkout (/odeme/). Design spec §13: VISUALS ONLY.
+ * The state, validation, payload to POST /api/orders, the PayTR iframe + 3 s polling of
+ * GET /api/orders/<id>/ and the success/failure handling below are unchanged; only the markup is new.
+ * Totals come from the cart store, which uses lib/pricing.ts (exactly what the order API charges).
+ */
+
+// Validation messages (client and /api/orders use the same texts) → the field they belong to,
+// so the message can also be shown under that field. Display only.
+const FIELD_FOR_ERROR: Record<string, string> = {
+    'Ad soyad zorunlu': 'fullName',
+    'E-posta zorunlu': 'email',
+    'E-posta adresi zorunlu': 'email',
+    'Telefon zorunlu': 'phone',
+    'Telefon numarası zorunlu': 'phone',
+    'Teslimat adresi için il zorunlu': 'city',
+    'Teslimat adresi için ilçe zorunlu': 'district',
+    'Fatura ili zorunlu': 'billingCity',
+    'Fatura ilçesi zorunlu': 'billingDistrict',
+    'Fatura adresi zorunlu': 'billingAddress',
+}
+
+/** 500 → "500 ₺", 499.9 → "499,90 ₺" */
+function formatThreshold(amount: number): string {
+    return Number.isInteger(amount) ? `${formatNumberTR(amount, 0)} ₺` : formatTL(amount)
+}
+
+const STEPS = ['Bilgiler', 'Ödeme', 'Onay'] as const
+
+function CheckoutSteps({ current }: { current: 1 | 2 | 3 }) {
+    return (
+        <ol className="flex items-center gap-2 text-[13px] font-semibold" aria-label="Ödeme adımları">
+            {STEPS.map((label, i) => {
+                const n = i + 1
+                const done = n < current
+                const active = n === current
+                return (
+                    <li key={label} className="flex items-center gap-2" aria-current={active ? 'step' : undefined}>
+                        <span
+                            className={cn(
+                                'flex h-6 w-6 items-center justify-center rounded-full text-[12px]',
+                                done && 'bg-success text-white',
+                                active && 'bg-ink text-white',
+                                !done && !active && 'border border-line-strong bg-white text-muted',
+                            )}
+                            aria-hidden="true"
+                        >
+                            {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : n}
+                        </span>
+                        <span className={cn(active ? 'text-ink' : 'text-muted')}>
+                            {label}
+                            {done && <span className="sr-only"> (tamamlandı)</span>}
+                        </span>
+                        {n < STEPS.length && <span className="h-px w-5 bg-line-strong sm:w-8" aria-hidden="true" />}
+                    </li>
+                )
+            })}
+        </ol>
+    )
+}
+
+function StepCard({ step, title, description, children }: { step: number; title: string; description?: string; children: React.ReactNode }) {
+    const titleId = `checkout-step-${step}`
+    return (
+        <section aria-labelledby={titleId} className="rounded-sheet border border-line bg-white p-4 shadow-card sm:p-6">
+            <div className="mb-5 flex items-start gap-3">
+                <span className="mt-px flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink text-[13px] font-bold text-white" aria-hidden="true">
+                    {step}
+                </span>
+                <div className="min-w-0">
+                    <h2 id={titleId} className="type-h3 text-ink">
+                        {title}
+                    </h2>
+                    {description && <p className="mt-0.5 text-[13px] leading-5 text-muted">{description}</p>}
+                </div>
+            </div>
+            {children}
+        </section>
+    )
+}
+
+function SubHeading({ children }: { children: React.ReactNode }) {
+    return <h3 className="type-micro mb-3 text-muted">{children}</h3>
+}
 
 export default function CheckoutPage() {
-    const router = useRouter()
     const { items, getSubtotal, clearCart, coupon, applyCoupon, removeCoupon, fetchShippingSettings, getShippingCost } = useCartStore()
     const [hydrated, setHydrated] = React.useState(false)
     const [loading, setLoading] = React.useState(false)
@@ -221,24 +311,42 @@ export default function CheckoutPage() {
         }
     }
 
+    // ---- Display-only state and values (no effect on the order flow) ----
+    const [summaryOpen, setSummaryOpen] = React.useState(false)
+    const [checkMessage, setCheckMessage] = React.useState('')
+    const freeThreshold = useCartStore(s => s.shippingSettings.freeThreshold)
+    const itemCount = items.reduce((n, item) => n + item.quantity, 0)
+    const cardPaymentActive = !!(paymentSettings?.is_active && paymentSettings?.provider !== 'offline')
+    const providerName = paymentSettings?.provider === 'paytr' ? 'PayTR' : 'iyzico'
+    const errorField = Object.prototype.hasOwnProperty.call(FIELD_FOR_ERROR, error) ? FIELD_FOR_ERROR[error] : undefined
+    const fieldError = (name: string) => (errorField === name ? error : undefined)
+
+    // The confirmation replaces the (tall) payment view: show it from the top, also when the
+    // payment was confirmed by the status polling rather than by the form submit
+    React.useEffect(() => {
+        if (orderComplete) window.scrollTo(0, 0)
+    }, [orderComplete])
+
     // Wait for the persisted cart before deciding the cart is empty (avoids a 'Sepetiniz Boş' flash)
     if (!hydrated) {
-        return <div className="min-h-screen bg-slate-50" />
+        return <CheckoutSkeleton />
     }
 
     // Empty cart check
     if (items.length === 0 && !orderComplete) {
         return (
-            <div className="min-h-screen bg-slate-50 py-12">
-                <div className="container mx-auto px-4 max-w-2xl text-center">
-                    <div className="bg-white rounded-2xl p-12 shadow-sm border border-slate-100">
-                        <ShoppingBag className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                        <h1 className="text-2xl font-bold text-slate-900 mb-2">Sepetiniz Boş</h1>
-                        <p className="text-slate-500 mb-6">Ödeme yapmak için önce sepetinize ürün ekleyin.</p>
-                        <Link href="/products">
-                            <Button className="bg-slate-900 text-white hover:bg-slate-800">
-                                Alışverişe Başla
-                            </Button>
+            <div className="min-h-[60vh] bg-surface py-10 lg:py-16">
+                <div className="container-store">
+                    <div className="mx-auto flex max-w-lg flex-col items-center rounded-sheet border border-line bg-white px-6 py-12 text-center shadow-card">
+                        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-surface text-muted" aria-hidden="true">
+                            <ShoppingBag className="h-7 w-7" />
+                        </span>
+                        <h1 className="type-h2 mt-4 text-ink">Sepetin boş</h1>
+                        <p className="mt-1.5 max-w-sm text-sm leading-6 text-muted">
+                            Ödeme yapmak için önce sepetine ürün ekle. Şarj aletleri, kablolar ve daha fazlası seni bekliyor.
+                        </p>
+                        <Link href="/products/" className={cn(buttonClasses({ variant: 'brand', size: '44' }), 'mt-5')}>
+                            Alışverişe başla
                         </Link>
                     </div>
                 </div>
@@ -249,31 +357,34 @@ export default function CheckoutPage() {
     // Order complete
     if (orderComplete) {
         return (
-            <div className="min-h-screen bg-slate-50 py-12">
-                <div className="container mx-auto px-4 max-w-2xl text-center">
-                    <div className="bg-white rounded-2xl p-12 shadow-sm border border-slate-100">
-                        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <Check className="w-10 h-10 text-green-600" />
+            <div className="min-h-[60vh] bg-surface py-8 lg:py-14">
+                <div className="container-store">
+                    <div className="mx-auto max-w-xl">
+                        <div className="flex justify-center">
+                            <CheckoutSteps current={3} />
                         </div>
-                        <h1 className="text-2xl font-bold text-slate-900 mb-2">Siparişiniz Alındı!</h1>
-                        <p className="text-slate-500 mb-4">
-                            Sipariş numaranız: <span className="font-bold text-slate-900">#{orderId}</span>
-                        </p>
-                        <p className="text-slate-500 mb-2">
-                            Sipariş detaylarınız <span className="font-medium">{formData.email}</span> adresine gönderilecektir.
-                        </p>
-                        <p className="text-sm text-amber-600 mb-6">
-                            📧 Mail gelmezse lütfen spam/gereksiz klasörünü kontrol edin.
-                        </p>
-                        <div className="flex gap-4 justify-center">
-                            <Link href="/">
-                                <Button variant="outline">Ana Sayfaya Dön</Button>
-                            </Link>
-                            <Link href="/products">
-                                <Button className="bg-slate-900 text-white hover:bg-slate-800">
-                                    Alışverişe Devam Et
-                                </Button>
-                            </Link>
+                        <div className="mt-6 rounded-sheet border border-line bg-white p-6 text-center shadow-card sm:p-10">
+                            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-success-50 text-success">
+                                <Check className="h-8 w-8" strokeWidth={2.5} aria-hidden="true" />
+                            </div>
+                            <h1 className="type-h1 text-ink">Siparişin alındı</h1>
+                            <p className="mt-3 text-[15px] leading-6 text-muted">
+                                Sipariş numaran: <span className="font-bold text-ink tabular">#{orderId}</span>
+                            </p>
+                            <p className="mt-1 text-[15px] leading-6 text-muted">
+                                Sipariş detayları <span className="font-semibold text-ink-2 break-all">{formData.email}</span> adresine gönderilecek.
+                            </p>
+                            <p className="mx-auto mt-4 max-w-sm rounded-card bg-warning-50 px-3.5 py-2.5 text-[13px] leading-5 text-warning">
+                                E-posta birkaç dakika içinde gelmezse spam / gereksiz klasörünü kontrol et.
+                            </p>
+                            <div className="mt-7 flex flex-col-reverse justify-center gap-3 sm:flex-row">
+                                <Link href="/" className={buttonClasses({ variant: 'outline-ink', size: '48' })}>
+                                    Ana sayfaya dön
+                                </Link>
+                                <Link href="/products/" className={buttonClasses({ variant: 'brand', size: '48' })}>
+                                    Alışverişe devam et
+                                </Link>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -284,42 +395,68 @@ export default function CheckoutPage() {
     // Payment Iframe (PayTR)
     if (iframeUrl) {
         return (
-            <div className="min-h-screen bg-slate-50 pt-32 pb-8">
-                <div className="container mx-auto px-4 max-w-4xl">
-                    <div className="mb-6 text-center">
-                        <p className="text-slate-500 mb-2">Ödeme İşlemi - Sipariş #{orderId}</p>
-                        <p className="text-xs text-slate-400">Ödeme tamamlandığında otomatik olarak yönlendirileceksiniz</p>
-                    </div>
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                        <iframe
-                            src={iframeUrl}
-                            className="w-full min-h-[600px] border-0"
-                            title="Ödeme Ekranı"
-                        ></iframe>
-                    </div>
-                    <div className="mt-4 text-center">
-                        <button
-                            onClick={async () => {
-                                try {
-                                    const res = await fetch(`/api/orders/${orderId}`)
-                                    if (res.ok) {
-                                        const order = await res.json()
-                                        if (order.payment_status === 'paid' || order.status === 'approved') {
-                                            setOrderComplete(true)
-                                            setIframeUrl(null)
-                                            clearCart()
-                                        } else {
-                                            alert('Ödeme henüz tamamlanmadı. Lütfen bekleyin veya ödemeyi tamamlayın.')
+            <div className="min-h-[60vh] bg-surface pb-12 pt-5 lg:pb-16 lg:pt-8">
+                <div className="container-store">
+                    <div className="mx-auto max-w-[880px]">
+                        <CheckoutSteps current={2} />
+                        <div className="mt-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+                            <div>
+                                <h1 className="type-h1 text-ink">Kart ile ödeme</h1>
+                                <p className="mt-1 text-sm text-muted">
+                                    Sipariş <span className="font-semibold text-ink-2 tabular">#{orderId}</span>
+                                    <span aria-hidden="true"> · </span>
+                                    Ödenecek tutar <span className="font-semibold text-ink-2 tabular">{formatTL(finalTotal)}</span>
+                                </p>
+                            </div>
+                            <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-success">
+                                <Lock className="h-4 w-4" aria-hidden="true" /> Güvenli ödeme
+                            </span>
+                        </div>
+                        <div className="mt-4 overflow-hidden rounded-sheet border border-line bg-white shadow-card">
+                            <iframe
+                                src={iframeUrl}
+                                className="w-full min-h-[600px] border-0"
+                                title="Ödeme Ekranı"
+                            ></iframe>
+                        </div>
+                        <p className="mt-4 text-center text-[13px] leading-5 text-muted">
+                            Ödeme tamamlandığında bu sayfa kendiliğinden güncellenir.
+                        </p>
+                        <div className="mt-1 text-center">
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    setCheckMessage('')
+                                    try {
+                                        const res = await fetch(`/api/orders/${orderId}`)
+                                        if (res.ok) {
+                                            const order = await res.json()
+                                            if (order.payment_status === 'paid' || order.status === 'approved') {
+                                                setOrderComplete(true)
+                                                setIframeUrl(null)
+                                                clearCart()
+                                            } else {
+                                                setCheckMessage('Ödeme henüz tamamlanmadı. Lütfen bekleyin veya ödemeyi tamamlayın.')
+                                            }
                                         }
+                                    } catch (e) {
+                                        console.error('Manual check failed:', e)
                                     }
-                                } catch (e) {
-                                    console.error('Manual check failed:', e)
-                                }
-                            }}
-                            className="text-sm text-slate-500 hover:text-slate-700 underline"
-                        >
-                            Ödeme tamamlandı mı? Kontrol et
-                        </button>
+                                }}
+                                className="inline-flex min-h-11 items-center gap-1.5 rounded-card px-3 text-sm font-semibold text-brand-600 underline-offset-4 hover:text-brand-700 hover:underline"
+                            >
+                                <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                                Ödeme tamamlandı mı? Kontrol et
+                            </button>
+                        </div>
+                        <div aria-live="polite" className="mx-auto max-w-md">
+                            {checkMessage && (
+                                <FormAlert tone="info" className="mt-2">
+                                    {checkMessage}
+                                </FormAlert>
+                            )}
+                        </div>
+                        <TrustNote provider={providerName} className="mx-auto mt-6 max-w-xl" />
                     </div>
                 </div>
             </div>
@@ -327,385 +464,411 @@ export default function CheckoutPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 py-8">
-            <div className="container mx-auto px-4 max-w-6xl">
-                {/* Back button */}
-                <div className="mb-6">
-                    <Button
-                        variant="ghost"
-                        className="pl-0 hover:pl-2 transition-all text-slate-600 hover:text-slate-900"
-                        onClick={() => router.back()}
-                    >
-                        <ArrowLeft className="w-4 h-4 mr-2" /> Geri
-                    </Button>
-                </div>
+        <div className="min-h-[60vh] bg-surface pb-12 pt-4 lg:pb-20 lg:pt-6">
+            <div className="container-store">
+                <div className="mx-auto max-w-[1120px]">
+                    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+                        <Link
+                            href="/products/"
+                            className="-ml-1 inline-flex min-h-11 items-center gap-1.5 rounded-card px-1 text-sm font-medium text-muted transition-colors hover:text-ink"
+                        >
+                            <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Alışverişe dön
+                        </Link>
+                        <CheckoutSteps current={1} />
+                    </div>
 
-                <h1 className="text-2xl font-bold text-slate-900 mb-8">Ödeme</h1>
+                    <div className="mt-3 flex items-center justify-between gap-4 lg:mt-4">
+                        <h1 className="type-h1 text-ink">Ödeme</h1>
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-success-50 px-3 py-1 text-[13px] font-semibold text-success">
+                            <Lock className="h-3.5 w-3.5" aria-hidden="true" /> Güvenli ödeme
+                        </span>
+                    </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left: Form */}
-                    <div className="lg:col-span-2 space-y-6">
-                        <form onSubmit={handleSubmit}>
-                            {/* Customer Info */}
-                            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
-                                <div className="flex items-center gap-3 mb-6">
-                                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                                        <User className="w-5 h-5 text-blue-600" />
-                                    </div>
-                                    <h2 className="text-lg font-bold text-slate-900">Müşteri Bilgileri</h2>
+                    <div className="mt-4 lg:mt-6 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8">
+                        {/* Order summary: collapsible bar on mobile (top), sticky card on desktop (right) */}
+                        <aside aria-label="Sipariş özeti" className="lg:sticky lg:top-[88px] lg:col-span-5 lg:col-start-8 lg:row-start-1">
+                            <div className="rounded-sheet border border-line bg-white shadow-card">
+                                <h2 className="lg:hidden">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSummaryOpen(open => !open)}
+                                        aria-expanded={summaryOpen}
+                                        aria-controls="checkout-summary-body"
+                                        className="flex min-h-14 w-full items-center justify-between gap-3 rounded-sheet px-4 py-3 text-left"
+                                    >
+                                        <span className="flex min-w-0 items-center gap-2.5">
+                                            <ShoppingBag className="h-5 w-5 shrink-0 text-brand-600" aria-hidden="true" />
+                                            <span className="text-[15px] font-semibold text-ink">
+                                                Sipariş özeti <span className="font-normal text-muted">({itemCount} ürün)</span>
+                                            </span>
+                                        </span>
+                                        <span className="flex shrink-0 items-center gap-1.5">
+                                            <span className="type-price text-ink">{formatTL(finalTotal)}</span>
+                                            <ChevronDown className={cn('h-5 w-5 text-muted transition-transform duration-200', summaryOpen && 'rotate-180')} aria-hidden="true" />
+                                        </span>
+                                    </button>
+                                </h2>
+                                <h2 className="hidden px-6 pt-6 type-h3 text-ink lg:block">
+                                    Sipariş özeti <span className="font-normal text-muted">({itemCount} ürün)</span>
+                                </h2>
+
+                                <div id="checkout-summary-body" className={cn('border-t border-line px-4 pb-4 lg:block lg:border-t-0 lg:px-6 lg:pb-6', summaryOpen ? 'block' : 'hidden')}>
+                                    <ul className="divide-y divide-line lg:max-h-[340px] lg:overflow-y-auto lg:pr-1">
+                                        {items.map((item, idx) => (
+                                            <li key={idx} className="flex gap-3 py-3.5">
+                                                <Link
+                                                    href={item.slug ? `/${item.slug}/` : `/product/${item.id}/`}
+                                                    target="_blank"
+                                                    rel="noopener"
+                                                    className="relative block h-16 w-16 shrink-0 rounded-thumb border border-line bg-white p-1.5"
+                                                    aria-label={`${item.name} (yeni sekmede açılır)`}
+                                                >
+                                                    <FallbackImage
+                                                        src={productImageUrl(item.image, 200)}
+                                                        fallbackSrc={originalImageUrl(item.image)}
+                                                        alt=""
+                                                        width={64}
+                                                        height={64}
+                                                        loading="lazy"
+                                                        className="h-full w-full object-contain"
+                                                    />
+                                                    <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-[11px] font-bold leading-none text-white tabular" aria-hidden="true">
+                                                        {item.quantity}
+                                                    </span>
+                                                </Link>
+                                                <div className="min-w-0 flex-1">
+                                                    <Link
+                                                        href={item.slug ? `/${item.slug}/` : `/product/${item.id}/`}
+                                                        target="_blank"
+                                                        rel="noopener"
+                                                        className="line-clamp-2 text-sm font-medium leading-5 text-ink hover:text-brand-600 hover:underline"
+                                                    >
+                                                        {item.name}
+                                                    </Link>
+                                                    <p className="mt-1 text-[13px] leading-5 text-muted tabular">
+                                                        {item.quantity} adet × {formatTL(unitPrice(item.price))}
+                                                    </p>
+                                                </div>
+                                                <p className="shrink-0 text-[15px] font-bold leading-5 text-ink tabular">{formatTL(cartLineTotal(item))}</p>
+                                            </li>
+                                        ))}
+                                    </ul>
+
+                                    {/* Coupon Input - hidden: the order API does not apply coupons (COUPONS_ENABLED in store/cart-store.ts) */}
+                                    {COUPONS_ENABLED && <div className="border-t border-line py-4">
+                                        {coupon ? (
+                                            <div className="flex items-center justify-between rounded-card border border-success/20 bg-success-50 p-3">
+                                                <div className="flex items-center gap-2">
+                                                    <Ticket className="h-4 w-4 text-success" aria-hidden="true" />
+                                                    <div>
+                                                        <p className="text-sm font-bold text-success">{coupon.code}</p>
+                                                        <p className="text-xs text-success">
+                                                            {coupon.discountType === 'percent' ? `%${coupon.discountValue} İndirim` : `${coupon.discountValue} TL İndirim`}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={removeCoupon}
+                                                    aria-label="Kuponu kaldır"
+                                                    className="inline-flex h-11 w-11 items-center justify-center rounded-card text-danger hover:bg-sale-50"
+                                                >
+                                                    <X className="h-4 w-4" aria-hidden="true" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex gap-2">
+                                                <input
+                                                    placeholder="Kupon kodu"
+                                                    aria-label="Kupon kodu"
+                                                    value={couponCode}
+                                                    onChange={e => setCouponCode(e.target.value)}
+                                                    className={cn(inputClass, 'h-11 flex-1')}
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="outline-ink"
+                                                    size="44"
+                                                    disabled={verifying}
+                                                    onClick={handleApplyCoupon}
+                                                >
+                                                    {verifying ? '...' : 'Uygula'}
+                                                </Button>
+                                            </div>
+                                        )}
+                                        {couponError && <p className="mt-2 text-xs text-danger">{couponError}</p>}
+                                    </div>}
+
+                                    <dl className="space-y-2.5 border-t border-line pt-4 text-sm">
+                                        <div className="flex justify-between gap-4">
+                                            <dt className="text-muted">Ara toplam</dt>
+                                            <dd className="font-medium text-ink tabular">{formatTL(subtotal)}</dd>
+                                        </div>
+                                        <div className="flex justify-between gap-4">
+                                            <dt className="text-muted">Kargo</dt>
+                                            {shippingCost === 0 ? (
+                                                <dd className="font-semibold text-success">Bedava</dd>
+                                            ) : (
+                                                <dd className="font-medium text-ink tabular">{formatTL(shippingCost)}</dd>
+                                            )}
+                                        </div>
+                                        {COUPONS_ENABLED && coupon && (
+                                            <div className="flex justify-between gap-4 text-success">
+                                                <dt>İndirim ({coupon.code})</dt>
+                                                <dd className="tabular">-{formatTL(calculateDiscount())}</dd>
+                                            </div>
+                                        )}
+                                        <div className="flex items-baseline justify-between gap-4 border-t border-line pt-3.5">
+                                            <dt className="text-base font-bold text-ink">
+                                                Toplam <span className="text-xs font-normal text-muted">(KDV dahil)</span>
+                                            </dt>
+                                            <dd className="text-xl font-extrabold text-ink tabular">{formatTL(finalTotal)}</dd>
+                                        </div>
+                                    </dl>
+
+                                    {shippingCost > 0 && freeThreshold > subtotal && (
+                                        <p className="mt-3.5 flex items-start gap-2 rounded-card bg-brand-50 px-3 py-2.5 text-[13px] leading-5 text-brand-700">
+                                            <Truck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                                            <span>
+                                                {formatThreshold(freeThreshold)} ve üzeri siparişlerde kargo bedava. Bedava kargo için{' '}
+                                                <strong className="font-semibold tabular">{formatTL(freeThreshold - subtotal)}</strong> kaldı.
+                                            </span>
+                                        </p>
+                                    )}
                                 </div>
+                            </div>
+                        </aside>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                                            Ad Soyad <span className="text-red-500">*</span>
-                                        </label>
-                                        <div className="relative">
-                                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        {/* Form */}
+                        <div className="mt-4 lg:col-span-7 lg:row-start-1 lg:mt-0">
+                            <form onSubmit={handleSubmit} className="space-y-4 lg:space-y-5">
+                                {error && <FormAlert>{error}</FormAlert>}
+
+                                <StepCard step={1} title="Teslimat bilgileri" description="Siparişin bu adrese gönderilir.">
+                                    <SubHeading>İletişim</SubHeading>
+                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <Field id="checkout-fullName" label="Ad soyad" required error={fieldError('fullName')} className="sm:col-span-2">
                                             <input
                                                 type="text"
                                                 name="fullName"
                                                 value={formData.fullName}
                                                 onChange={handleInputChange}
                                                 required
-                                                className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
-                                                placeholder="Adınız Soyadınız"
+                                                autoComplete="name"
+                                                className={inputClass}
+                                                placeholder="Adın ve soyadın"
                                             />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                                            E-posta <span className="text-red-500">*</span>
-                                        </label>
-                                        <div className="relative">
-                                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                        </Field>
+                                        <Field id="checkout-email" label="E-posta" required error={fieldError('email')} hint="Sipariş onayı bu adrese gelir.">
                                             <input
                                                 type="email"
                                                 name="email"
                                                 value={formData.email}
                                                 onChange={handleInputChange}
                                                 required
-                                                className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
-                                                placeholder="email@example.com"
+                                                autoComplete="email"
+                                                inputMode="email"
+                                                className={inputClass}
+                                                placeholder="ornek@eposta.com"
                                             />
-                                        </div>
-                                    </div>
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                                            Telefon <span className="text-red-500">*</span>
-                                        </label>
-                                        <div className="relative">
-                                            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                        </Field>
+                                        <Field id="checkout-phone" label="Telefon" required error={fieldError('phone')} hint="Kargo ve sipariş bilgilendirmesi için.">
                                             <input
                                                 type="tel"
                                                 name="phone"
                                                 value={formData.phone}
                                                 onChange={handleInputChange}
                                                 required
-                                                className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
+                                                autoComplete="tel"
+                                                className={inputClass}
                                                 placeholder="05XX XXX XX XX"
                                             />
+                                        </Field>
+                                    </div>
+
+                                    <div className="mt-6 border-t border-line pt-5">
+                                        <SubHeading>Teslimat adresi</SubHeading>
+                                        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                                            <Field id="checkout-city" label="İl" required error={fieldError('city')}>
+                                                <input
+                                                    type="text"
+                                                    name="city"
+                                                    value={formData.city}
+                                                    onChange={handleInputChange}
+                                                    required
+                                                    autoComplete="shipping address-level1"
+                                                    className={inputClass}
+                                                    placeholder="örn. İstanbul"
+                                                />
+                                            </Field>
+                                            <Field id="checkout-district" label="İlçe" required error={fieldError('district')}>
+                                                <input
+                                                    type="text"
+                                                    name="district"
+                                                    value={formData.district}
+                                                    onChange={handleInputChange}
+                                                    required
+                                                    autoComplete="shipping address-level2"
+                                                    className={inputClass}
+                                                    placeholder="örn. Kadıköy"
+                                                />
+                                            </Field>
+                                            <Field id="checkout-address" label="Adres" className="col-span-2">
+                                                <textarea
+                                                    name="address"
+                                                    value={formData.address}
+                                                    onChange={handleInputChange}
+                                                    rows={2}
+                                                    autoComplete="shipping street-address"
+                                                    className={textareaClass}
+                                                    placeholder="Mahalle, sokak, bina no, daire no"
+                                                />
+                                            </Field>
+                                            <Field id="checkout-postalCode" label="Posta kodu" optional className="col-span-2 sm:col-span-1">
+                                                <input
+                                                    type="text"
+                                                    name="postalCode"
+                                                    value={formData.postalCode}
+                                                    onChange={handleInputChange}
+                                                    autoComplete="shipping postal-code"
+                                                    inputMode="numeric"
+                                                    className={inputClass}
+                                                    placeholder="örn. 34000"
+                                                />
+                                            </Field>
+                                            <Field id="checkout-note" label="Sipariş notu" optional className="col-span-2 sm:col-span-1">
+                                                <input
+                                                    type="text"
+                                                    name="note"
+                                                    value={formData.note}
+                                                    onChange={handleInputChange}
+                                                    autoComplete="off"
+                                                    className={inputClass}
+                                                    placeholder="Kurye için not"
+                                                />
+                                            </Field>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
+                                </StepCard>
 
-                            {/* Shipping Address */}
-                            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
-                                <div className="flex items-center gap-3 mb-6">
-                                    <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
-                                        <Truck className="w-5 h-5 text-green-600" />
-                                    </div>
-                                    <h2 className="text-lg font-bold text-slate-900">Teslimat Adresi</h2>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">İl <span className="text-red-500">*</span></label>
+                                <StepCard step={2} title="Fatura bilgileri" description="Faturan bu bilgilerle düzenlenir.">
+                                    <Field
+                                        id="checkout-tcIdentity"
+                                        label="T.C. kimlik no"
+                                        optional
+                                        hint="Bireysel faturan için. Boş bırakabilirsin."
+                                    >
                                         <input
                                             type="text"
-                                            name="city"
-                                            value={formData.city}
+                                            name="tcIdentity"
+                                            value={formData.tcIdentity}
                                             onChange={handleInputChange}
-                                            required
-                                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
-                                            placeholder="İstanbul"
+                                            autoComplete="off"
+                                            inputMode="numeric"
+                                            className={inputClass}
+                                            placeholder="11 haneli T.C. kimlik numaran"
+                                            maxLength={11}
                                         />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">İlçe <span className="text-red-500">*</span></label>
-                                        <input
-                                            type="text"
-                                            name="district"
-                                            value={formData.district}
-                                            onChange={handleInputChange}
-                                            required
-                                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
-                                            placeholder="Kadıköy"
-                                        />
-                                    </div>
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Adres</label>
-                                        <div className="relative">
-                                            <MapPin className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
-                                            <textarea
-                                                name="address"
-                                                value={formData.address}
-                                                onChange={handleInputChange}
-                                                rows={2}
-                                                className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none resize-none"
-                                                placeholder="Mahalle, Sokak, Bina No, Daire No"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Posta Kodu</label>
-                                        <input
-                                            type="text"
-                                            name="postalCode"
-                                            value={formData.postalCode}
-                                            onChange={handleInputChange}
-                                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
-                                            placeholder="34000"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Sipariş Notu</label>
-                                        <input
-                                            type="text"
-                                            name="note"
-                                            value={formData.note}
-                                            onChange={handleInputChange}
-                                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
-                                            placeholder="Opsiyonel not..."
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                                    </Field>
 
-                            {/* Invoice Address Section */}
-                            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-                                        <MapPin className="w-5 h-5 text-orange-600" />
-                                    </div>
-                                    <h2 className="text-lg font-bold text-slate-900">Fatura Bilgileri</h2>
-                                </div>
-
-                                {/* TC Identity */}
-                                <div className="mb-4">
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                                        TC Kimlik No <span className="text-slate-400 font-normal">(Opsiyonel)</span>
+                                    {/* Different Billing Address Checkbox */}
+                                    <label className="mt-4 flex min-h-11 cursor-pointer items-center gap-3 rounded-card border border-line px-3.5 py-2.5 transition-colors hover:border-line-strong has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.wantsDifferentBillingAddress}
+                                            onChange={(e) => setFormData({ ...formData, wantsDifferentBillingAddress: e.target.checked })}
+                                            className={checkboxClass}
+                                        />
+                                        <span className="text-sm font-medium text-ink-2">Fatura adresim teslimat adresinden farklı</span>
                                     </label>
-                                    <input
-                                        type="text"
-                                        name="tcIdentity"
-                                        value={formData.tcIdentity}
-                                        onChange={handleInputChange}
-                                        className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
-                                        placeholder="Kurumsal fatura için zorunlu"
-                                        maxLength={11}
-                                    />
-                                </div>
 
-                                {/* Different Billing Address Checkbox */}
-                                <label className="flex items-center gap-3 cursor-pointer mb-4">
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.wantsDifferentBillingAddress}
-                                        onChange={(e) => setFormData({ ...formData, wantsDifferentBillingAddress: e.target.checked })}
-                                        className="w-5 h-5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                                    />
-                                    <span className="text-sm text-slate-700">Fatura adresim teslimat adresinden farklı</span>
-                                </label>
-
-                                {/* Billing Address Fields (conditional) */}
-                                {formData.wantsDifferentBillingAddress && (
-                                    <div className="space-y-4 pt-4 border-t border-slate-100">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-1">Fatura İl <span className="text-red-500">*</span></label>
+                                    {/* Billing Address Fields (conditional) */}
+                                    {formData.wantsDifferentBillingAddress && (
+                                        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-5 sm:gap-4">
+                                            <Field id="checkout-billingCity" label="Fatura ili" required error={fieldError('billingCity')}>
                                                 <input
                                                     type="text"
                                                     name="billingCity"
                                                     value={formData.billingCity}
                                                     onChange={handleInputChange}
                                                     required
-                                                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
-                                                    placeholder="İstanbul"
+                                                    autoComplete="billing address-level1"
+                                                    className={inputClass}
+                                                    placeholder="örn. İstanbul"
                                                 />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-1">Fatura İlçe <span className="text-red-500">*</span></label>
+                                            </Field>
+                                            <Field id="checkout-billingDistrict" label="Fatura ilçesi" required error={fieldError('billingDistrict')}>
                                                 <input
                                                     type="text"
                                                     name="billingDistrict"
                                                     value={formData.billingDistrict}
                                                     onChange={handleInputChange}
                                                     required
-                                                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
-                                                    placeholder="Kadıköy"
+                                                    autoComplete="billing address-level2"
+                                                    className={inputClass}
+                                                    placeholder="örn. Kadıköy"
                                                 />
-                                            </div>
+                                            </Field>
+                                            <Field id="checkout-billingAddress" label="Fatura adresi" required error={fieldError('billingAddress')} className="col-span-2">
+                                                <textarea
+                                                    name="billingAddress"
+                                                    value={formData.billingAddress}
+                                                    onChange={handleInputChange}
+                                                    required
+                                                    autoComplete="billing street-address"
+                                                    className={textareaClass}
+                                                    rows={2}
+                                                    placeholder="Mahalle, sokak, bina no, daire no"
+                                                />
+                                            </Field>
                                         </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Fatura Adresi <span className="text-red-500">*</span></label>
-                                            <textarea
-                                                name="billingAddress"
-                                                value={formData.billingAddress}
-                                                onChange={handleInputChange}
-                                                required
-                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none resize-none"
-                                                rows={2}
-                                                placeholder="Mahalle, Sokak, Bina No, Daire..."
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
+                                </StepCard>
 
-                            {/* Payment Method */}
-                            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
-                                <div className="flex items-center gap-3 mb-6">
-                                    <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                                        <CreditCard className="w-5 h-5 text-purple-600" />
-                                    </div>
-                                    <h2 className="text-lg font-bold text-slate-900">Ödeme Yöntemi</h2>
-                                </div>
-
-                                <div className="space-y-3">
+                                <StepCard step={3} title="Ödeme">
                                     {/* Card Payment - Always shown when PayTR is active */}
-                                    {paymentSettings?.is_active && paymentSettings?.provider !== 'offline' ? (
-                                        <div className="flex items-center gap-4 p-4 rounded-xl border-2 border-purple-500 bg-purple-50">
-                                            <div className="w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center">
-                                                <Check className="w-3 h-3 text-white" />
-                                            </div>
-                                            <div className="flex-1">
-                                                <p className="font-semibold text-slate-900">Kredi / Banka Kartı</p>
-                                                <p className="text-sm text-slate-500">
-                                                    {paymentSettings.provider === 'paytr' ? 'PayTR' : 'Iyzico'} güvenli ödeme ile ödeyin
+                                    {cardPaymentActive ? (
+                                        <div className="flex items-center gap-3.5 rounded-card border-2 border-brand-600 bg-brand-50 p-4">
+                                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-600" aria-hidden="true">
+                                                <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                                            </span>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-semibold text-ink">Kredi / banka kartı</p>
+                                                <p className="text-[13px] leading-5 text-muted">
+                                                    {providerName} güvenli ödeme ile öde. Kart bilgilerini bir sonraki adımda gireceksin.
                                                 </p>
                                             </div>
-                                            <CreditCard className="w-6 h-6 text-purple-600" />
+                                            <CreditCard className="h-6 w-6 shrink-0 text-brand-600" aria-hidden="true" />
                                         </div>
                                     ) : (
-                                        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
-                                            <p className="text-sm text-amber-800">
-                                                <strong>Ödeme sistemi henüz aktif değil.</strong> Lütfen daha sonra tekrar deneyin.
-                                            </p>
-                                        </div>
+                                        <FormAlert tone="info">
+                                            <strong>Ödeme sistemi henüz aktif değil.</strong> Lütfen daha sonra tekrar deneyin.
+                                        </FormAlert>
                                     )}
-                                </div>
-                            </div>
 
-                            {error && (
-                                <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl mb-6">
-                                    {error}
-                                </div>
-                            )}
-
-                            <Button
-                                type="submit"
-                                disabled={loading}
-                                className="w-full h-14 text-lg bg-slate-900 text-white hover:bg-slate-800 rounded-xl"
-                            >
-                                {loading ? 'İşleniyor...' : `Siparişi Tamamla - ${formatPrice(finalTotal, false)}`}
-                            </Button>
-                        </form>
-                    </div>
-
-                    {/* Right: Order Summary */}
-                    <div className="lg:col-span-1">
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 sticky top-24">
-                            <h2 className="text-lg font-bold text-slate-900 mb-4">Sipariş Özeti</h2>
-
-                            <div className="space-y-4 mb-6">
-                                {items.map((item, idx) => (
-                                    <div key={idx} className="flex gap-3">
-                                        <Link href={`/${item.slug || 'product/' + item.id}`} target="_blank" className="block w-16 h-16 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0 hover:opacity-80 transition-opacity">
-                                            <img
-                                                src={item.image || '/placeholder.svg'}
-                                                alt={item.name}
-                                                className="w-full h-full object-cover"
-                                            />
-                                        </Link>
-                                        <div className="flex-1 min-w-0">
-                                            <Link href={`/${item.slug || 'product/' + item.id}`} target="_blank" className="text-sm font-medium text-slate-900 hover:text-blue-600 hover:underline block mb-1">
-                                                {item.name}
-                                            </Link>
-                                            <p className="text-sm text-slate-500">Adet: {item.quantity}</p>
-                                            <p className="text-sm font-bold text-slate-900">{formatPrice(cartLineTotal(item), false)}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Coupon Input - hidden: the order API does not apply coupons (COUPONS_ENABLED in store/cart-store.ts) */}
-                            {COUPONS_ENABLED && <div className="mb-6 border-b border-slate-100 pb-6">
-                                {coupon ? (
-                                    <div className="flex items-center justify-between bg-green-50 p-3 rounded-xl border border-green-100">
-                                        <div className="flex items-center gap-2">
-                                            <Ticket className="w-4 h-4 text-green-600" />
-                                            <div>
-                                                <p className="text-sm font-bold text-green-700">{coupon.code}</p>
-                                                <p className="text-xs text-green-600">
-                                                    {coupon.discountType === 'percent' ? `%${coupon.discountValue} İndirim` : `${coupon.discountValue} TL İndirim`}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={removeCoupon}
-                                            className="text-red-500 hover:text-red-700 p-1"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="flex gap-2">
-                                        <input
-                                            placeholder="Kupon Kodu"
-                                            value={couponCode}
-                                            onChange={e => setCouponCode(e.target.value)}
-                                            className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-slate-900"
-                                        />
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="outline"
-                                            disabled={verifying}
-                                            onClick={handleApplyCoupon}
-                                        >
-                                            {verifying ? '...' : 'Uygula'}
-                                        </Button>
-                                    </div>
-                                )}
-                                {couponError && <p className="text-xs text-red-500 mt-2">{couponError}</p>}
-                            </div>}
-
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">Ara Toplam</span>
-                                    <span className="text-slate-900">{formatPrice(subtotal, false)}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">Kargo</span>
-                                    {shippingCost === 0 ? (
-                                        <span className="text-green-600">Ücretsiz</span>
-                                    ) : (
-                                        <span className="text-slate-900">{formatPrice(shippingCost, false)}</span>
-                                    )}
-                                </div>
-                                {COUPONS_ENABLED && coupon && (
-                                    <div className="flex justify-between text-sm text-green-600">
-                                        <span>İndirim ({coupon.code})</span>
-                                        <span>-{formatPrice(calculateDiscount(), false)}</span>
-                                    </div>
-                                )}
-                                <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-100">
-                                    <span className="text-slate-900">Toplam</span>
-                                    <span className="text-slate-900">{formatPrice(finalTotal, false)}</span>
-                                </div>
-                            </div>
+                                    <Button
+                                        type="submit"
+                                        variant="brand"
+                                        size="52"
+                                        fullWidth
+                                        isLoading={loading}
+                                        disabled={loading}
+                                        className="mt-5 text-base"
+                                    >
+                                        {loading ? (
+                                            'İşleniyor...'
+                                        ) : (
+                                            <>
+                                                <Lock className="h-[18px] w-[18px]" aria-hidden="true" />
+                                                {cardPaymentActive ? 'Ödemeye geç' : 'Siparişi tamamla'}
+                                                <span aria-hidden="true" className="opacity-60">·</span>
+                                                <span className="tabular">{formatTL(finalTotal)}</span>
+                                            </>
+                                        )}
+                                    </Button>
+                                    <TrustNote provider={providerName} className="mt-3" />
+                                </StepCard>
+                            </form>
                         </div>
                     </div>
                 </div>

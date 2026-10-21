@@ -1,335 +1,153 @@
-'use client'
-
-import * as React from 'react'
+import type { Metadata } from 'next'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { User, Heart, Package, LogOut, ChevronRight, ShoppingBag, MapPin, Phone, Save } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { formatPrice } from '@/lib/formatPrice'
+import { redirect } from 'next/navigation'
+import { ChevronRight, Heart, Mail, Package, UserRound } from 'lucide-react'
+import { AccountShell } from '@/components/account/AccountShell'
+import { ProfileForm } from '@/components/account/ProfileForm'
+import { ProductCard } from '@/components/product/ProductCard'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { countAccountOrders, getFavoriteProductIds, getSessionUser } from '@/lib/account'
+import { getActiveProducts, getShippingSettings, type Product } from '@/lib/catalog'
+import { formatDateTR } from '@/lib/format'
+import { privatePageMetadata } from '@/lib/seo'
 
-export default function ProfilePage() {
-    const router = useRouter()
-    const [user, setUser] = React.useState<any>(null)
-    const [favorites, setFavorites] = React.useState<any[]>([])
-    const [loading, setLoading] = React.useState(true)
-    const [redirecting, setRedirecting] = React.useState(false)
-    const [activeTab, setActiveTab] = React.useState<'profile' | 'favorites'>('profile')
+type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
-    // Profile edit state
-    const [phone, setPhone] = React.useState('')
-    const [address, setAddress] = React.useState('')
-    const [city, setCity] = React.useState('')
-    const [district, setDistrict] = React.useState('')
-    const [postalCode, setPostalCode] = React.useState('')
-    const [saving, setSaving] = React.useState(false)
-    const [saveSuccess, setSaveSuccess] = React.useState(false)
+function tabOf(sp: Record<string, string | string[] | undefined>): 'profile' | 'favorites' {
+    const tab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab
+    return tab === 'favorites' || tab === 'favoriler' ? 'favorites' : 'profile'
+}
 
-    React.useEffect(() => {
-        // Check auth
-        fetch('/api/auth/me')
-            .then(res => {
-                if (!res.ok) throw new Error('Not logged in')
-                return res.json()
-            })
-            .then(data => {
-                setUser(data.user)
-                setPhone(data.user.phone || '')
-                setAddress(data.user.address || '')
-                setCity(data.user.city || '')
-                setDistrict(data.user.district || '')
-                setPostalCode(data.user.postal_code || '')
-                setLoading(false)
-            })
-            .catch(() => {
-                setRedirecting(true)
-                setLoading(false)
-                // Use window.location for reliable redirect clearing any client state
-                window.location.href = '/login?redirect=/profile'
-            })
+export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
+    const tab = tabOf(await searchParams)
+    return { title: tab === 'favorites' ? 'Favorilerim' : 'Hesabım', ...privatePageMetadata }
+}
 
-        // Fetch favorites
-        fetch('/api/favorites')
-            .then(res => res.json())
-            .then(data => {
-                if (data.favorites) setFavorites(data.favorites)
-            })
-            .catch(console.error)
-    }, [router])
-
-    const handleLogout = async () => {
-        await fetch('/api/auth/logout', { method: 'POST' })
-        router.push('/')
+export default async function ProfilePage({ searchParams }: { searchParams: SearchParams }) {
+    const tab = tabOf(await searchParams)
+    const user = await getSessionUser()
+    if (!user) {
+        redirect(`/login/?redirect=${encodeURIComponent(tab === 'favorites' ? '/profile/?tab=favorites' : '/profile/')}`)
     }
 
-    const handleSaveProfile = async () => {
-        setSaving(true)
-        setSaveSuccess(false)
-        try {
-            const res = await fetch('/api/user/update-profile', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone, address, city, district, postal_code: postalCode })
-            })
-            if (res.ok) {
-                const data = await res.json()
-                setUser(data.user)
-                setSaveSuccess(true)
-                setTimeout(() => setSaveSuccess(false), 3000)
-            }
-        } catch (err) {
-            console.error('Save error:', err)
-        } finally {
-            setSaving(false)
-        }
-    }
+    const [favoriteIds, products] = await Promise.all([getFavoriteProductIds(user.id), getActiveProducts()])
+    const byId = new Map(products.map(p => [p.id, p]))
+    const favorites = favoriteIds.map(id => byId.get(id)).filter((p): p is Product => !!p)
 
-    const removeFavorite = async (productId: number) => {
-        await fetch('/api/favorites', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ productId })
-        })
-        setFavorites(favorites.filter(f => f.product_id !== productId))
-    }
-
-    if (loading) {
+    if (tab === 'favorites') {
+        const shipping = await getShippingSettings()
         return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="text-slate-500">Yükleniyor...</div>
-            </div>
+            <AccountShell
+                user={user}
+                active="favorites"
+                title="Favorilerim"
+                description={favorites.length ? `${favorites.length} ürün` : undefined}
+            >
+                {favorites.length === 0 ? (
+                    <div className="rounded-sheet border border-line bg-white shadow-card">
+                        <EmptyState
+                            icon={<Heart />}
+                            title="Henüz favorin yok"
+                            description="Beğendiğin ürünlerdeki kalbe dokun; hepsi burada seni bekler."
+                            action={{ label: 'Ürünleri keşfet', href: '/products/' }}
+                        />
+                    </div>
+                ) : (
+                    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:gap-5">
+                        {favorites.map((product, i) => (
+                            <li key={product.id} className="flex">
+                                <ProductCard
+                                    product={product}
+                                    priority={i < 3}
+                                    headingLevel="h2"
+                                    freeShippingThreshold={shipping.freeShippingThreshold}
+                                    sizes="(max-width: 640px) 46vw, (max-width: 1024px) 31vw, 280px"
+                                    className="w-full"
+                                />
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </AccountShell>
         )
     }
 
-    if (redirecting) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="text-slate-500">Giriş sayfasına yönlendiriliyorsunuz...</div>
-            </div>
-        )
-    }
+    const orderCount = await countAccountOrders(user)
+    const memberSince = formatDateTR(user.createdAt)
 
     return (
-        <div className="min-h-screen bg-slate-50 py-8">
-            <div className="container mx-auto px-4 max-w-4xl">
-                {/* Header */}
-                <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm border border-slate-100">
-                    <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white text-2xl font-bold">
-                            {user?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
-                        </div>
-                        <div className="flex-1">
-                            <h1 className="text-xl font-bold text-slate-900">{user?.full_name || 'Kullanıcı'}</h1>
-                            <p className="text-slate-500">{user?.email}</p>
-                            {user?.role === 'admin' && (
-                                <span className="inline-block mt-1 px-2 py-0.5 bg-slate-900 text-white text-xs rounded-full">
-                                    Admin
-                                </span>
-                            )}
-                        </div>
-                        <Button variant="outline" onClick={handleLogout} className="gap-2">
-                            <LogOut className="w-4 h-4" />
-                            Çıkış Yap
-                        </Button>
-                    </div>
-                </div>
-
-                {/* Tabs */}
-                <div className="flex gap-2 mb-6">
-                    <button
-                        onClick={() => setActiveTab('profile')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors ${activeTab === 'profile'
-                            ? 'bg-slate-900 text-white'
-                            : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                            }`}
-                    >
-                        <User className="w-4 h-4" />
-                        Profilim
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('favorites')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors ${activeTab === 'favorites'
-                            ? 'bg-slate-900 text-white'
-                            : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                            }`}
-                    >
-                        <Heart className="w-4 h-4" />
-                        Beğendiklerim
-                        {favorites.length > 0 && (
-                            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                                {favorites.length}
-                            </span>
-                        )}
-                    </button>
-                </div>
-
-                {/* Content */}
-                {activeTab === 'profile' && (
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                        {/* Menu Items */}
-                        <a href="/orders" className="flex items-center justify-between p-4 hover:bg-slate-50 border-b border-slate-100">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                                    <Package className="w-5 h-5 text-blue-600" />
-                                </div>
-                                <div>
-                                    <p className="font-semibold text-slate-900">Siparişlerim</p>
-                                    <p className="text-sm text-slate-500">Sipariş geçmişinizi görüntüleyin</p>
-                                </div>
-                            </div>
-                            <ChevronRight className="w-5 h-5 text-slate-400" />
-                        </a>
-
-                        {user?.role === 'admin' && (
-                            <a href="/admin" className="flex items-center justify-between p-4 hover:bg-slate-50 border-b border-slate-100">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                                        <User className="w-5 h-5 text-purple-600" />
-                                    </div>
-                                    <div>
-                                        <p className="font-semibold text-slate-900">Admin Paneli</p>
-                                        <p className="text-sm text-slate-500">Ürün ve sipariş yönetimi</p>
-                                    </div>
-                                </div>
-                                <ChevronRight className="w-5 h-5 text-slate-400" />
-                            </a>
-                        )}
-
-                        <Link href="/products" className="flex items-center justify-between p-4 hover:bg-slate-50">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
-                                    <ShoppingBag className="w-5 h-5 text-green-600" />
-                                </div>
-                                <div>
-                                    <p className="font-semibold text-slate-900">Alışverişe Devam Et</p>
-                                    <p className="text-sm text-slate-500">Ürünlere göz atın</p>
-                                </div>
-                            </div>
-                            <ChevronRight className="w-5 h-5 text-slate-400" />
-                        </Link>
-
-                        {/* Profile Edit Form */}
-                        <div className="border-t border-slate-100 p-4">
-                            <h3 className="font-semibold text-slate-900 mb-4">Bilgilerimi Düzenle</h3>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1">
-                                        <Phone className="w-4 h-4" /> Telefon
-                                    </label>
-                                    <input
-                                        type="tel"
-                                        value={phone}
-                                        onChange={(e) => setPhone(e.target.value)}
-                                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                                        placeholder="05XX XXX XX XX"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1">
-                                        <MapPin className="w-4 h-4" /> Adres (Cadde/Sokak/No)
-                                    </label>
-                                    <textarea
-                                        value={address}
-                                        onChange={(e) => setAddress(e.target.value)}
-                                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10 resize-none"
-                                        rows={2}
-                                        placeholder="Mahalle, Sokak, No, Daire..."
-                                    />
-                                </div>
-                                <div className="grid grid-cols-3 gap-3">
-                                    <div>
-                                        <label className="text-sm font-medium text-slate-700 mb-1 block">İl</label>
-                                        <input
-                                            type="text"
-                                            value={city}
-                                            onChange={(e) => setCity(e.target.value)}
-                                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                                            placeholder="İstanbul"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-medium text-slate-700 mb-1 block">İlçe</label>
-                                        <input
-                                            type="text"
-                                            value={district}
-                                            onChange={(e) => setDistrict(e.target.value)}
-                                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                                            placeholder="Kadıköy"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-medium text-slate-700 mb-1 block">Posta Kodu</label>
-                                        <input
-                                            type="text"
-                                            value={postalCode}
-                                            onChange={(e) => setPostalCode(e.target.value)}
-                                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                                            placeholder="34000"
-                                        />
-                                    </div>
-                                </div>
-                                <Button
-                                    onClick={handleSaveProfile}
-                                    disabled={saving}
-                                    className={`gap-2 w-full ${saveSuccess ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-900 hover:bg-slate-800'}`}
-                                >
-                                    <Save className="w-4 h-4" />
-                                    {saving ? 'Kaydediliyor...' : saveSuccess ? 'Kaydedildi!' : 'Değişiklikleri Kaydet'}
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {activeTab === 'favorites' && (
-                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-                        <h2 className="text-lg font-bold text-slate-900 mb-4">
-                            Beğendiğim Ürünler ({favorites.length})
-                        </h2>
-
-                        {favorites.length === 0 ? (
-                            <div className="text-center py-12">
-                                <Heart className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                                <p className="text-slate-500 mb-4">Henüz beğendiğiniz ürün yok</p>
-                                <Link href="/products">
-                                    <Button className="bg-slate-900 text-white hover:bg-slate-800">
-                                        Ürünlere Göz At
-                                    </Button>
-                                </Link>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                {favorites.map(product => (
-                                    <div key={product.product_id} className="group relative bg-slate-50 rounded-xl overflow-hidden">
-                                        <Link href={`/product/${product.product_id}`}>
-                                            <div className="aspect-square relative">
-                                                <img
-                                                    src={product.images?.[0] || '/placeholder.svg'}
-                                                    alt={product.name}
-                                                    className="w-full h-full object-cover"
-                                                />
-                                            </div>
-                                            <div className="p-3">
-                                                <h3 className="font-medium text-slate-900 text-sm line-clamp-2 mb-1">
-                                                    {product.name}
-                                                </h3>
-                                                <p className="font-bold text-slate-900">
-                                                    {formatPrice(product.price)}
-                                                </p>
-                                            </div>
-                                        </Link>
-                                        <button
-                                            onClick={() => removeFavorite(product.product_id)}
-                                            className="absolute top-2 right-2 p-2 bg-white rounded-full shadow-md hover:bg-red-50 transition-colors"
-                                        >
-                                            <Heart className="w-4 h-4 text-red-500 fill-red-500" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
+        <AccountShell user={user} active="profile" title="Hesabım" description={memberSince ? `${memberSince} tarihinden beri üyesin` : undefined}>
+            <div className="grid grid-cols-2 gap-3 lg:gap-4">
+                <Link
+                    href="/orders/"
+                    className="group flex items-center gap-3 rounded-sheet border border-line bg-white p-4 shadow-card transition-colors hover:border-line-strong lg:p-5"
+                >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-card bg-brand-50 text-brand-600" aria-hidden="true">
+                        <Package className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                        <span className="block text-[15px] font-semibold text-ink">Siparişlerim</span>
+                        <span className="block text-[13px] text-muted">{orderCount ? `${orderCount} sipariş` : 'Henüz sipariş yok'}</span>
+                    </span>
+                    <ChevronRight className="hidden h-5 w-5 shrink-0 text-subtle transition-transform group-hover:translate-x-0.5 sm:block" aria-hidden="true" />
+                </Link>
+                <Link
+                    href="/profile/?tab=favorites"
+                    className="group flex items-center gap-3 rounded-sheet border border-line bg-white p-4 shadow-card transition-colors hover:border-line-strong lg:p-5"
+                >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-card bg-sale-50 text-sale" aria-hidden="true">
+                        <Heart className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                        <span className="block text-[15px] font-semibold text-ink">Favorilerim</span>
+                        <span className="block text-[13px] text-muted">{favorites.length ? `${favorites.length} ürün` : 'Henüz favori yok'}</span>
+                    </span>
+                    <ChevronRight className="hidden h-5 w-5 shrink-0 text-subtle transition-transform group-hover:translate-x-0.5 sm:block" aria-hidden="true" />
+                </Link>
             </div>
-        </div>
+
+            <div className="mt-4 grid gap-4 lg:mt-5 lg:grid-cols-5 lg:items-start lg:gap-5">
+                <section aria-labelledby="account-info-title" className="rounded-sheet border border-line bg-white p-4 shadow-card sm:p-6 lg:col-span-2">
+                    <h2 id="account-info-title" className="type-h3 text-ink">
+                        Hesap bilgileri
+                    </h2>
+                    <dl className="mt-4 space-y-4 text-sm">
+                        <div className="flex items-start gap-3">
+                            <UserRound className="mt-0.5 h-[18px] w-[18px] shrink-0 text-muted" aria-hidden="true" />
+                            <div className="min-w-0">
+                                <dt className="text-[13px] text-muted">Ad soyad</dt>
+                                <dd className="mt-0.5 font-medium text-ink">{user.fullName || '—'}</dd>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                            <Mail className="mt-0.5 h-[18px] w-[18px] shrink-0 text-muted" aria-hidden="true" />
+                            <div className="min-w-0">
+                                <dt className="text-[13px] text-muted">E-posta</dt>
+                                <dd className="mt-0.5 break-all font-medium text-ink">{user.email}</dd>
+                            </div>
+                        </div>
+                    </dl>
+                    <p className="mt-5 rounded-card bg-surface px-3.5 py-3 text-[13px] leading-5 text-muted">
+                        Ad soyad veya e-posta adresini değiştirmek için bize ulaşabilirsin.
+                    </p>
+                </section>
+
+                <section aria-labelledby="account-address-title" className="rounded-sheet border border-line bg-white p-4 shadow-card sm:p-6 lg:col-span-3">
+                    <h2 id="account-address-title" className="type-h3 text-ink">
+                        İletişim ve teslimat adresi
+                    </h2>
+                    <p className="mb-5 mt-1 text-[13px] leading-5 text-muted">Ödeme sayfasında bu bilgiler otomatik doldurulur.</p>
+                    <ProfileForm
+                        initial={{
+                            phone: user.phone,
+                            address: user.address,
+                            city: user.city,
+                            district: user.district,
+                            postalCode: user.postalCode,
+                        }}
+                    />
+                </section>
+            </div>
+        </AccountShell>
     )
 }

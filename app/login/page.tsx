@@ -1,14 +1,27 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { ShoppingBag } from 'lucide-react'
+import { Button, buttonClasses } from '@/components/ui/button'
+import { LogIn, ShieldCheck } from 'lucide-react'
 import { Suspense } from 'react'
 import { safeRedirectPath } from '@/lib/safeRedirect'
+import { AuthShell } from '@/components/account/AuthShell'
+import { authErrorText } from '@/components/account/auth-errors'
+import { Field, FormAlert, inputClass } from '@/components/forms/Field'
+import { PasswordInput } from '@/components/forms/PasswordInput'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { useSiteSettings } from '@/components/layout/store-data'
+import { cn } from '@/lib/utils'
 
 // Admin 2FA codes are valid for 5 minutes (app/api/auth/login/route.ts)
 const CODE_VALID_SECONDS = 300
+
+/** 300 → "5:00" */
+function formatCountdown(seconds: number): string {
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
 
 function LoginForm() {
     const router = useRouter()
@@ -141,218 +154,168 @@ function LoginForm() {
         }
     }
 
+    const settings = useSiteSettings()
+    const registerHref = redirectData !== '/' ? `/register/?redirect=${encodeURIComponent(redirectData)}` : '/register/'
+
     // 2FA Code Entry Screen
     if (requires2FA) {
         return (
-            <div className="min-h-screen grid lg:grid-cols-2">
-                <div className="flex items-center justify-center p-8 bg-white">
-                    <div className="w-full max-w-md space-y-8">
-                        <div className="text-center">
-                            <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-white mb-6">
-                                🔐
-                            </div>
-                            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-                                Doğrulama Kodu
-                            </h1>
-                            <p className="mt-2 text-slate-600">
-                                <strong>{emailHint}</strong> adresine gönderilen 6 haneli kodu girin
+            <AuthShell
+                icon={<ShieldCheck />}
+                title="Doğrulama kodu"
+                subtitle={
+                    <>
+                        <strong className="font-semibold text-ink-2">{emailHint}</strong> adresine gönderilen 6 haneli kodu gir.
+                    </>
+                }
+                panelTitle="Hesabın iki adımlı doğrulamayla korunuyor"
+            >
+                <form onSubmit={handle2FASubmit} className="space-y-5">
+                    {error && <FormAlert>{authErrorText(error)}</FormAlert>}
+
+                    <Field id="login-code" label="Doğrulama kodu">
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={6}
+                            required
+                            value={code}
+                            onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            autoComplete="one-time-code"
+                            className={cn(inputClass, 'h-16 text-center indent-[0.5em] text-[28px] font-bold tracking-[0.5em] tabular placeholder:tracking-[0.5em]')}
+                            placeholder="000000"
+                            autoFocus
+                        />
+                    </Field>
+
+                    <div className="text-center text-sm">
+                        {countdown > 0 ? (
+                            <p className="text-muted">
+                                Kodun geçerlilik süresi: <span className="font-bold text-ink tabular">{formatCountdown(countdown)}</span>
                             </p>
-                        </div>
-
-                        <form onSubmit={handle2FASubmit} className="space-y-6">
-                            {error && (
-                                <div className="p-4 rounded-lg bg-red-50 text-red-600 text-sm font-medium">
-                                    {error}
-                                </div>
-                            )}
-
-                            <div>
-                                <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    pattern="[0-9]*"
-                                    maxLength={6}
-                                    required
-                                    value={code}
-                                    onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                    className="w-full px-4 py-4 text-center text-3xl tracking-[0.5em] font-bold rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
-                                    placeholder="000000"
-                                    autoFocus
-                                />
-                            </div>
-
-                            <div className="text-center">
-                                {countdown > 0 ? (
-                                    <p className="text-slate-500">
-                                        Kod <span className="font-bold text-slate-900">{countdown}</span> saniye içinde geçersiz olacak
-                                    </p>
-                                ) : (
-                                    <div className="space-y-2">
-                                        <p className="text-red-500 font-medium">Kodun süresi doldu</p>
-                                        <button
-                                            type="button"
-                                            onClick={handleResendCode}
-                                            disabled={loading}
-                                            className="text-slate-900 font-semibold hover:underline"
-                                        >
-                                            Yeni kod gönder
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="space-y-4">
-                                <Button
-                                    type="submit"
-                                    disabled={loading || code.length !== 6 || countdown === 0}
-                                    className="w-full h-12 bg-slate-900 text-white hover:bg-slate-800 rounded-xl font-semibold text-base"
-                                >
-                                    {loading ? 'Doğrulanıyor...' : 'Doğrula'}
-                                </Button>
+                        ) : (
+                            <div className="space-y-1" role="status">
+                                <p className="font-semibold text-danger">Kodun süresi doldu</p>
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setRequires2FA(false)
-                                        setCode('')
-                                        setError('')
-                                    }}
-                                    className="w-full h-12 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-semibold text-base"
+                                    onClick={handleResendCode}
+                                    disabled={loading}
+                                    className="inline-flex min-h-11 items-center px-2 font-semibold text-brand-600 underline-offset-4 hover:text-brand-700 hover:underline disabled:opacity-50"
                                 >
-                                    Geri Dön
+                                    Yeni kod gönder
                                 </button>
                             </div>
-                        </form>
+                        )}
                     </div>
-                </div>
 
-                {/* Right: Security Feature */}
-                <div className="hidden lg:block bg-slate-900 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-800" />
-                    <div className="absolute inset-0 flex items-center justify-center p-12">
-                        <div className="text-white max-w-lg space-y-6 relative z-10 p-12">
-                            <h2 className="text-4xl font-bold leading-tight">
-                                İki Faktörlü Doğrulama
-                            </h2>
-                            <p className="text-slate-300 text-lg">
-                                Hesabınızın güvenliği için e-posta ile doğrulama kodu gönderdik.
-                            </p>
-                            <ul className="space-y-4 text-slate-300">
-                                <li className="flex items-center gap-3">
-                                    <div className="h-2 w-2 rounded-full bg-green-400" />
-                                    Ekstra güvenlik katmanı
-                                </li>
-                                <li className="flex items-center gap-3">
-                                    <div className="h-2 w-2 rounded-full bg-green-400" />
-                                    5 dakikalık geçerlilik
-                                </li>
-                                <li className="flex items-center gap-3">
-                                    <div className="h-2 w-2 rounded-full bg-green-400" />
-                                    Yetkisiz erişime karşı koruma
-                                </li>
-                            </ul>
-                        </div>
+                    <div className="space-y-3">
+                        <Button
+                            type="submit"
+                            variant="brand"
+                            size="48"
+                            fullWidth
+                            isLoading={loading}
+                            disabled={loading || code.length !== 6 || countdown === 0}
+                        >
+                            {loading ? 'Doğrulanıyor...' : 'Doğrula'}
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline-ink"
+                            size="48"
+                            fullWidth
+                            onClick={() => {
+                                setRequires2FA(false)
+                                setCode('')
+                                setError('')
+                            }}
+                        >
+                            Geri dön
+                        </Button>
                     </div>
-                </div>
-            </div>
+                </form>
+            </AuthShell>
         )
     }
 
     return (
-        <div className="min-h-screen grid lg:grid-cols-2">
-            {/* Left: Form */}
-            <div className="flex items-center justify-center p-8 bg-white">
-                <div className="w-full max-w-md space-y-8">
-                    <div className="text-center">
-                        <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-white mb-6">
-                            <ShoppingBag className="h-6 w-6" />
-                        </div>
-                        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-                            Tekrar Hoşgeldiniz
-                        </h1>
-                        <p className="mt-2 text-slate-600">
-                            Hesabınıza giriş yapın veya{' '}
-                            <a href="/register" className="font-semibold text-slate-900 hover:underline">
-                                ücretsiz kayıt olun
-                            </a>
-                        </p>
-                    </div>
+        <AuthShell
+            icon={<LogIn />}
+            title="Giriş yap"
+            subtitle={
+                <>
+                    Hesabın yok mu?{' '}
+                    <Link href={registerHref} className="font-semibold text-brand-600 underline-offset-4 hover:text-brand-700 hover:underline">
+                        Ücretsiz üye ol
+                    </Link>
+                </>
+            }
+        >
+            <form onSubmit={handleSubmit} className="space-y-5">
+                {error && <FormAlert>{authErrorText(error)}</FormAlert>}
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        {error && (
-                            <div className="p-4 rounded-lg bg-red-50 text-red-600 text-sm font-medium">
-                                {error}
-                            </div>
-                        )}
+                <Field id="login-email" label="E-posta">
+                    <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        autoComplete="email"
+                        inputMode="email"
+                        className={inputClass}
+                        placeholder="ornek@eposta.com"
+                    />
+                </Field>
+                <Field id="login-password" label="Şifre">
+                    <PasswordInput
+                        required
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        autoComplete="current-password"
+                        placeholder="Şifren"
+                    />
+                </Field>
 
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                                <input
-                                    type="email"
-                                    required
-                                    value={email}
-                                    onChange={e => setEmail(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
-                                    placeholder="ornek@email.com"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Şifre</label>
-                                <input
-                                    type="password"
-                                    required
-                                    value={password}
-                                    onChange={e => setPassword(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
-                                    placeholder="••••••••"
-                                />
-                            </div>
-                        </div>
+                <Button type="submit" variant="brand" size="48" fullWidth isLoading={loading} disabled={loading}>
+                    {loading ? 'Giriş yapılıyor...' : 'Giriş yap'}
+                </Button>
 
-                        <div className="space-y-4">
-                            <Button
-                                type="submit"
-                                disabled={loading}
-                                className="w-full h-12 bg-slate-900 text-white hover:bg-slate-800 rounded-xl font-semibold text-base"
-                            >
-                                {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
-                            </Button>
-                            <a href="/register" className="block">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="w-full h-12 border-slate-200 text-slate-900 hover:bg-slate-50 rounded-xl font-semibold text-base"
-                                >
-                                    Kayıt Ol
-                                </Button>
-                            </a>
-                        </div>
-                    </form>
+                <div className="flex items-center gap-3 text-[13px] text-subtle" aria-hidden="true">
+                    <span className="h-px flex-1 bg-line" />
+                    veya
+                    <span className="h-px flex-1 bg-line" />
                 </div>
-            </div>
 
-            {/* Right: Feature/Image */}
-            <div className="hidden lg:block bg-slate-900 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-800" />
-                <div className="absolute inset-0 flex items-center justify-center p-12">
-                    <div className="text-white max-w-lg space-y-6 relative z-10 p-12 ">
-                        <h2 className="text-4xl font-bold leading-tight">
-                            Premium Alışveriş Deneyimi Sizi Bekliyor
-                        </h2>
-                        <ul className="space-y-4 text-slate-300">
-                            <li className="flex items-center gap-3">
-                                <div className="h-2 w-2 rounded-full bg-white" />
-                                Özel koleksiyonlara erken erişim
-                            </li>
-                            <li className="flex items-center gap-3">
-                                <div className="h-2 w-2 rounded-full bg-white" />
-                                Hızlı ve güvenli ödeme
-                            </li>
-                            <li className="flex items-center gap-3">
-                                <div className="h-2 w-2 rounded-full bg-white" />
-                                7/24 Müşteri desteği
-                            </li>
-                        </ul>
+                <Link href={registerHref} className={buttonClasses({ variant: 'outline-ink', size: '48', fullWidth: true })}>
+                    Yeni hesap oluştur
+                </Link>
+
+                {settings.footer_email && (
+                    <p className="text-center text-[13px] leading-5 text-muted">
+                        Şifreni mi unuttun?{' '}
+                        <a href={`mailto:${settings.footer_email}`} className="font-semibold text-ink-2 underline-offset-4 hover:underline">
+                            {settings.footer_email}
+                        </a>{' '}
+                        adresine yaz, yardımcı olalım.
+                    </p>
+                )}
+            </form>
+        </AuthShell>
+    )
+}
+
+function LoginFallback() {
+    return (
+        <div className="min-h-[60vh] bg-surface py-6 sm:py-10 lg:py-16" role="status" aria-label="Giriş sayfası yükleniyor">
+            <div className="container-store">
+                <div className="mx-auto max-w-[1040px] rounded-sheet border border-line bg-white px-5 py-7 sm:px-10 sm:py-10 lg:px-14 lg:py-14">
+                    <div className="max-w-[400px] space-y-5">
+                        <Skeleton className="h-12 w-12 rounded-card" />
+                        <Skeleton className="h-8 w-40" />
+                        <Skeleton className="h-12 w-full rounded-[10px]" />
+                        <Skeleton className="h-12 w-full rounded-[10px]" />
+                        <Skeleton className="h-12 w-full rounded-card" />
                     </div>
                 </div>
             </div>
@@ -362,7 +325,7 @@ function LoginForm() {
 
 export default function LoginPage() {
     return (
-        <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Yükleniyor...</div>}>
+        <Suspense fallback={<LoginFallback />}>
             <LoginForm />
         </Suspense>
     )

@@ -1,21 +1,15 @@
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import type { Metadata } from 'next'
+import { NotFoundView } from '@/components/status/status-islands'
+
+// Real 404 page (HTTP 404 via notFound() or an unknown URL). No canonical (buildMetadata is not called).
+// Next serialises this tree into the RSC payload of every page (root not-found boundary), so the view
+// is one client component: every other page only carries a module reference, and the
+// data-onopo-nocache marker is in the HTML only when the 404 is really rendered.
+export const metadata: Metadata = {
+    title: 'Sayfa bulunamadı',
+    robots: { index: false, follow: true, googleBot: { index: false, follow: true } },
+}
 
 export default function NotFound() {
-    return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-            <div className="text-center max-w-md">
-                <h1 className="text-9xl font-black text-slate-200">404</h1>
-                <h2 className="text-2xl font-bold text-slate-900 mt-4">Sayfa Bulunamadı</h2>
-                <p className="text-slate-500 mt-2 mb-8">
-                    Aradığınız sayfa silinmiş veya taşınmış olabilir.
-                </p>
-                <Link href="/">
-                    <Button className="rounded-full px-8 h-12 bg-slate-900 text-white hover:bg-slate-800">
-                        Anasayfaya Dön
-                    </Button>
-                </Link>
-            </div>
-        </div>
-    )
+    return <NotFoundView />
 }

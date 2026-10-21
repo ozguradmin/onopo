@@ -1,12 +1,22 @@
 'use client'
 
 import * as React from 'react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { ChevronDown, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ShoppingBag, Check, Star, Truck, Shield, Gift } from 'lucide-react'
+import { AuthShell } from '@/components/account/AuthShell'
+import { authErrorText } from '@/components/account/auth-errors'
+import { Field, FormAlert, inputClass, textareaClass } from '@/components/forms/Field'
+import { PasswordInput } from '@/components/forms/PasswordInput'
+import { safeRedirectPath } from '@/lib/safeRedirect'
+import { cn } from '@/lib/utils'
 
-export default function RegisterPage() {
+function RegisterForm() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    // Where to go after the automatic login (e.g. back to the checkout); same validation as /login
+    const redirectTo = safeRedirectPath(searchParams.get('redirect'))
 
     const [name, setName] = React.useState('')
     const [email, setEmail] = React.useState('')
@@ -18,6 +28,7 @@ export default function RegisterPage() {
     const [password, setPassword] = React.useState('')
     const [loading, setLoading] = React.useState(false)
     const [error, setError] = React.useState('')
+    const [showAddress, setShowAddress] = React.useState(false)
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -55,7 +66,7 @@ export default function RegisterPage() {
             })
 
             if (loginRes.ok) {
-                router.push('/')
+                router.push(redirectTo)
                 router.refresh()
             } else {
                 // If auto-login fails, redirect to login page
@@ -69,188 +80,155 @@ export default function RegisterPage() {
         }
     }
 
-    const features = [
-        { icon: Truck, title: "Ücretsiz Kargo", desc: "150₺ üzeri siparişlerde" },
-        { icon: Shield, title: "Güvenli Alışveriş", desc: "256-bit SSL şifreleme" },
-        { icon: Star, title: "Özel Fırsatlar", desc: "Üyelere özel kampanyalar" },
-    ]
+    const loginHref = redirectTo !== '/' ? `/login/?redirect=${encodeURIComponent(redirectTo)}` : '/login/'
 
     return (
-        <div className="min-h-screen grid lg:grid-cols-2">
-            {/* Left: Form */}
-            <div className="flex items-center justify-center p-8 bg-white">
-                <div className="w-full max-w-md space-y-8">
-                    <div className="text-center">
-                        <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-white mb-6">
-                            <ShoppingBag className="h-6 w-6" />
-                        </div>
-                        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-                            Aramıza Katılın
-                        </h1>
-                        <p className="mt-2 text-slate-600">
-                            Zaten hesabınız var mı?{' '}
-                            <a href="/login" className="font-semibold text-slate-900 hover:underline">
-                                Giriş yapın
-                            </a>
-                        </p>
-                    </div>
+        <AuthShell
+            icon={<UserPlus />}
+            title="Üye ol"
+            subtitle={
+                <>
+                    Zaten hesabın var mı?{' '}
+                    <Link href={loginHref} className="font-semibold text-brand-600 underline-offset-4 hover:text-brand-700 hover:underline">
+                        Giriş yap
+                    </Link>
+                </>
+            }
+        >
+            <form onSubmit={handleSubmit} className="space-y-5">
+                {error && <FormAlert>{authErrorText(error)}</FormAlert>}
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        {error && (
-                            <div className="p-4 rounded-lg bg-red-50 text-red-600 text-sm font-medium">
-                                {error}
-                            </div>
-                        )}
+                <Field id="register-name" label="Ad soyad" required>
+                    <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        autoComplete="name"
+                        className={inputClass}
+                        placeholder="Adın ve soyadın"
+                    />
+                </Field>
+                <Field id="register-email" label="E-posta" required>
+                    <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        autoComplete="email"
+                        inputMode="email"
+                        className={inputClass}
+                        placeholder="ornek@eposta.com"
+                    />
+                </Field>
+                <Field id="register-phone" label="Telefon" required>
+                    <input
+                        type="tel"
+                        required
+                        value={phone}
+                        onChange={e => setPhone(e.target.value)}
+                        autoComplete="tel"
+                        className={inputClass}
+                        placeholder="05XX XXX XX XX"
+                    />
+                </Field>
+                <Field id="register-password" label="Şifre" required hint="En az 6 karakter.">
+                    <PasswordInput
+                        required
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        autoComplete="new-password"
+                        placeholder="Bir şifre belirle"
+                        minLength={6}
+                    />
+                </Field>
 
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Ad Soyad</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={name}
-                                    onChange={e => setName(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
-                                    placeholder="Adınız Soyadınız"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                                <input
-                                    type="email"
-                                    required
-                                    value={email}
-                                    onChange={e => setEmail(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
-                                    placeholder="ornek@email.com"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Telefon</label>
-                                <input
-                                    type="tel"
-                                    required
-                                    value={phone}
-                                    onChange={e => setPhone(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
-                                    placeholder="05XX XXX XX XX"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Şifre</label>
-                                <input
-                                    type="password"
-                                    required
-                                    value={password}
-                                    onChange={e => setPassword(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
-                                    placeholder="En az 6 karakter"
-                                    minLength={6}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                    Adres <span className="text-slate-400 font-normal">(Opsiyonel)</span>
-                                </label>
+                <div className="rounded-card border border-line">
+                    <button
+                        type="button"
+                        onClick={() => setShowAddress(open => !open)}
+                        aria-expanded={showAddress}
+                        aria-controls="register-address-fields"
+                        className="flex min-h-12 w-full items-center justify-between gap-3 rounded-card px-3.5 text-left text-sm font-semibold text-ink-2"
+                    >
+                        <span>
+                            Teslimat adresini şimdi ekle <span className="font-normal text-muted">(isteğe bağlı)</span>
+                        </span>
+                        <ChevronDown className={cn('h-5 w-5 shrink-0 text-muted transition-transform duration-200', showAddress && 'rotate-180')} aria-hidden="true" />
+                    </button>
+                    {showAddress && (
+                        <div id="register-address-fields" className="space-y-4 border-t border-line p-3.5">
+                            <Field id="register-address" label="Adres">
                                 <textarea
                                     value={address}
                                     onChange={e => setAddress(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all resize-none mb-3"
-                                    placeholder="Mahalle, Sokak, No, Daire..."
+                                    autoComplete="street-address"
+                                    className={textareaClass}
+                                    placeholder="Mahalle, sokak, bina no, daire no"
                                     rows={2}
                                 />
-                                <div className="grid grid-cols-3 gap-3">
-                                    <div>
-                                        <input
-                                            type="text"
-                                            value={city}
-                                            onChange={e => setCity(e.target.value)}
-                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
-                                            placeholder="İl"
-                                        />
-                                    </div>
-                                    <div>
-                                        <input
-                                            type="text"
-                                            value={district}
-                                            onChange={e => setDistrict(e.target.value)}
-                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
-                                            placeholder="İlçe"
-                                        />
-                                    </div>
-                                    <div>
-                                        <input
-                                            type="text"
-                                            value={postalCode}
-                                            onChange={e => setPostalCode(e.target.value)}
-                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
-                                            placeholder="Posta Kodu"
-                                        />
-                                    </div>
-                                </div>
+                            </Field>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Field id="register-city" label="İl">
+                                    <input
+                                        type="text"
+                                        value={city}
+                                        onChange={e => setCity(e.target.value)}
+                                        autoComplete="address-level1"
+                                        className={inputClass}
+                                        placeholder="örn. İstanbul"
+                                    />
+                                </Field>
+                                <Field id="register-district" label="İlçe">
+                                    <input
+                                        type="text"
+                                        value={district}
+                                        onChange={e => setDistrict(e.target.value)}
+                                        autoComplete="address-level2"
+                                        className={inputClass}
+                                        placeholder="örn. Kadıköy"
+                                    />
+                                </Field>
                             </div>
+                            <Field id="register-postalCode" label="Posta kodu">
+                                <input
+                                    type="text"
+                                    value={postalCode}
+                                    onChange={e => setPostalCode(e.target.value)}
+                                    autoComplete="postal-code"
+                                    inputMode="numeric"
+                                    className={inputClass}
+                                    placeholder="örn. 34000"
+                                />
+                            </Field>
                         </div>
-
-                        <Button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full h-12 bg-slate-900 text-white hover:bg-slate-800 rounded-xl font-semibold text-base"
-                        >
-                            {loading ? 'Hesap Oluşturuluyor...' : 'Hesap Oluştur'}
-                        </Button>
-                    </form>
-                </div>
-            </div>
-
-            {/* Right: Premium Feature Showcase */}
-            <div className="hidden lg:flex bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
-                {/* Background Pattern */}
-                <div className="absolute inset-0 opacity-10">
-                    <div className="absolute top-20 left-20 w-72 h-72 bg-white rounded-full blur-3xl" />
-                    <div className="absolute bottom-20 right-20 w-96 h-96 bg-purple-500 rounded-full blur-3xl" />
+                    )}
                 </div>
 
-                <div className="relative z-10 flex flex-col justify-center p-12 w-full">
-                    <div className="max-w-md mx-auto">
-                        <h2 className="text-3xl font-bold text-white mb-4">
-                            Üyelik Avantajları
-                        </h2>
-                        <p className="text-slate-400 mb-10">
-                            ONOPO ailesine katılarak özel fırsatlardan yararlanın.
-                        </p>
+                <Button type="submit" variant="brand" size="48" fullWidth isLoading={loading} disabled={loading}>
+                    {loading ? 'Hesap oluşturuluyor...' : 'Hesap oluştur'}
+                </Button>
 
-                        <div className="space-y-6">
-                            {features.map((feature, i) => (
-                                <div
-                                    key={i}
-                                    className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all"
-                                >
-                                    <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                                        <feature.icon className="w-6 h-6 text-white" />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-semibold text-white">{feature.title}</h3>
-                                        <p className="text-sm text-slate-400">{feature.desc}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                <p className="text-center text-[13px] leading-5 text-muted">
+                    Hesap oluşturarak{' '}
+                    <Link href="/page/terms/" className="font-medium text-ink-2 underline underline-offset-2 hover:text-ink">
+                        Kullanım Koşulları
+                    </Link>{' '}
+                    ve{' '}
+                    <Link href="/page/policy/" className="font-medium text-ink-2 underline underline-offset-2 hover:text-ink">
+                        Gizlilik Politikası
+                    </Link>
+                    &apos;nı okuduğunu kabul edersin.
+                </p>
+            </form>
+        </AuthShell>
+    )
+}
 
-                        <div className="mt-10 pt-8 border-t border-white/10">
-                            <div className="flex items-center gap-3">
-                                <div className="flex -space-x-2">
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 border-2 border-slate-900" />
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 border-2 border-slate-900" />
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 border-2 border-slate-900" />
-                                </div>
-                                <p className="text-sm text-slate-400">
-                                    <span className="font-semibold text-white">1,000+</span> mutlu müşteri
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+export default function RegisterPage() {
+    return (
+        <React.Suspense fallback={<div className="min-h-[70vh] bg-surface" />}>
+            <RegisterForm />
+        </React.Suspense>
     )
 }
