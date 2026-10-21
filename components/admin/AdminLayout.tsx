@@ -49,6 +49,35 @@ const navItems = [
 // Pages reachable without an admin session
 const PUBLIC_ADMIN_PATHS = ['/admin/login', '/admin/reset-password']
 
+// /api/auth/me is retried on network errors, timeouts and 5xx; only 401/403/404 mean "not logged in"
+const AUTH_CHECK_TIMEOUT_MS = 10_000
+const AUTH_CHECK_RETRY_DELAYS_MS = [0, 1_000, 3_000]
+
+type AuthResult = { kind: 'admin', user: any } | { kind: 'logged-out' } | { kind: 'unreachable' }
+
+async function checkAdminSession(isCancelled: () => boolean): Promise<AuthResult | null> {
+    for (const delay of AUTH_CHECK_RETRY_DELAYS_MS) {
+        if (delay) await new Promise(resolve => setTimeout(resolve, delay))
+        if (isCancelled()) return null
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), AUTH_CHECK_TIMEOUT_MS)
+        try {
+            const res = await fetch('/api/auth/me', { cache: 'no-store', signal: controller.signal })
+            if (res.status === 401 || res.status === 403 || res.status === 404) return { kind: 'logged-out' }
+            if (res.ok) {
+                const data = await res.json()
+                return data.user?.role === 'admin' ? { kind: 'admin', user: data.user } : { kind: 'logged-out' }
+            }
+            // 5xx (e.g. a D1 hiccup or a cold start): retry
+        } catch {
+            // Network error or timeout: retry
+        } finally {
+            clearTimeout(timer)
+        }
+    }
+    return { kind: 'unreachable' }
+}
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
     // next.config uses trailingSlash, so the pathname may end with '/'
@@ -56,48 +85,59 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const router = useRouter()
     const [sidebarOpen, setSidebarOpen] = React.useState(false)
     const [user, setUser] = React.useState<any>(null)
-    const [loading, setLoading] = React.useState(true)
+    // Set when /api/auth/me can't be reached; the admin stays on the page and can retry
+    const [authError, setAuthError] = React.useState(false)
+    const [retryCount, setRetryCount] = React.useState(0)
 
+    // Re-checked on every admin page change. The panel is only rendered once the session is confirmed,
+    // so a logged-out visitor never sees (or triggers the API calls of) a dashboard before the redirect.
     React.useEffect(() => {
-        if (isPublicPage) {
-            setLoading(false)
-            return
-        }
-        fetch('/api/auth/me')
-            .then(res => {
-                if (!res.ok) throw new Error('Not logged in')
-                return res.json()
-            })
-            .then(data => {
-                if (data.user?.role !== 'admin') {
-                    router.push('/admin/login')
-                    return
-                }
-                setUser(data.user)
-                setLoading(false)
-            })
-            .catch(() => {
-                setLoading(false)
-                router.push('/admin/login')
-            })
-    }, [router])
+        if (isPublicPage) return
+        let cancelled = false
+        checkAdminSession(() => cancelled).then(result => {
+            if (cancelled || !result) return
+            if (result.kind === 'admin') {
+                setUser(result.user)
+                setAuthError(false)
+            } else if (result.kind === 'logged-out') {
+                setUser(null)
+                router.replace(`/admin/login/?redirect=${encodeURIComponent(pathname)}`)
+            } else {
+                setAuthError(true)
+            }
+        })
+        return () => { cancelled = true }
+    }, [pathname, isPublicPage, retryCount, router])
 
     const handleLogout = async () => {
         await fetch('/api/auth/logout', { method: 'POST' })
         router.push('/')
     }
 
-    if (loading && !isPublicPage) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50">
-                <div className="text-slate-500">Yükleniyor...</div>
-            </div>
-        )
-    }
-
     // Don't show sidebar on login/reset pages
     if (isPublicPage) {
         return <>{children}</>
+    }
+
+    if (!user) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+                {authError ? (
+                    <div className="max-w-sm text-center space-y-3">
+                        <p className="text-slate-700 font-medium">Sunucuya ulaşılamadı.</p>
+                        <p className="text-sm text-slate-500">Oturumunuz kapanmadı; bağlantı sorunu olabilir.</p>
+                        <Button
+                            onClick={() => { setAuthError(false); setRetryCount(c => c + 1) }}
+                            className="bg-slate-900 text-white hover:bg-slate-800"
+                        >
+                            Tekrar Dene
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="text-slate-500">Yükleniyor...</div>
+                )}
+            </div>
+        )
     }
 
     return (
@@ -195,6 +235,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
                 {/* Page Content */}
                 <main className="flex-1 p-4 lg:p-8 overflow-x-hidden">
+                    {authError && (
+                        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                            <span>Oturum kontrolü sırasında sunucuya ulaşılamadı.</span>
+                            <button
+                                onClick={() => { setAuthError(false); setRetryCount(c => c + 1) }}
+                                className="font-semibold underline"
+                            >
+                                Tekrar dene
+                            </button>
+                        </div>
+                    )}
                     {children}
                 </main>
             </div>
