@@ -21,6 +21,9 @@ export interface BottomSheetProps {
 export function BottomSheet({ open, onClose, title, children, footer, className }: BottomSheetProps) {
     const ref = React.useRef<HTMLDialogElement>(null)
     const titleId = React.useId()
+    // The content is mounted on first open (not in the server HTML) and kept for the close animation
+    const [mounted, setMounted] = React.useState(false)
+    if (open && !mounted) setMounted(true)
     const onCloseRef = React.useRef(onClose)
     React.useEffect(() => {
         onCloseRef.current = onClose
@@ -80,8 +83,8 @@ export function BottomSheet({ open, onClose, title, children, footer, className 
                         <X className="h-5 w-5" aria-hidden="true" />
                     </button>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">{children}</div>
-                {footer && (
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">{mounted ? children : null}</div>
+                {footer && mounted && (
                     <div className="shrink-0 border-t border-line bg-white px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))]">{footer}</div>
                 )}
             </div>

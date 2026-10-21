@@ -228,41 +228,41 @@ export function ProductCard({
     )
 }
 
-const STAR_PATH = 'M10 1.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8L10 14.8l-5.2 2.7 1-5.8L1.6 7.6l5.8-.8L10 1.5z'
+/** One star in a 20×20 box, relative commands only (drawn from its top point). */
+const STAR = 'l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z'
+/** Five stars side by side in one path (viewBox 0 0 100 20), so a row is a single small SVG. */
+const FIVE_STARS = [0, 20, 40, 60, 80].map(x => `M${x + 10} 1.5${STAR}`).join('')
 
 function formatRating(n: number): string {
     return n.toFixed(1).replace('.', ',')
 }
 
+function StarsSvg({ className, outline = false }: { className: string; outline?: boolean }) {
+    return (
+        <svg viewBox="0 0 100 20" className={className} aria-hidden="true" fill={outline ? 'none' : 'currentColor'} stroke={outline ? 'currentColor' : undefined} strokeWidth={outline ? 1.4 : undefined}>
+            <path d={FIVE_STARS} />
+        </svg>
+    )
+}
+
 /**
  * Subtle 5-star row: real average and count when the product has reviews, otherwise 5 filled stars
- * with "5,0" and "(0)" (owner decision). Server-friendly; also used by the product page if needed.
- * Never feeds JSON-LD: aggregateRating comes only from real reviews (lib/reviews).
+ * with "5,0" and "(0)" (owner decision 2026-10-22). Server-friendly; the product page can reuse it
+ * (size="md"). Never feeds JSON-LD: aggregateRating comes only from real reviews (lib/reviews).
  */
 export function RatingStars({ rating, size = 'sm', className }: { rating: ProductCardRating | null; size?: 'sm' | 'md'; className?: string }) {
     const real = rating != null && rating.count > 0
     const average = real ? Math.min(5, Math.max(0, rating!.average)) : 5
     const count = real ? rating!.count : 0
-    const pct = Math.round((average / 5) * 100)
-    const star = size === 'md' ? 'h-4 w-4' : 'h-3 w-3'
-    const label = real
-        ? `5 üzerinden ${formatRating(average)} puan, ${count} değerlendirme`
-        : 'Henüz değerlendirme yok'
-    const row = (filled: boolean) => (
-        <span className="flex" aria-hidden="true">
-            {[0, 1, 2, 3, 4].map(i => (
-                <svg key={i} viewBox="0 0 20 20" className={cn(star, 'shrink-0', filled ? 'fill-current' : 'fill-none stroke-current')} strokeWidth={filled ? 0 : 1.4}>
-                    <path d={STAR_PATH} />
-                </svg>
-            ))}
-        </span>
-    )
+    const pct = Math.round((average / 5) * 1000) / 10
+    const box = size === 'md' ? 'h-4 w-20' : 'h-3 w-[60px]'
+    const label = real ? `5 üzerinden ${formatRating(average)} puan, ${count} değerlendirme` : 'Henüz değerlendirme yok'
     return (
         <p className={cn('flex items-center gap-1.5 leading-4', size === 'md' ? 'text-sm' : 'text-xs', className)}>
-            <span role="img" aria-label={label} className="relative inline-flex text-line-strong">
-                {row(false)}
-                <span className="absolute inset-y-0 left-0 overflow-hidden text-warning" style={{ width: `${pct}%` }}>
-                    {row(true)}
+            <span role="img" aria-label={label} className={cn('relative inline-block shrink-0', box)}>
+                {pct < 100 && <StarsSvg outline className="absolute inset-0 h-full w-full text-line-strong" />}
+                <span className="absolute inset-y-0 left-0 overflow-hidden text-warning" style={pct < 100 ? { width: `${pct}%` } : { width: '100%' }}>
+                    <StarsSvg className={cn('h-full', size === 'md' ? 'w-20' : 'w-[60px]')} />
                 </span>
             </span>
             <span className="font-semibold tabular-nums text-ink-2" aria-hidden="true">{formatRating(average)}</span>

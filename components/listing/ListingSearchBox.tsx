@@ -103,7 +103,7 @@ export function ListingSearchBox({ placeholder = 'Ürünlerde ara', label = 'Ür
                 enterKeyHint="search"
                 maxLength={120}
                 className={cn(
-                    'h-12 w-full appearance-none rounded-card border border-line-strong bg-white pl-11 pr-12 text-[15px] text-ink placeholder:text-subtle',
+                    'h-11 w-full appearance-none rounded-card border border-line-strong bg-white pl-11 pr-12 lg:h-12 text-[15px] text-ink placeholder:text-subtle',
                     'transition-[border-color,box-shadow] duration-150 focus:border-brand-600 focus:shadow-focus focus:outline-none',
                     '[&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden',
                 )}

@@ -82,7 +82,10 @@ export function ResultsGrid({ items, page, totalPages, total, pageSize }: Result
     }
 
     React.useEffect(() => {
+        loadedPages.delete(memoryKey)
         loadedPages.set(memoryKey, chunks)
+        // Keep the 20 most recent listings
+        while (loadedPages.size > 20) loadedPages.delete(loadedPages.keys().next().value as string)
     }, [memoryKey, chunks])
 
     // Flatten, dropping duplicates (the catalogue may change between two pages)
