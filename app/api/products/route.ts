@@ -24,6 +24,14 @@ function toLegacyRow(p: Product) {
     }
 }
 
+/** True only for a request carrying a valid admin auth_token (never cached: see includeInactive below). */
+async function isAdminSession(): Promise<boolean> {
+    const token = (await cookies()).get('auth_token')?.value
+    if (!token) return false
+    const payload = await verifyJWT(token)
+    return !!payload && payload.role === 'admin'
+}
+
 /** Rank SQL rows with lib/search (rows carry product_code for matching; it is removed before returning). */
 function rankRows(rows: any[], query: string): any[] {
     return searchItems(rows, prepareQuery(query), { soldOutLast: true }).map(({ product_code, ...row }: any) => row)
@@ -35,6 +43,10 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url)
         const category = searchParams.get('category')
         const includeAll = searchParams.get('includeAll') === 'true' // Admin flag to include out-of-stock
+        // Admin › Ürünler: hidden (is_active = 0) products too, with an is_active field, so they can be found
+        // and switched back on. Only with includeAll (never edge-cached) AND a verified admin session;
+        // everyone else gets exactly the active-only response.
+        const includeInactive = includeAll && searchParams.get('includeInactive') === 'true' && await isAdminSession()
         const slugParam = searchParams.get('slug')
         const exactSlug = searchParams.get('exact') === 'true'
         const searchSlug = searchParams.get('search_slug')
@@ -141,7 +153,9 @@ export async function GET(req: NextRequest) {
         // Base query - only active products, and for customers, hide out-of-stock items
         // (legacy array format: homepage carousels, related products, admin pickers — their cards cannot
         // show a sold-out state, so they keep receiving in-stock products only)
-        let sql = `SELECT ${LEGACY_COLUMNS}${hasQuery ? ', product_code' : ''} FROM products WHERE is_active = 1`
+        let sql = includeInactive
+            ? `SELECT ${LEGACY_COLUMNS}, is_active${hasQuery ? ', product_code' : ''} FROM products WHERE 1 = 1`
+            : `SELECT ${LEGACY_COLUMNS}${hasQuery ? ', product_code' : ''} FROM products WHERE is_active = 1`
 
         // For customer-facing pages, only show in-stock products
         if (!includeAll) {
@@ -202,7 +216,8 @@ export async function GET(req: NextRequest) {
         // Admin response - array format for backwards compatibility
         return NextResponse.json(products, {
             headers: {
-                'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300'
+                // The variant with hidden products is for one admin only: never stored anywhere
+                'Cache-Control': includeInactive ? 'private, no-store' : 'public, s-maxage=60, stale-while-revalidate=300'
             }
         })
     } catch (error: any) {

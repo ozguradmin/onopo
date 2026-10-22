@@ -5,6 +5,18 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, User, Lock, Save, Upload, X, Image, Facebook, Instagram, Twitter, Youtube, Linkedin } from 'lucide-react'
 
+// The storefront listing rounds products_per_page UP to a multiple of 12 between 12 and 96, so every
+// page fills whole rows in the 2/3/4-column grids (lib/listing-data.ts listingPageSize; an unset or
+// invalid value counts as 20, lib/catalog.ts). Only values the storefront really uses are offered.
+const PRODUCTS_PER_PAGE_OPTIONS = ['12', '24', '48', '96']
+
+/** What the storefront actually shows for a stored products_per_page value. */
+function storefrontProductsPerPage(stored: unknown): string {
+    const n = parseInt(String(stored ?? ''), 10)
+    const perPage = Number.isFinite(n) && n > 0 && n <= 200 ? n : 20
+    return String(Math.min(96, Math.max(12, Math.ceil(perPage / 12) * 12)))
+}
+
 export default function AdminSettingsPage() {
     const router = useRouter()
     const [user, setUser] = React.useState<any>(null)
@@ -47,7 +59,7 @@ export default function AdminSettingsPage() {
     const [adminEmail, setAdminEmail] = React.useState('')
 
     // Products Per Page
-    const [productsPerPage, setProductsPerPage] = React.useState('40')
+    const [productsPerPage, setProductsPerPage] = React.useState('24')
 
     React.useEffect(() => {
         Promise.all([
@@ -83,7 +95,8 @@ export default function AdminSettingsPage() {
                 if (settingsData.linkedin_url !== undefined) setLinkedinUrl(settingsData.linkedin_url)
                 if (settingsData.footer_social_visible !== undefined) setFooterSocialVisible(settingsData.footer_social_visible === 'true')
                 setAdminEmail(settingsData.admin_email || '')
-                setProductsPerPage(settingsData.products_per_page || '40')
+                // Shown as what the storefront uses (e.g. a stored 20 shows as 24); nothing is written until Kaydet
+                setProductsPerPage(storefrontProductsPerPage(settingsData.products_per_page))
             }
             if (Array.isArray(categoriesData)) {
                 setAllCategories(categoriesData)
@@ -473,17 +486,20 @@ export default function AdminSettingsPage() {
                         <div className="border-t pt-4 mt-4">
                             <h3 className="font-semibold mb-4 text-sm text-slate-500 uppercase tracking-wider">🛒 Ürün Listesi Ayarları</h3>
                             <div>
-                                <label className="block text-sm font-medium mb-1">Sayfa Başına Ürün Sayısı</label>
-                                <p className="text-xs text-slate-500 mb-2">Ürünler sayfasında kaç ürün gösterilsin</p>
+                                <label htmlFor="products-per-page" className="block text-sm font-medium mb-1">Sayfa Başına Ürün Sayısı</label>
+                                <p className="text-xs text-slate-500 mb-2">Ürünler ve kategori sayfalarında kaç ürün gösterilsin (satırlar tam dolsun diye 12'nin katları)</p>
                                 <select
+                                    id="products-per-page"
                                     value={productsPerPage}
                                     onChange={e => setProductsPerPage(e.target.value)}
                                     className="w-full p-2 border rounded-lg"
                                 >
-                                    <option value="10">10 ürün</option>
-                                    <option value="20">20 ürün</option>
-                                    <option value="40">40 ürün</option>
-                                    <option value="80">80 ürün</option>
+                                    {(PRODUCTS_PER_PAGE_OPTIONS.includes(productsPerPage)
+                                        ? PRODUCTS_PER_PAGE_OPTIONS
+                                        : [...PRODUCTS_PER_PAGE_OPTIONS, productsPerPage].sort((a, b) => Number(a) - Number(b))
+                                    ).map(value => (
+                                        <option key={value} value={value}>{value} ürün</option>
+                                    ))}
                                 </select>
                             </div>
                         </div>

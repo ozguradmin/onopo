@@ -31,17 +31,16 @@ function flattenOnWhite(context: OffscreenCanvasRenderingContext2D | CanvasRende
     context.fillRect(0, 0, width, height)
 }
 
-async function encodeWebp(bitmap: ImageBitmap, maxWidth: number): Promise<Blob | null> {
-    // Never upscale: small originals get same-size WebP copies so every width exists
-    const width = Math.min(maxWidth, bitmap.width)
-    const height = Math.max(1, Math.round(bitmap.height * width / bitmap.width))
+type Context2D = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D
 
+// Draws on a white canvas of the given size and encodes it as WebP; null when that fails
+async function renderWebp(width: number, height: number, draw?: (context: Context2D) => void): Promise<Blob | null> {
     if (typeof OffscreenCanvas !== 'undefined') {
         const canvas = new OffscreenCanvas(width, height)
         const context = canvas.getContext('2d')
         if (!context) return null
         flattenOnWhite(context, width, height)
-        context.drawImage(bitmap, 0, 0, width, height)
+        draw?.(context)
         const blob = await canvas.convertToBlob({ type: 'image/webp', quality: WEBP_QUALITY })
         return blob.type === 'image/webp' ? blob : null
     }
@@ -52,21 +51,30 @@ async function encodeWebp(bitmap: ImageBitmap, maxWidth: number): Promise<Blob |
     const context = canvas.getContext('2d')
     if (!context) return null
     flattenOnWhite(context, width, height)
-    context.drawImage(bitmap, 0, 0, width, height)
+    draw?.(context)
     const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/webp', WEBP_QUALITY))
     // Browsers without a WebP encoder silently return PNG: skip rather than store a mislabelled file
     return blob && blob.type === 'image/webp' ? blob : null
 }
 
-/**
- * Creates and uploads the WebP variants of an image that was just uploaded.
- * Call without awaiting after the original upload succeeded: `void uploadImageVariants(file, result.url)`.
- */
-export async function uploadImageVariants(file: File, uploadedUrl: string): Promise<void> {
+async function encodeWebp(bitmap: ImageBitmap, maxWidth: number): Promise<Blob | null> {
+    // Never upscale: small originals get same-size WebP copies so every width exists
+    const width = Math.min(maxWidth, bitmap.width)
+    const height = Math.max(1, Math.round(bitmap.height * width / bitmap.width))
+    return renderWebp(width, height, context => context.drawImage(bitmap, 0, 0, width, height))
+}
+
+// Whether this browser can encode WebP at all, checked once on a 1x1 canvas (older Safari cannot),
+// so photos are never decoded at full size just to find out
+let webpEncodingSupported: Promise<boolean> | null = null
+function canEncodeWebp(): Promise<boolean> {
+    webpEncodingSupported ??= renderWebp(1, 1).then(blob => blob !== null, () => false)
+    return webpEncodingSupported
+}
+
+async function createAndUploadVariants(file: File, key: string): Promise<void> {
     try {
-        const key = originalKeyFromUrl(uploadedUrl)
-        if (!key || !file.type.startsWith('image/') || file.type === 'image/svg+xml' || file.type === 'image/gif') return
-        if (typeof createImageBitmap !== 'function') return
+        if (!(await canEncodeWebp())) return
 
         const bitmap = await createImageBitmap(file)
         try {
@@ -86,4 +94,23 @@ export async function uploadImageVariants(file: File, uploadedUrl: string): Prom
     } catch (error) {
         console.warn('Image variants were not created:', error)
     }
+}
+
+// One image at a time: a multi-file upload calls uploadImageVariants once per file without awaiting,
+// and decoding several full-size photos at once can run a phone out of memory
+let queue: Promise<void> = Promise.resolve()
+
+/**
+ * Creates and uploads the WebP variants of an image that was just uploaded.
+ * Call without awaiting after the original upload succeeded: `void uploadImageVariants(file, result.url)`.
+ * Calls are queued and processed one after another; the promise settles when this file is done.
+ */
+export async function uploadImageVariants(file: File, uploadedUrl: string): Promise<void> {
+    const key = originalKeyFromUrl(uploadedUrl)
+    if (!key || !file.type.startsWith('image/') || file.type === 'image/svg+xml' || file.type === 'image/gif') return
+    if (typeof createImageBitmap !== 'function') return
+
+    const job = queue.then(() => createAndUploadVariants(file, key))
+    queue = job.catch(() => { })
+    return job
 }

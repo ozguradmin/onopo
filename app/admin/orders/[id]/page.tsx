@@ -399,7 +399,7 @@ export default function OrderEditPage() {
                     {items.map((item: any, idx: number) => (
                         <div key={idx} className="flex items-center gap-4 p-3 bg-slate-50 rounded-lg">
                             {item.image && (
-                                <Link href={`/product/${item.productId || item.id}`} target="_blank">
+                                <Link href={`/product/${item.productId || item.id}`} target="_blank" prefetch={false}>
                                     <img
                                         src={item.image}
                                         alt={item.name}
@@ -411,6 +411,7 @@ export default function OrderEditPage() {
                                 <Link
                                     href={`/product/${item.productId || item.id}`}
                                     target="_blank"
+                                    prefetch={false}
                                     className="font-medium text-slate-900 hover:text-blue-600 hover:underline"
                                 >
                                     {item.name}

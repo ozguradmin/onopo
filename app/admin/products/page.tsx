@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Edit, Trash2, Plus, Upload, Trash, Loader2, Search } from 'lucide-react'
 import { formatPrice } from '@/lib/formatPrice'
 import { getImageUrl, parseProductImages } from '@/lib/utils'
-import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
 import { ProductEditModal } from '@/components/admin/ProductEditModal'
 
@@ -53,7 +52,8 @@ export default function AdminProductsPage() {
 
     const fetchProducts = React.useCallback(() => {
         Promise.all([
-            fetch('/api/products?includeAll=true').then(r => r.json()),
+            // includeInactive: hidden products too (shown with a 'Gizli' badge; admin sessions only)
+            fetch('/api/products?includeAll=true&includeInactive=true').then(r => r.json()),
             fetch('/api/categories').then(r => r.json())
         ]).then(([prods, cats]) => {
             setProducts(prods || [])
@@ -110,6 +110,9 @@ export default function AdminProductsPage() {
     }, [filteredProducts, currentPage, pageSize])
 
     const totalPages = pageSize === 0 ? 1 : Math.ceil(filteredProducts.length / pageSize)
+    // is_active only comes with includeInactive (admin session); a row without it is an active product
+    const isHidden = (p: any) => p.is_active === 0 || p.is_active === '0'
+    const hiddenCount = filteredProducts.filter(isHidden).length
 
     const handleDelete = async (id: number) => {
         if (!confirm('Bu ürünü silmek istediğinize emin misiniz?')) return
@@ -147,6 +150,8 @@ export default function AdminProductsPage() {
         reader.onload = async (evt) => {
             try {
                 const bstr = evt.target?.result
+                // SheetJS (~110 KB gzip) is loaded only when a file is actually imported
+                const XLSX = await import('xlsx')
                 const wb = XLSX.read(bstr, { type: 'binary' })
                 const wsname = wb.SheetNames[0]
                 const ws = wb.Sheets[wsname]
@@ -342,6 +347,7 @@ export default function AdminProductsPage() {
             {/* Results count */}
             <p className="text-sm text-slate-500 mb-2">
                 {filteredProducts.length} ürün bulundu
+                {hiddenCount > 0 && ` (${hiddenCount} gizli)`}
                 {pageSize > 0 && ` (Sayfa ${currentPage}/${totalPages})`}
             </p>
 
@@ -360,14 +366,24 @@ export default function AdminProductsPage() {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {paginatedProducts.map(product => (
-                                <tr key={product.id} className="hover:bg-slate-50">
+                                <tr key={product.id} className={isHidden(product) ? 'bg-slate-50/70 hover:bg-slate-100' : 'hover:bg-slate-50'}>
                                     <td className="p-4">
                                         <img
                                             src={getImageUrl(parseProductImages(product.images)[0]) || '/placeholder.svg'}
-                                            className="w-12 h-12 rounded-lg object-cover bg-slate-100"
+                                            className={`w-12 h-12 rounded-lg object-cover bg-slate-100 ${isHidden(product) ? 'opacity-50' : ''}`}
                                         />
                                     </td>
-                                    <td className="p-4 font-medium text-slate-900">{product.name}</td>
+                                    <td className="p-4 font-medium text-slate-900">
+                                        {product.name}
+                                        {isHidden(product) && (
+                                            <span
+                                                className="ml-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800"
+                                                title="Mağazada görünmüyor. Düzenle › Yayında ile yeniden yayına alabilirsiniz."
+                                            >
+                                                Gizli
+                                            </span>
+                                        )}
+                                    </td>
                                     <td className="p-4 text-slate-600">{product.category || '-'}</td>
                                     <td className="p-4 text-slate-600">{formatPrice(product.price)}</td>
                                     <td className="p-4 text-slate-600">{product.stock}</td>

@@ -12,7 +12,7 @@ import {
     Utensils, Armchair, Dumbbell, Dog, Flower2,
     Briefcase, Hammer, Baby, Scissors, Anchor, Sun,
     Moon, Cloud, Umbrella, Key, Lock, Map, Compass,
-    Globe, Award, Medal, Crown, Trophy, Jewel
+    Globe, Award, Medal, Crown, Trophy
 } from 'lucide-react'
 
 // Icon options for category selection
@@ -110,11 +110,19 @@ export default function AdminCategoriesPage() {
     const handleAddCategory = async () => {
         if (!newCatName.trim()) return
         try {
-            await fetch('/api/categories', {
+            const res = await fetch('/api/categories', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: newCatName, icon: newCatIcon })
             })
+            if (!res.ok) {
+                alert(res.status === 409
+                    ? 'Bu adla ya da aynı bağlantıyla (slug) bir kategori zaten var.'
+                    : res.status === 400
+                        ? 'Kategori adı en az bir harf veya rakam içermeli.'
+                        : 'Kategori eklenemedi.')
+                return
+            }
             setNewCatName('')
             setNewCatIcon('package')
             fetchCategories()
