@@ -53,6 +53,8 @@ const nextConfig: NextConfig = {
     // JSON/API responses are never indexed. Not on /api/images/* (stored product image URLs must stay
     // indexable for image search) and /api/feeds/* (Merchant/Akakçe feeds are left as they are).
     const noIndex = [{ key: 'X-Robots-Tag', value: 'noindex' }]
+    // The admin panel is a client app without page metadata (it would inherit the store's index,follow).
+    const noIndexNoFollow = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }]
     return [
       { source: '/:path*', headers: securityHeaders },
       { source: '/api/:path((?!images(?:/|$)|feeds(?:/|$)).*)', headers: noIndex },
@@ -62,6 +64,8 @@ const nextConfig: NextConfig = {
       { source: '/api/site-settings', headers: noStore },
       { source: `/:page(${privatePages})`, headers: noStore },
       { source: `/:page(${privatePages})/:rest*`, headers: noStore },
+      { source: '/admin', headers: noIndexNoFollow },
+      { source: '/admin/:path*', headers: noIndexNoFollow },
     ]
   },
   // Disable powered by header
