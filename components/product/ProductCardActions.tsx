@@ -4,7 +4,7 @@
  * Client islands used by ProductCard (and reusable on the product page):
  *   <QuickAddButton>  adds to the cart with the unchanged cart-store payload
  *   <FavoriteButton>  toggles a favourite through the existing /api/favorites API
- *   useFavorites()    shared favourites state (one GET /api/favorites per page load, lazily)
+ *   useFavorites()    shared favourites state (one GET /api/favorites per page load, lazily; none for guests)
  */
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { formatTL } from '@/lib/format'
 import { useCartStore } from '@/store/cart-store'
 import { useOptionalStoreData } from '@/components/layout/store-data'
+import { hasSessionHint } from '@/lib/session-hint'
 
 // ---------------------------------------------------------------------------------------------
 // Cart
@@ -181,9 +182,17 @@ function subscribe(listener: () => void) {
     }
 }
 
-/** Load the visitor's favourites once per page load (anonymous visitors get [] without a DB hit). */
+/**
+ * Load the visitor's favourites once per page load. Without the session hint cookie the visitor is a
+ * guest and the answer is always empty: skip the request (a heart click still asks the API, which
+ * answers 401 and sends the guest to the login page).
+ */
 function loadFavorites() {
     if (favState.status !== 'idle') return
+    if (!hasSessionHint()) {
+        setFavState({ status: 'ready', ids: new Set() })
+        return
+    }
     favState = { ...favState, status: 'loading' }
     fetch('/api/favorites', { credentials: 'same-origin' })
         .then(r => (r.ok ? r.json() : { favorites: [] }))
