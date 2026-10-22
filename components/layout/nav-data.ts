@@ -154,7 +154,7 @@ export function formatAmountShort(n: number): string {
     return `${int.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}${frac ? ',' + frac : ''} ₺`
 }
 
-/** "+90 505 821 75 47" → "tel:+905058217547" */
+/** "+90 500 000 00 00" → "tel:+905000000000" */
 export function telHref(phone: string): string {
     return `tel:${phone.replace(/[^\d+]/g, '')}`
 }
