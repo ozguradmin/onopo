@@ -7,6 +7,16 @@ export const dynamic = 'force-dynamic'
 
 const EMAIL_ONLY_FIELDS = ['id', 'status', 'payment_status', 'payment_method', 'total_amount', 'items', 'created_at', 'updated_at']
 
+// The shop's own order data that customers never get: the admin's internal note and the payment provider's id
+// (the same rule in GET /api/orders). The /orders page (lib/account.ts) never selects them either.
+const INTERNAL_FIELDS = ['admin_notes', 'payment_id']
+
+function customerOrder(order: any) {
+    const copy = { ...order }
+    for (const key of INTERNAL_FIELDS) delete copy[key]
+    return copy
+}
+
 function emailOnlyOrder(order: any) {
     const summary: Record<string, unknown> = { details_hidden: true }
     for (const key of EMAIL_ONLY_FIELDS) if (key in order) summary[key] = order[key]
@@ -66,8 +76,10 @@ export async function GET(req: NextRequest) {
         }
 
         // Orders matched only by the (unverified) e-mail keep their summary; personal and document data
-        // is dropped, as on the /orders page (lib/account.ts getAccountOrders).
-        orders = orders.map(o => (Number(o.user_id) === Number(userId) ? o : emailOnlyOrder(o)))
+        // is dropped, as on the /orders page (lib/account.ts getAccountOrders). Own orders lose the internal
+        // fields unless the caller is the admin.
+        const isAdmin = payload.role === 'admin'
+        orders = orders.map(o => (Number(o.user_id) === Number(userId) ? (isAdmin ? o : customerOrder(o)) : emailOnlyOrder(o)))
 
         return NextResponse.json({ orders })
     } catch (error: any) {
