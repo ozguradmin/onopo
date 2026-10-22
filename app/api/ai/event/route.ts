@@ -2,12 +2,13 @@
  * POST /api/ai/event/: content-free UI beacons from the chat panel (SPEC 8.2): open, card_click,
  * add_to_cart, wa_shown, wa_click, stop, new_chat. They feed the admin usage table (add-to-cart and
  * WhatsApp clicks per day). The body carries ids and codes only, never text; it answers 204 at once and
- * writes in ctx.waitUntil.
+ * writes in ctx.waitUntil. While the kill switch is off nothing is written (no chat can be open then, so a
+ * beacon can only come from a stale tab or a script).
  */
 import { isBotUserAgent } from '@/lib/bot-user-agent'
 import { parseUiEvent } from '@/lib/assistant/request'
 import { ipKey, recordUiEvent, type D1Lite } from '@/lib/assistant/limits'
-import { clientIp } from '@/lib/assistant/data'
+import { clientIp, getAssistantSettings, isAssistantEnabled } from '@/lib/assistant/data'
 import { sha16 } from '@/lib/assistant/turn'
 
 export const dynamic = 'force-dynamic'
@@ -42,6 +43,11 @@ export async function POST(req: Request) {
 
     const { getCloudflareContext } = await import('@opennextjs/cloudflare')
     const { env, ctx } = await getCloudflareContext({ async: true })
+    try {
+        if (!isAssistantEnabled(await getAssistantSettings(env.DB))) return noContent()
+    } catch {
+        return noContent()
+    }
     try {
         if (env.CHAT_RL_BURST && !(await env.CHAT_RL_BURST.limit({ key: `ev:${ipKey(clientIp(req))}` })).success) return noContent()
     } catch {
