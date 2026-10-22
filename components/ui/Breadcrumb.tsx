@@ -30,8 +30,10 @@ export function breadcrumbJsonLd(items: BreadcrumbItem[], origin: string = SITE_
 }
 
 /**
- * Visible breadcrumb (13px muted, one horizontally scrollable line on mobile) plus, with `jsonLd`,
- * the matching BreadcrumbList structured data. Server-friendly.
+ * Visible breadcrumb (13px muted, one line) plus, with `jsonLd`, the matching BreadcrumbList structured
+ * data. The current page (last crumb, often a long product name) shrinks to the space left and ends in
+ * "…" at the right gutter; the other crumbs stay whole (the line scrolls sideways only if they alone
+ * are too wide). Server-friendly.
  *
  *   <Breadcrumb jsonLd items={[{ label: 'Anasayfa', href: '/' }, { label: 'Kablolar', href: '/products/?category=…' }, { label: product.name }]} />
  */
@@ -44,13 +46,14 @@ export function Breadcrumb({ items, jsonLd = false, className }: { items: Breadc
                     {items.map((item, i) => {
                         const last = i === items.length - 1
                         return (
-                            <li key={`${i}-${item.label}`} className={cn("flex items-center gap-1", last ? "min-w-0" : "shrink-0")}>
+                            // shrink! wins over a caller's [&_li]:shrink-0, so the ellipsis is never pushed off-screen
+                            <li key={`${i}-${item.label}`} className={cn("flex items-center gap-1", last ? "min-w-0 shrink!" : "shrink-0")}>
                                 {item.href && !last ? (
                                     <Link href={item.href} prefetch={false} className="rounded-sm underline-offset-2 hover:text-ink hover:underline">
                                         {item.label}
                                     </Link>
                                 ) : (
-                                    <span aria-current={last ? 'page' : undefined} className={cn(last && 'max-w-[60vw] truncate text-ink-2 md:max-w-[480px]')}>
+                                    <span aria-current={last ? 'page' : undefined} className={cn(last && 'min-w-0 truncate text-ink-2 md:max-w-[480px]')}>
                                         {item.label}
                                     </span>
                                 )}
