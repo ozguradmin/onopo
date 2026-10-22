@@ -31,7 +31,7 @@ export type SlugResolution =
 export const RESERVED_SLUGS = [
     'admin', 'api', 'categories', 'help', 'kategori', 'login', 'maintenance', 'odeme', 'orders', 'page', 'policy',
     'product', 'products', 'profile', 'register', 'shipping', 'siparis-basarili', 'siparis-hata', 'terms',
-    'cart', 'checkout', 'sepet', 'export', 'sitemap.xml', 'robots.txt',
+    'cart', 'checkout', 'sepet', 'export', 'sitemap.xml', 'robots.txt', 'degerlendir',
 ] as const
 
 /**

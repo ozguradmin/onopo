@@ -7,6 +7,7 @@ import { Edit, Trash2, Plus, Upload, Trash, Loader2, Search } from 'lucide-react
 import { formatPrice } from '@/lib/formatPrice'
 import { getImageUrl, parseProductImages } from '@/lib/utils'
 import { productImageUrl } from '@/lib/images'
+import { gtinForStorage } from '@/lib/gtin'
 import { FallbackImage } from '@/components/ui/FallbackImage'
 import { toast } from 'sonner'
 import { ProductEditModal } from '@/components/admin/ProductEditModal'
@@ -182,6 +183,9 @@ export default function AdminProductsPage() {
                     // Get product code
                     const productCode = item['Ürün Kodu'] || item['Code'] || item['product_code'] || ''
 
+                    // Barcode (export column 'Barkod (GTIN)'); only a valid GS1 code is kept (lib/gtin.ts)
+                    const gtin = gtinForStorage(item['Barkod (GTIN)'] ?? item['Barkod'] ?? item['GTIN'] ?? item['EAN'] ?? item['gtin'] ?? '')
+
                     // Get description - support multiple column names
                     let description = item['Açıklama'] || item['Detay'] || item['Description'] || ''
 
@@ -209,6 +213,7 @@ export default function AdminProductsPage() {
                     return {
                         name: productName,
                         product_code: productCode,
+                        gtin,
                         category: category,
                         price: price,
                         original_price: originalPrice || null,

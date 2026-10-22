@@ -152,7 +152,7 @@ export function topEntries<K extends string | number>(counts: Map<K, number>, li
 const NOT_PRODUCT = new Set([
     'admin', 'api', 'categories', 'help', 'kategori', 'login', 'maintenance', 'odeme', 'orders', 'page', 'policy',
     'product', 'products', 'profile', 'register', 'shipping', 'siparis-basarili', 'siparis-hata', 'terms',
-    'cart', 'checkout', 'sepet', 'export', 'favorites', 'favoriler', 'search', 'arama',
+    'cart', 'checkout', 'sepet', 'export', 'favorites', 'favoriler', 'search', 'arama', 'degerlendir',
 ])
 
 /** Stored path: no query or hash, at most 300 characters, always starting and ending with "/". */

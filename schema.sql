@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS products (
     installment_info TEXT,
     is_active INTEGER DEFAULT 1,
     product_code TEXT,
+    gtin TEXT,                               -- barcode (lib/gtin.ts); live DB: migrations/2026-10-22-product-gtin.sql
     whatsapp_order_enabled INTEGER DEFAULT 0,
     whatsapp_number TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -50,17 +51,37 @@ CREATE TABLE IF NOT EXISTS menus (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Reviews table
+-- Reviews table. user_id is NULL for a guest who reviewed through an order's review link (lib/order-reviews.ts);
+-- order_id, reviewer_name ("Ayşe K.", never the full name) and verified = 1 are set for those link reviews.
+-- UNIQUE(order_id, product_id): one review per product per order (NULL order_ids are distinct in SQLite).
+-- The live table was rebuilt into this shape by migrations/2026-10-22-guest-reviews.sql (CREATE TABLE IF NOT
+-- EXISTS does not change an existing table). Do not add statements that need the new columns to this file:
+-- it also runs on a database that has not had that migration yet.
 CREATE TABLE IF NOT EXISTS reviews (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
+    user_id INTEGER,
     rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
     comment TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    order_id INTEGER,
+    reviewer_name TEXT,
+    verified INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE (order_id, product_id)
 );
+CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id, created_at);
+
+-- Review-request e-mails (lib/order-reviews.ts sendReviewRequests): one row per order that was asked, so it is
+-- asked only once. status: sending | sent | failed. No e-mail address is stored.
+CREATE TABLE IF NOT EXISTS review_requests (
+    order_id INTEGER PRIMARY KEY,
+    sent_at TEXT NOT NULL,
+    status TEXT NOT NULL,
+    error TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_review_requests_status ON review_requests(status, sent_at);
 
 -- Hero Slides table
 CREATE TABLE IF NOT EXISTS hero_slides (
@@ -319,7 +340,7 @@ CREATE INDEX IF NOT EXISTS idx_not_found_log_seen ON not_found_log(last_seen);
 CREATE TABLE IF NOT EXISTS system_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TEXT NOT NULL,
-    source TEXT NOT NULL,                    -- redirects | facts | images | cron | assistant | other
+    source TEXT NOT NULL,                    -- redirects | facts | images | cron | assistant | reviews | other
     level TEXT NOT NULL,                     -- error | warn | info
     message TEXT NOT NULL,
     detail TEXT,

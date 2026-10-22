@@ -6,6 +6,7 @@ import { stripHtml } from '@/lib/stripHtml'
 import { requireAdmin } from '@/lib/auth'
 import { parseShippingSettings, shippingCost as computeShippingCost } from '@/lib/pricing'
 import { canonicalOrigin, exportImageUrl, feedPrices, parseImages } from '@/lib/feeds'
+import { hasGtinColumn } from '@/lib/gtin'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,7 @@ interface Product {
     is_active: number
     free_shipping: number | null
     product_code: string | null
+    gtin?: string | null
     created_at: string
 }
 
@@ -33,8 +35,10 @@ export async function GET() {
         // checkout charges them.
         const isAdmin = (await requireAdmin()) === null
 
+        // products.gtin once migrations/2026-10-22-product-gtin.sql has run (the column stays empty until then)
+        const gtinColumn = (await hasGtinColumn(db)) ? ', gtin' : ''
         const { results: products } = await db.prepare(
-            `SELECT id, name, description, price, original_price, stock, images, category, is_active, free_shipping, product_code, created_at
+            `SELECT id, name, description, price, original_price, stock, images, category, is_active, free_shipping, product_code, created_at${gtinColumn}
              FROM products ${isAdmin ? '' : 'WHERE is_active = 1 '}ORDER BY id DESC`
         ).all() as { results: Product[] }
 
@@ -71,7 +75,8 @@ export async function GET() {
                 'Kargo Ücreti': shippingPriceValue.toFixed(2),
                 'Aktif': product.is_active ? 'Evet' : 'Hayır',
                 'Görsel URL': imageUrl,
-                'Oluşturma Tarihi': product.created_at || ''
+                'Oluşturma Tarihi': product.created_at || '',
+                'Barkod (GTIN)': product.gtin || ''
             }
         })
 

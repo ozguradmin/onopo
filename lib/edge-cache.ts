@@ -58,11 +58,11 @@ export function hasAuthCookie(cookieHeader: string | null): boolean {
 // Never cached, whatever the other rules say
 const DENY = [
     /^\/api\/(orders|auth|birfatura|payment|cron|analytics|favorites|user|installment-token|admin|ai)/,
-    /^\/(admin|odeme|profile|orders|login|register|siparis-)/,
+    /^\/(admin|odeme|profile|orders|login|register|siparis-|degerlendir)/,
 ]
 
 // Single-segment paths that are not product pages
-const RESERVED_SEGMENTS = new Set(['admin', 'odeme', 'profile', 'orders', 'login', 'register', 'api', 'maintenance', 'categories'])
+const RESERVED_SEGMENTS = new Set(['admin', 'odeme', 'profile', 'orders', 'login', 'register', 'api', 'maintenance', 'categories', 'degerlendir'])
 
 const PAGE_ALLOW = [
     /^\/$/,
@@ -256,9 +256,10 @@ const CONTENT_WRITE = /^\/api\/(admin|products|categories|homepage-sections|hero
 // password reset and the client error log; optimize-images only reports image copy coverage (GET);
 // email/send only sends mail; profile changes the admin's own login; users is
 // read-only; redirects only changes what 404 URLs answer (never cached), and its resolve POST only reads;
-// system-logs only marks admin log entries "Çözüldü"; assistant/facts writes the assistant's product facts lines
-// (the storefront HTML does not show them; the "Ürün bilgilerini yenile" button posts every ~20 s).
-const CONTENT_WRITE_EXCEPTIONS = /^\/api\/admin\/(forgot-password|reset-password|log|optimize-images|email|profile|users|redirects|system-logs|assistant\/facts)(\/|$)/
+// system-logs only marks admin log entries "Çözüldü"; review-requests only switches the review e-mails on/off;
+// assistant/facts writes the assistant's product facts lines (the storefront HTML does not show them; the
+// "Ürün bilgilerini yenile" button posts every ~20 s).
+const CONTENT_WRITE_EXCEPTIONS = /^\/api\/admin\/(forgot-password|reset-password|log|optimize-images|email|profile|users|redirects|system-logs|review-requests|assistant\/facts)(\/|$)/
 
 export function shouldBumpCacheVersion(pathname: string, method: string, hasSession: boolean): boolean {
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false

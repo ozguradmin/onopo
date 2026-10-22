@@ -1,6 +1,8 @@
 /**
- * POST /api/cron/automation/?job=images|facts&ms=<time budget>: the daily automatic upkeep.
+ * POST /api/cron/automation/?job=reviews|images|facts&ms=<time budget>: the daily automatic upkeep.
  *
+ *  - job=reviews: the review-request e-mails, at most 20 orders per run, each order once
+ *    (lib/order-reviews.ts, lib/review-requests-server.ts).
  *  - job=images: creates the missing WebP variants of the images the storefront shows (Cloudflare Images
  *    binding; lib/image-variants-server.ts), bounded per run.
  *  - job=facts: writes every missing or outdated assistant facts line, one DeepSeek call every 4 s, at most
@@ -14,11 +16,12 @@
 import { NextResponse } from 'next/server'
 import { sweepProductFacts } from '@/lib/assistant/data'
 import { sweepImageVariants } from '@/lib/image-variants-server'
+import { sweepReviewRequests } from '@/lib/review-requests-server'
 
 export const dynamic = 'force-dynamic'
 
 const headers = { 'Cache-Control': 'private, no-store' }
-const MAX_MS: Record<string, number> = { images: 4 * 60_000, facts: 9 * 60_000 }
+const MAX_MS: Record<string, number> = { reviews: 2 * 60_000, images: 4 * 60_000, facts: 9 * 60_000 }
 
 export async function POST(req: Request) {
     const cronSecret = process.env.CRON_SECRET
@@ -34,6 +37,12 @@ export async function POST(req: Request) {
     try {
         const { getCloudflareContext } = await import('@opennextjs/cloudflare')
         const { env } = await getCloudflareContext({ async: true })
+        if (job === 'reviews') {
+            const r = await sweepReviewRequests(env, deadline)
+            const s = r as { stopped: string; candidates?: number; sent?: number; failed?: number }
+            console.log(`automation_reviews stopped=${s.stopped} candidates=${s.candidates ?? '-'} sent=${s.sent ?? '-'} failed=${s.failed ?? '-'}`)
+            return NextResponse.json({ job, stopped: s.stopped, candidates: s.candidates ?? null, sent: s.sent ?? 0, failed: s.failed ?? 0 }, { headers })
+        }
         if (job === 'images') {
             const r = await sweepImageVariants(env, deadline)
             const s = r as { stopped: string; missingImages?: number; done?: number; failed?: unknown[]; remaining?: number }

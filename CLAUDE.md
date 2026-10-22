@@ -44,6 +44,7 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   tip hatalarını yok sayar (`ignoreBuildErrors`).
 - Birim testleri: `node --test scripts/edge-cache.test.mjs scripts/seo.test.mjs scripts/redirects.test.mjs` (Node 23.6+; CI çalıştırmaz).
   Otomatik işler: `node --test scripts/automation.test.mjs` (D1 yerine `node:sqlite`, saat/AI/R2/Images sahte).
+  Yorumlar/değerlendirme e-postaları ve migration: `node --test scripts/reviews.test.mjs`; Google feed ve barkod: `node --test scripts/feeds.test.mjs`.
 
 ## Gizli değişkenler (sadece adlar)
 - Cloudflare Worker secret'ları: `BIRFATURA_TOKEN`, `CRON_SECRET`, `JWT_SECRET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `RESEND_API_KEY`;
@@ -71,6 +72,11 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   `product_variations`, `two_factor_codes` tabloları ve sonradan eklenen sütunlar (ör. `products.slug`,
   `free_shipping`, `price_usd`) `app/api/migrations/*` (admin korumalı) ya da `ALTER TABLE ... ADD COLUMN` ile
   eklenmiş. Boş bir DB'yi tek başına kuramaz; gerçek şema için canlı DB'ye bak.
+- **Elle çalıştırılan migration'lar** `migrations/<tarih>-<ad>.sql` (deploy çalıştırmaz; yedekten sonra bir kez
+  `wrangler d1 execute onopo-db --remote --file=...`). Kod, migration çalışmadan da çökmez.
+  `2026-10-22-guest-reviews.sql` (reviews tablosu yeniden kurulur: `user_id` boş olabilir, `order_id`,
+  `reviewer_name`, `verified`, `UNIQUE(order_id, product_id)`; `review_requests` tablosu; ikinci çalıştırma
+  korumada durur) ve `2026-10-22-product-gtin.sql` (`products.gtin`).
 
 ## Worker (`worker.ts`, kurallar `lib/edge-cache.ts`)
 - **Kanonik host:** `http://` ve `www.` sayfa GET/HEAD istekleri `https://onopostore.com`'a 301 olur. `/api/*` hiç
@@ -170,6 +176,20 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   3. `/api/cron/automation/?job=images` (en çok 4 dk): eksik görsel varyantları.
   4. `/api/cron/automation/?job=facts` (kalan süre, en çok 9 dk): asistanın eksik/eski ürün bilgisi satırları,
      4 sn'de bir DeepSeek çağrısı (hesap sınırı 20/dk, canlı sohbetlere yer kalsın), en çok 120 ürün/gün.
+  `images`'tan önce `?job=reviews` (en çok 2 dk): değerlendirme e-postaları (aşağıda).
+
+## Değerlendirme e-postaları ve misafir yorumları
+- `lib/order-reviews.ts`, `lib/review-link.ts`, `lib/review-requests-server.ts`. Günlük iş: durumu `completed` (ya da
+  7 günden eski `shipped`), 5–45 gün önce verilmiş, e-postası olan, `review_requests` satırı olmayan siparişler; en
+  çok 20/gün, sipariş başına **bir kez** (satır önce alınır; Resend kesintisinde geri bırakılır, adres reddinde
+  `failed`). `review_requests`'te e-posta adresi tutulmaz. Admin › Yorumlar'da aç/kapa (`site_settings.review_requests_enabled`,
+  yoksa açık) ve son 30 günün sayıları.
+- Bağlantı `https://onopostore.com/degerlendir/?t=<order>.<exp>.<HMAC>`: anahtar `JWT_SECRET + ":review-link"`,
+  amaç etiketi verinin içinde, 60 gün. Secret yoksa (ya da açık kaynaktaki yedek değerse) hiç imzalanmaz/kabul edilmez.
+- `/degerlendir/` noindex, robots'ta kapalı, edge cache'te DENY. `POST /api/reviews/order/` (rate limit `REVIEW_RL`):
+  token, sipariş durumu (approved/shipped/completed), ürün siparişte mi, aynı sipariş+ürün tekrarı (409), puan 1–5,
+  yorum ≤ 1000. Kayıt `verified = 1`, `reviewer_name` = teslimat adından "Ayşe K." (tam ad saklanmaz); başarıda
+  `cache_version` artar. Ürün sayfası "Doğrulanmış alıcı" rozeti gösterir.
 
 ## Asistan ürün bilgileri (otomatik)
 - `lib/assistant/facts-auto.ts` + `lib/automation/pacing.ts`. Ürün eklenince/kaydedilince (`POST /api/products`,
