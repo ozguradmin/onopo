@@ -56,10 +56,12 @@ export function RailScroller({ heading, label, children, className, listClassNam
             cancelAnimationFrame(frame)
             frame = requestAnimationFrame(update)
         }
-        update()
+        // First measurement after layout: the observer's initial callback (or the next frame) instead of a
+        // synchronous read during hydration, which forced a layout once per rail on the home page
         el.addEventListener('scroll', onScroll, { passive: true })
         const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onScroll) : null
-        ro?.observe(el)
+        if (ro) ro.observe(el)
+        else onScroll()
         return () => {
             cancelAnimationFrame(frame)
             el.removeEventListener('scroll', onScroll)
