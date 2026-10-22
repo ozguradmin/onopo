@@ -370,6 +370,47 @@ export function displayName(name: string): string {
     return stripped.length > 0 ? stripped : trimmed
 }
 
+/** Folded last words of a leading compatibility phrase ("… Uyumlu", "… İçin") and its joiner words. */
+const COMPAT_END = new Set(['uyumlu', 'icin'])
+const COMPAT_LOWER = new Set(['ve', 'ile', 'uyumlu', 'icin'])
+/** At most this many words before "Uyumlu"/"İçin" ("Android Xiaomi Ve Samsung Uyumlu" has 4). */
+const MAX_COMPAT_WORDS = 6
+
+/**
+ * Card title split (display only; the full name stays in alt/title/aria-label, SEO and feeds).
+ * Many names start with the same compatibility phrase ("Android Xiaomi Ve Samsung Uyumlu …",
+ * "İphone Apple Uyumlu …"), so in a 2-line clamp neighbouring cards look identical and the product
+ * type is cut off. A short, generic leading phrase that ends in "Uyumlu"/"İçin" moves to its own line:
+ *   "onopo Android Xiaomi Ve Samsung Uyumlu Micro Usb Hızlı Şarj ve Data Kablosu 3.0A / 1MT - D6"
+ *   → title "Micro Usb Hızlı Şarj ve Data Kablosu 3.0A / 1MT - D6", compat "Android Xiaomi ve Samsung uyumlu"
+ * A phrase that names a model ("Iphone 15 Pro Uyumlu …", it has a number) is what tells the variants
+ * apart, so it stays at the start of the title. Names without such a phrase (or where "Uyumlu" comes
+ * late, after model lists) keep displayName().
+ */
+export function splitDisplayName(name: string): { title: string; compat: string | null } {
+    const title = displayName(name)
+    const words = title.split(/\s+/).filter(Boolean)
+    // Keep at least two words after the phrase
+    const last = Math.min(MAX_COMPAT_WORDS, words.length - 3)
+    for (let i = 1; i <= last; i++) {
+        const before = words[i - 1]
+        // A separator or a clause end before the keyword: this is not a leading phrase
+        if (/^[-–|·:]$/.test(before) || /[,;:|]$/.test(before)) break
+        if (!COMPAT_END.has(foldTr(words[i]))) continue
+        if (words.slice(0, i).some(w => /\d/.test(w))) break
+        const rest = words.slice(i + 1).join(' ').replace(/^[-–|·:,\s]+/, '')
+        if (rest.split(' ').length < 2) break
+        const compat = words
+            .slice(0, i + 1)
+            .map((w, k) => (k > 0 && COMPAT_LOWER.has(foldTr(w)) ? w.toLocaleLowerCase('tr-TR') : w))
+            .join(' ')
+        const first = rest.charAt(0)
+        const head = /\p{Ll}/u.test(first) && /\p{Ll}/u.test(rest.charAt(1)) ? first.toLocaleUpperCase('tr-TR') : first
+        return { title: head + rest.slice(1), compat }
+    }
+    return { title, compat: null }
+}
+
 /** "ONOPO" when the product is our own brand (name starts with onopo), else null. */
 export function brandOf(name: string): string | null {
     return /^onopo\b/i.test((name || '').trim()) ? 'ONOPO' : null
