@@ -16,7 +16,6 @@
  *   the DOM, so Tab walks into it naturally.
  */
 import * as React from "react"
-import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
 import {
     ArrowRight, BatteryCharging, Cable, Car, ChevronDown, ChevronRight, Headphones, LayoutGrid, ShieldCheck,
@@ -30,6 +29,7 @@ import {
     activeNavHref, buildMenuTree, CONNECTOR_LINKS, formatAmountShort, isExternalHref, isNoindexListingHref, normalizeHref,
     PRODUCT_TYPE_LINKS, type NavLinkItem,
 } from "./nav-data"
+import { PrefetchLink } from "./PrefetchLink"
 
 const TYPE_ICONS: Record<string, LucideIcon> = {
     'sarj-aleti': Zap,
@@ -41,7 +41,7 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
 }
 
 /**
- * Internal links navigate client-side (no prefetch); external ones are plain anchors. Links to noindex
+ * Internal links navigate client-side and are prefetched on hover, touch or focus (PrefetchLink); external ones are plain anchors. Links to noindex
  * listing variants (?sort=, ?f=, …: "Yeni Gelenler") get rel="nofollow", like the toolbar's sort links.
  */
 export function ShellLink({
@@ -59,9 +59,9 @@ export function ShellLink({
         )
     }
     return (
-        <Link href={target} prefetch={false} rel={isNoindexListingHref(target) ? 'nofollow' : undefined} {...rest}>
+        <PrefetchLink href={target} rel={isNoindexListingHref(target) ? 'nofollow' : undefined} {...rest}>
             {children}
-        </Link>
+        </PrefetchLink>
     )
 }
 
@@ -197,15 +197,14 @@ export function DesktopNav() {
                         const Icon = TYPE_ICONS[t.key] ?? Zap
                         return (
                             <li key={t.key}>
-                                <Link
+                                <PrefetchLink
                                     href={t.href}
-                                    prefetch={false}
                                     rel="nofollow"
                                     className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium text-muted transition-colors hover:bg-surface hover:text-ink"
                                 >
                                     <Icon className="h-4 w-4 text-brand-500" aria-hidden="true" strokeWidth={1.75} />
                                     {t.short}
-                                </Link>
+                                </PrefetchLink>
                             </li>
                         )
                     })}
@@ -261,9 +260,8 @@ function MegaPanel({ hasMenus, tree, onNavigate }: { hasMenus: boolean; tree: Me
                 <ul className="flex flex-col gap-0.5">
                     {categories.map(c => (
                         <li key={c.id}>
-                            <Link
+                            <PrefetchLink
                                 href={c.href}
-                                prefetch={false}
                                 onClick={onNavigate}
                                 className="group flex items-center gap-3 rounded-card px-2 py-2 transition-colors hover:bg-surface"
                             >
@@ -275,19 +273,18 @@ function MegaPanel({ hasMenus, tree, onNavigate }: { hasMenus: boolean; tree: Me
                                     <span className="block text-[13px] text-muted">{c.product_count} ürün</span>
                                 </span>
                                 <ChevronRight className="h-4 w-4 text-subtle opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />
-                            </Link>
+                            </PrefetchLink>
                         </li>
                     ))}
                 </ul>
-                <Link
+                <PrefetchLink
                     href="/products/"
-                    prefetch={false}
                     onClick={onNavigate}
                     className="mt-3 inline-flex items-center gap-1.5 px-2 text-sm font-semibold text-brand-600 hover:text-brand-700"
                 >
                     Tüm ürünleri gör{totalCount > 0 ? ` (${totalCount})` : ''}
                     <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </Link>
+                </PrefetchLink>
             </div>
 
             {columns.length < 2 && (
@@ -298,16 +295,15 @@ function MegaPanel({ hasMenus, tree, onNavigate }: { hasMenus: boolean; tree: Me
                             const Icon = TYPE_ICONS[t.key] ?? Zap
                             return (
                                 <li key={t.key}>
-                                    <Link
+                                    <PrefetchLink
                                         href={t.href}
-                                        prefetch={false}
                                         rel="nofollow"
                                         onClick={onNavigate}
                                         className="flex min-h-10 items-center gap-2.5 text-[15px] font-medium text-ink-2 transition-colors hover:text-brand-600"
                                     >
                                         <Icon className="h-[18px] w-[18px] text-brand-500" aria-hidden="true" strokeWidth={1.75} />
                                         {t.label}
-                                    </Link>
+                                    </PrefetchLink>
                                 </li>
                             )
                         })}
@@ -322,16 +318,15 @@ function MegaPanel({ hasMenus, tree, onNavigate }: { hasMenus: boolean; tree: Me
                             const Icon = t.key === '20w' ? Zap : t.key === 'orgulu' ? Cable : Smartphone
                             return (
                                 <li key={t.key}>
-                                    <Link
+                                    <PrefetchLink
                                         href={t.href}
-                                        prefetch={false}
                                         rel="nofollow"
                                         onClick={onNavigate}
                                         className="flex min-h-10 items-center gap-2.5 text-[15px] font-medium text-ink-2 transition-colors hover:text-brand-600"
                                     >
                                         <Icon className="h-[18px] w-[18px] text-brand-500" aria-hidden="true" strokeWidth={1.75} />
                                         {t.label}
-                                    </Link>
+                                    </PrefetchLink>
                                 </li>
                             )
                         })}
@@ -374,15 +369,14 @@ function MegaPanel({ hasMenus, tree, onNavigate }: { hasMenus: boolean; tree: Me
                             <li>PayTR ile güvenli ödeme</li>
                         </ul>
                     </div>
-                    <Link
+                    <PrefetchLink
                         href="/products/"
-                        prefetch={false}
                         onClick={onNavigate}
                         className="relative mt-5 inline-flex h-11 items-center justify-center gap-2 self-start rounded-card bg-white px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface"
                     >
                         Alışverişe başla
                         <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </Link>
+                    </PrefetchLink>
                 </div>
             </div>
         </div>

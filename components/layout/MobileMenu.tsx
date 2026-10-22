@@ -9,7 +9,8 @@
  *   3. "Ürün tipine göre" and "Cihazına göre" quick links (or the admin menus when they exist)
  *   4. Admin › Header links
  *   5. help pages, contact (phone, WhatsApp, e-mail)
- * Opened by the header ☰ button and the bottom-nav "Kategoriler" button.
+ * Opened by the header ☰ button and the bottom-nav "Kategoriler" button. Page links are prefetched on touch, hover
+ * or focus (PrefetchLink); the account links never are.
  */
 import * as React from "react"
 import Link from "next/link"
@@ -22,6 +23,7 @@ import { useShellUI } from "@/components/layout/shell-ui"
 import { Drawer } from "./Drawer"
 import { CategoryIcon } from "./CategoryIcon"
 import { ShellLink, useActiveNavHref } from "./MegaMenu"
+import { PrefetchLink } from "./PrefetchLink"
 import { buildMenuTree, CONNECTOR_LINKS, normalizeHref, PRODUCT_TYPE_LINKS, SUPPORT_LINKS, telHref, whatsappHref } from "./nav-data"
 
 type AuthState = { status: 'unknown' } | { status: 'out' } | { status: 'in'; name: string }
@@ -150,37 +152,37 @@ export function MobileMenu() {
                         <ul>
                             {categories.map(c => (
                                 <li key={c.id}>
-                                    <Link href={c.href} prefetch={false} onClick={closeMenu} aria-current={current(c.href)} className={ROW}>
+                                    <PrefetchLink href={c.href} onClick={closeMenu} aria-current={current(c.href)} className={ROW}>
                                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600" aria-hidden="true">
                                             <CategoryIcon name={c.icon} className="h-[18px] w-[18px]" />
                                         </span>
                                         <span className="line-clamp-2 min-w-0 flex-1 py-1.5 font-semibold leading-5">{c.name}</span>
                                         <span className="text-[13px] tabular-nums text-muted">{c.product_count}</span>
                                         <ChevronRight className="h-4 w-4 shrink-0 text-subtle" aria-hidden="true" />
-                                    </Link>
+                                    </PrefetchLink>
                                 </li>
                             ))}
                             <li>
-                                <Link href="/kategoriler/" prefetch={false} onClick={closeMenu} aria-current={current('/kategoriler/')} className={cn(ROW, 'font-semibold text-brand-600')}>
+                                <PrefetchLink href="/kategoriler/" onClick={closeMenu} aria-current={current('/kategoriler/')} className={cn(ROW, 'font-semibold text-brand-600')}>
                                     <span className="flex-1">Tüm kategorileri gör</span>
                                     <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-                                </Link>
+                                </PrefetchLink>
                             </li>
                             <li>
-                                <Link href="/products/" prefetch={false} onClick={closeMenu} aria-current={current('/products/')} className={cn(ROW, 'font-semibold text-brand-600')}>
+                                <PrefetchLink href="/products/" onClick={closeMenu} aria-current={current('/products/')} className={cn(ROW, 'font-semibold text-brand-600')}>
                                     <span className="flex-1">Tüm ürünler</span>
                                     <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-                                </Link>
+                                </PrefetchLink>
                             </li>
                             {BROWSE_LINKS.map(({ href, label, Icon }) => (
                                 <li key={href}>
-                                    <Link href={href} prefetch={false} onClick={closeMenu} aria-current={current(href)} className={ROW}>
+                                    <PrefetchLink href={href} onClick={closeMenu} aria-current={current(href)} className={ROW}>
                                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600" aria-hidden="true">
                                             <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
                                         </span>
                                         <span className="min-w-0 flex-1 py-1.5 font-semibold leading-5">{label}</span>
                                         <ChevronRight className="h-4 w-4 shrink-0 text-subtle" aria-hidden="true" />
-                                    </Link>
+                                    </PrefetchLink>
                                 </li>
                             ))}
                         </ul>
@@ -278,9 +280,9 @@ export function MobileMenu() {
                         <ul>
                             {SUPPORT_LINKS.map(l => (
                                 <li key={l.href}>
-                                    <Link href={l.href} prefetch={false} onClick={closeMenu} aria-current={current(l.href)} className={cn(ROW, 'min-h-11 text-ink-2')}>
+                                    <PrefetchLink href={l.href} onClick={closeMenu} aria-current={current(l.href)} className={cn(ROW, 'min-h-11 text-ink-2')}>
                                         {l.label}
-                                    </Link>
+                                    </PrefetchLink>
                                 </li>
                             ))}
                         </ul>

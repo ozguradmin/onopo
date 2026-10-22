@@ -4,7 +4,8 @@
 //   - tracking parameters (utm_*, gclid, srsltid, ...) removed from the URL Next renders (the browser keeps
 //     its address) and put back on the Location of Next's same-origin redirects,
 //   - a conservative edge cache for anonymous public GETs (rules in lib/edge-cache.ts); anonymous cached
-//     HTML goes to the browser as 'private, no-cache' so it can use the back/forward cache,
+//     HTML goes to the browser as 'private, no-cache' so it can use the back/forward cache; the RSC payloads of
+//     the same pages (client-side navigations and prefetches) are cached too, keyed by the router headers,
 //   - the maintenance render answered as 503 + Retry-After + X-Robots-Tag: noindex (client-side navigations of
 //     tabs opened before maintenance get a plain 503, so the router loads that page),
 //   - the readable session hint cookie (lib/session-hint.ts) kept in sync with auth_token,
@@ -36,14 +37,19 @@ import {
     hasAuthCookie,
     hstsHeader,
     isCacheableRequest,
+    isCacheableRscRequest,
     isMaintenanceBody,
     isRscRequest,
     isStorableBody,
     isStorableResponse,
+    isStorableRscBody,
+    isStorableRscResponse,
     maintenanceHeaders,
     mayRenderMaintenance,
     needsBodyCheck,
     restoreTrackingParams,
+    rscCacheKeyUrl,
+    rscVariant,
     sessionHintSetCookie,
     shouldBumpCacheVersion,
     stripTrackingParams,
@@ -295,6 +301,48 @@ async function serveFromEdgeCache(request: Request, url: URL, env: Env, ctx: Ctx
     return out
 }
 
+async function sha256Hex(text: string): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+    return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * RSC payload of an allowlisted public page (lib/edge-cache.ts isCacheableRscRequest): served from the edge cache,
+ * else rendered and streamed to the browser at once while a copy is checked (isStorableRscBody) and stored in the
+ * background. During maintenance nothing is served from or written to the cache, and store pages get the 503 that
+ * sends the router to a full page load.
+ */
+async function serveRscFromEdgeCache(request: Request, url: URL, env: Env, ctx: Ctx): Promise<Response> {
+    const cache = edgeCache()
+    const [buildId, settings] = await Promise.all([getBuildId(env), getEdgeSettings(env)])
+    if (settings?.maintenance && blocksRscDuringMaintenance(url.pathname)) return maintenanceRscResponse()
+    if (!cache || !buildId || !settings || settings.maintenance) {
+        return withCacheStatus(await handler.fetch(request, env, ctx), 'BYPASS')
+    }
+
+    const key = new Request(rscCacheKeyUrl(url, buildId, settings.version, await sha256Hex(rscVariant(request.headers))))
+    try {
+        const hit = await cache.match(key)
+        if (hit) return fromStoredCopy(hit)
+    } catch (error) {
+        console.error('[edge-cache] rsc match failed', error)
+    }
+
+    const response: Response = await handler.fetch(request, env, ctx)
+    if (!response.body || !isStorableRscResponse(response)) return withCacheStatus(response, 'BYPASS')
+
+    // The browser gets the stream as it renders; the copy is read to the end before it may be stored
+    const [toBrowser, toStore] = response.body.tee()
+    ctx.waitUntil((async () => {
+        const body = await new Response(toStore).text()
+        if (!isStorableRscBody(url.pathname, body)) return
+        await cache.put(key, toStoredCopy(new Response(body, response)))
+    })().catch(error => {
+        console.error('[edge-cache] rsc put failed', error)
+    }))
+    return withCacheStatus(new Response(toBrowser, response), 'MISS')
+}
+
 // ---- old URLs: a 404 with a live replacement becomes a 301 (rules and safety in lib/redirects.ts) ----
 
 // Not 'immutable': an admin may change a redirect, and a fuzzy match may improve as products change
@@ -425,6 +473,9 @@ async function handleFetch(request: Request, env: Env, ctx: Ctx): Promise<Respon
 
     if (isCacheableRequest({ method, url: targetUrl, headers: target.headers })) {
         return finish(await oldUrl(await serveFromEdgeCache(target, targetUrl, env, ctx)))
+    }
+    if (isCacheableRscRequest({ method, url: targetUrl, headers: target.headers })) {
+        return finish(await oldUrl(await serveRscFromEdgeCache(target, targetUrl, env, ctx)))
     }
     // HEAD of a store page during maintenance: rendered as a GET so the 503 status and headers match
     if (method === 'HEAD' && mayRenderMaintenance(targetUrl.pathname)) {

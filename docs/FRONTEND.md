@@ -70,6 +70,14 @@ RootLayout (server)            getStorefrontData(): settings, shipping, maxInsta
   except `/odeme`, and every cart write first takes over the saved cart (`syncSavedCart()`). Cart counts
   render 0 on the server and update after mount. `/siparis-basarili` empties the saved cart while the
   page is parsed (`components/checkout/ClearCartOnSuccess.tsx`, which repeats the persist key and shape).
+- **Fast tab switches.** Every page is dynamic and none has a `loading.js`, so Next's automatic prefetch fetched
+  nothing and each tap waited for the server. `components/layout/PrefetchLink.tsx` asks for a full prefetch: the
+  bottom nav's "Ana sayfa" and "Kategoriler" as soon as they are on screen (not the current tab), the logo, the
+  desktop menu and the drawer's page rows on hover (100 ms), touch or focus. Only `lib/prefetch.ts`
+  `isPrefetchableHref` pages (public; never `/profile`, `/orders`, `/odeme`, `/login`, `/register`, admin, APIs) and
+  not on Save-Data / 2G. `next.config.ts` `experimental.staleTimes` keeps visited pages 30 s and full prefetches
+  180 s in the tab's router cache (logout's `router.refresh()` and login's full load drop it). worker.ts serves the
+  anonymous RSC payloads of the edge-cache allowlist from the edge cache (`lib/edge-cache.ts`, "RSC payloads").
 - **Analytics.** The shell sends `POST /api/analytics/track {page}` once per store page view,
   including client-side navigations (the first one of a page load adds `landing: true` and `ref`:
   document.referrer, for traffic sources). The route writes the old `analytics` row and a cookieless

@@ -10,6 +10,8 @@
  *   (so out of the tab order and the accessibility tree) on pages that render an element with
  *   `data-hide-bottom-nav` (e.g. the product page's sticky buy bar), see app/globals.css.
  * - No login check on load: "Hesabım" always goes to /profile/ (which sends guests to the login).
+ * - "Ana sayfa" and "Kategoriler" are prefetched as soon as the bar is on screen (PrefetchLink "view"; not the tab of
+ *   the page you are on), so switching tabs shows the page at once; "Hesabım" (personal) is never prefetched.
  */
 import * as React from "react"
 import Link from "next/link"
@@ -19,6 +21,7 @@ import { cn } from "@/lib/utils"
 import { useCartStore } from "@/store/cart-store"
 import { useShellChrome } from "@/components/layout/store-data"
 import { openMobileSearch, useShellUI } from "@/components/layout/shell-ui"
+import { PrefetchLink } from "@/components/layout/PrefetchLink"
 import { useAssistantStore } from "@/components/assistant/assistant-store"
 
 export function MobileNav({ fromShell = false }: { fromShell?: boolean }) {
@@ -61,17 +64,17 @@ function MobileNavInner() {
             >
                 <ul className="mx-auto flex max-w-[560px] items-stretch">
                     <li className="flex flex-1">
-                        <Link href="/" prefetch={false} aria-current={path === '/' ? 'page' : undefined} className={cn(ITEM, tone(path === '/'))}>
+                        <PrefetchLink href="/" prefetchOn={path === '/' ? 'none' : 'view'} aria-current={path === '/' ? 'page' : undefined} className={cn(ITEM, tone(path === '/'))}>
                             <Home className="h-[22px] w-[22px]" aria-hidden="true" strokeWidth={path === '/' ? 2.25 : 1.75} />
                             Ana sayfa
-                        </Link>
+                        </PrefetchLink>
                     </li>
                     <li className="flex flex-1">
                         {/* The categories page (owner: the tab opened the side menu, which already has its own button) */}
-                        <Link href="/kategoriler/" prefetch={false} aria-current={path === '/kategoriler' ? 'page' : undefined} className={cn(ITEM, tone(path === '/kategoriler'))}>
+                        <PrefetchLink href="/kategoriler/" prefetchOn={path === '/kategoriler' ? 'none' : 'view'} aria-current={path === '/kategoriler' ? 'page' : undefined} className={cn(ITEM, tone(path === '/kategoriler'))}>
                             <LayoutGrid className="h-[22px] w-[22px]" aria-hidden="true" strokeWidth={path === '/kategoriler' ? 2.25 : 1.75} />
                             Kategoriler
-                        </Link>
+                        </PrefetchLink>
                     </li>
                     <li className="flex flex-1">
                         <button
