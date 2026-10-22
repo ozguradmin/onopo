@@ -103,8 +103,10 @@ function FooterInner({ variant }: { variant: 'store' | 'checkout' }) {
     const whatsapp = whatsappHref(s.whatsapp_number)
     const hasContact = !!(s.footer_phone || s.footer_email || s.footer_address || whatsapp)
 
+    // No top margin: every store page ends with its own bottom padding (48–64px, the section rhythm), so a
+    // margin here only doubled it into a 128–154px empty band. Pages that end grey run into the grey band.
     return (
-        <footer className="mt-12 lg:mt-16">
+        <footer>
             <TrustBand />
             <div className="bg-ink text-white">
                 <div className="container-store grid gap-x-8 gap-y-2 py-8 lg:grid-cols-12 lg:gap-y-8 lg:py-14">

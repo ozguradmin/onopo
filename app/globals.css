@@ -458,8 +458,10 @@ body:has([data-hide-bottom-nav]) [data-bottom-nav] {
 }
 
 /* Pages whose last block is grey (bg-surface: checkout, the product page's related rail) run straight
-   into the grey pre-footer trust band instead of leaving a white stripe above it. Pages that end on
-   white keep the footer's top margin. Only the page root or its last child count (not cards deeper inside). */
+   into the grey pre-footer trust band instead of leaving a white stripe above it. The store footer has
+   no top margin any more (pages end with their own bottom padding); this keeps the checkout footer's
+   margin off grey pages and guards against a margin coming back. Only the page root or its last child
+   count (not cards deeper inside). */
 #main-content:has(> .bg-surface:last-child, > :last-child > .bg-surface:last-child) + footer {
   margin-top: 0;
 }
