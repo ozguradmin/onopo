@@ -281,7 +281,7 @@ function LoginForm() {
                     {loading ? 'Giriş yapılıyor...' : 'Giriş yap'}
                 </Button>
 
-                <div className="flex items-center gap-3 text-[13px] text-subtle" aria-hidden="true">
+                <div className="flex items-center gap-3 text-[13px] text-muted" aria-hidden="true">
                     <span className="h-px flex-1 bg-line" />
                     veya
                     <span className="h-px flex-1 bg-line" />
