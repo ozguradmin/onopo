@@ -4,6 +4,7 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, User, Lock, Save, Upload, X, Image, Facebook, Instagram, Twitter, Youtube, Linkedin } from 'lucide-react'
+import { uploadImageVariants } from '@/lib/imageVariants'
 
 // The storefront listing rounds products_per_page UP to a multiple of 12 between 12 and 96, so every
 // page fills whole rows in the 2/3/4-column grids (lib/listing-data.ts listingPageSize; an unset or
@@ -65,7 +66,7 @@ export default function AdminSettingsPage() {
         Promise.all([
             fetch('/api/auth/me').then(r => r.json()),
             fetch('/api/site-settings').then(r => r.json()),
-            fetch('/api/categories').then(r => r.json())
+            fetch('/api/categories', { cache: 'no-store' }).then(r => r.json())
         ]).then(([userData, settingsData, categoriesData]) => {
             if (userData.user) {
                 setUser(userData.user)
@@ -240,6 +241,9 @@ export default function AdminSettingsPage() {
                                                 if (res.ok) {
                                                     const json = await res.json()
                                                     setLogoUrl(json.url)
+                                                    // 200w/400w WebP copies for the header and footer (transparency kept: the
+                                                    // footer inverts the logo on dark); never blocks saving
+                                                    void uploadImageVariants(file, json.url, { keepTransparency: true })
                                                 }
                                             } catch { }
                                         }}

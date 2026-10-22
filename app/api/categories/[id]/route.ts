@@ -64,6 +64,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
         return NextResponse.json({ success: true })
     } catch (error: any) {
+        // categories.name is UNIQUE; the batch rolled back, nothing changed
+        if (String(error?.message || '').includes('UNIQUE')) {
+            return NextResponse.json({ error: 'Bu adla bir kategori zaten var.' }, { status: 409 })
+        }
         console.error('Category update error:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })
     }

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import { VariationsSection, Variation } from './VariationsSection'
 import { uploadImageVariants } from '@/lib/imageVariants'
+import { useUsdTryRate } from './useUsdTryRate'
 
 interface ProductEditModalProps {
     isOpen: boolean
@@ -42,7 +43,8 @@ export function ProductEditModal({ isOpen, onClose, productId, onSuccess }: Prod
         free_shipping: false
     })
 
-    const [exchangeRate, setExchangeRate] = React.useState<number>(0)
+    // Stored daily rate (or a 3 s background lookup): the form never waits for it
+    const exchangeRate = useUsdTryRate(isOpen)
 
     // Fetch product and categories when modal opens
     React.useEffect(() => {
@@ -51,10 +53,10 @@ export function ProductEditModal({ isOpen, onClose, productId, onSuccess }: Prod
         setLoading(true)
         Promise.all([
             fetch(`/api/products/${productId}`).then(r => r.json()),
-            fetch('/api/categories').then(r => r.json()),
-            fetch(`/api/products/${productId}/variations`).then(r => r.json()),
-            fetch('https://api.exchangerate-api.com/v4/latest/USD').then(r => r.json()).catch(() => ({ rates: { TRY: 0 } }))
-        ]).then(([product, cats, vars, rateData]) => {
+            fetch('/api/categories', { cache: 'no-store' }).then(r => r.json()),
+            // no-store: the public answer is cached for minutes, the modal must show what was just saved
+            fetch(`/api/products/${productId}/variations`, { cache: 'no-store' }).then(r => r.json())
+        ]).then(([product, cats, vars]) => {
             if (product && !product.error) {
                 setFormData({
                     name: product.name || '',
@@ -85,7 +87,6 @@ export function ProductEditModal({ isOpen, onClose, productId, onSuccess }: Prod
                 sku: v.sku || '',
                 image_url: v.image_url || ''
             })))
-            if (rateData?.rates?.TRY) setExchangeRate(rateData.rates.TRY)
             setLoading(false)
         }).catch(() => setLoading(false))
     }, [isOpen, productId])

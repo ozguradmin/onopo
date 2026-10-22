@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, Upload, Loader2, X, Plus } from 'lucide-react'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import { VariationsSection, Variation } from '@/components/admin/VariationsSection'
 import { uploadImageVariants } from '@/lib/imageVariants'
+import { useUsdTryRate } from '@/components/admin/useUsdTryRate'
 
 export default function AddProductPage() {
     const router = useRouter()
@@ -34,22 +35,15 @@ export default function AddProductPage() {
         free_shipping: false
     })
 
-    const [exchangeRate, setExchangeRate] = React.useState<number>(0)
+    // Stored daily rate (or a 3 s background lookup): the form never waits for it
+    const exchangeRate = useUsdTryRate()
     const [variations, setVariations] = React.useState<Variation[]>([])
 
-    // Fetch categories and exchange rate
+    // Fetch categories
     React.useEffect(() => {
-        fetch('/api/categories')
+        fetch('/api/categories', { cache: 'no-store' })
             .then(r => r.json())
             .then(cats => setCategories(cats || []))
-            .catch(() => { })
-
-        // Fetch exchange rate
-        fetch('https://api.exchangerate-api.com/v4/latest/USD')
-            .then(r => r.json())
-            .then(data => {
-                if (data?.rates?.TRY) setExchangeRate(data.rates.TRY)
-            })
             .catch(() => { })
     }, [])
 

@@ -100,7 +100,7 @@ export default function MenusPage() {
             {/* Add/Edit Form */}
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-8">
                 <h2 className="text-lg font-semibold mb-4">{editingId ? 'Menü Düzenle' : 'Yeni Menü Ekle'}</h2>
-                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
                     <div className="lg:col-span-1">
                         <label className="block text-sm font-medium mb-1">Başlık</label>
                         <Input
@@ -138,6 +138,16 @@ export default function MenusPage() {
                             onChange={e => setFormData({ ...formData, sort_order: Number(e.target.value) })}
                         />
                     </div>
+                    {/* Unchecked: the item stays here as 'Pasif' and the storefront menu leaves it out */}
+                    <label className="flex h-10 cursor-pointer items-center gap-2 text-sm font-medium lg:col-span-1">
+                        <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-slate-300"
+                            checked={!!formData.is_active}
+                            onChange={e => setFormData({ ...formData, is_active: e.target.checked ? 1 : 0 })}
+                        />
+                        Yayında
+                    </label>
                     <div className="flex gap-2">
                         <Button type="submit" className="flex-1 bg-slate-900 text-white">
                             {editingId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}

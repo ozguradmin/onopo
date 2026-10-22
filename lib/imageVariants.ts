@@ -8,6 +8,20 @@
 export const IMAGE_VARIANT_WIDTHS = [200, 400, 800, 1200] as const
 const WEBP_QUALITY = 0.8
 
+export interface VariantOptions {
+    /**
+     * Keep transparency instead of flattening onto white. For the logo: the header shows it on white, but the
+     * dark footer inverts it, where a white box would turn into a black one.
+     */
+    keepTransparency?: boolean
+}
+
+/** What happened to one image's variants: the widths stored, and the first width that failed (and why). */
+export interface VariantResult {
+    stored: number[]
+    failed: { width: number; reason: string } | null
+}
+
 // R2 key of an uploaded original, from any URL form the upload routes return or the DB stores
 export function originalKeyFromUrl(url: string | null | undefined): string | null {
     if (!url) return null
@@ -33,13 +47,14 @@ function flattenOnWhite(context: OffscreenCanvasRenderingContext2D | CanvasRende
 
 type Context2D = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D
 
-// Draws on a white canvas of the given size and encodes it as WebP; null when that fails
-async function renderWebp(width: number, height: number, draw?: (context: Context2D) => void): Promise<Blob | null> {
+// Draws on a white (with keepTransparency: transparent) canvas of the given size and encodes it as WebP;
+// null when that fails
+async function renderWebp(width: number, height: number, draw?: (context: Context2D) => void, keepTransparency = false): Promise<Blob | null> {
     if (typeof OffscreenCanvas !== 'undefined') {
         const canvas = new OffscreenCanvas(width, height)
         const context = canvas.getContext('2d')
         if (!context) return null
-        flattenOnWhite(context, width, height)
+        if (!keepTransparency) flattenOnWhite(context, width, height)
         draw?.(context)
         const blob = await canvas.convertToBlob({ type: 'image/webp', quality: WEBP_QUALITY })
         return blob.type === 'image/webp' ? blob : null
@@ -50,44 +65,59 @@ async function renderWebp(width: number, height: number, draw?: (context: Contex
     canvas.height = height
     const context = canvas.getContext('2d')
     if (!context) return null
-    flattenOnWhite(context, width, height)
+    if (!keepTransparency) flattenOnWhite(context, width, height)
     draw?.(context)
     const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/webp', WEBP_QUALITY))
     // Browsers without a WebP encoder silently return PNG: skip rather than store a mislabelled file
     return blob && blob.type === 'image/webp' ? blob : null
 }
 
-async function encodeWebp(bitmap: ImageBitmap, maxWidth: number): Promise<Blob | null> {
+async function encodeWebp(bitmap: ImageBitmap, maxWidth: number, keepTransparency = false): Promise<Blob | null> {
     // Never upscale: small originals get same-size WebP copies so every width exists
     const width = Math.min(maxWidth, bitmap.width)
     const height = Math.max(1, Math.round(bitmap.height * width / bitmap.width))
-    return renderWebp(width, height, context => context.drawImage(bitmap, 0, 0, width, height))
+    return renderWebp(width, height, context => context.drawImage(bitmap, 0, 0, width, height), keepTransparency)
 }
 
 // Whether this browser can encode WebP at all, checked once on a 1x1 canvas (older Safari cannot),
 // so photos are never decoded at full size just to find out
 let webpEncodingSupported: Promise<boolean> | null = null
-function canEncodeWebp(): Promise<boolean> {
+export function canEncodeWebp(): Promise<boolean> {
     webpEncodingSupported ??= renderWebp(1, 1).then(blob => blob !== null, () => false)
     return webpEncodingSupported
 }
 
-async function createAndUploadVariants(file: File, key: string): Promise<void> {
+// Encodes and stores the given widths one after another (POST /api/admin/upload with variantOf). Stops at the
+// first failure that would repeat for every width: no encoder, no admin session (401/403), original missing (404).
+async function uploadVariantsFromBitmap(bitmap: ImageBitmap, key: string, widths: readonly number[], options: VariantOptions): Promise<VariantResult> {
+    const stored: number[] = []
+    let failed: VariantResult['failed'] = null
+    for (const width of widths) {
+        const blob = await encodeWebp(bitmap, width, options.keepTransparency)
+        if (!blob) return { stored, failed: failed ?? { width, reason: 'encode' } }
+        const form = new FormData()
+        form.append('file', new File([blob], `${width}.webp`, { type: 'image/webp' }))
+        form.append('variantOf', key)
+        form.append('width', String(width))
+        const res = await fetch('/api/admin/upload', { method: 'POST', body: form })
+        if (res.ok) {
+            stored.push(width)
+            continue
+        }
+        console.warn(`Image variant ${width}px was not stored (${res.status})`)
+        failed ??= { width, reason: String(res.status) }
+        if (res.status === 401 || res.status === 403 || res.status === 404) break
+    }
+    return { stored, failed }
+}
+
+async function createAndUploadVariants(file: File, key: string, options: VariantOptions): Promise<void> {
     try {
         if (!(await canEncodeWebp())) return
 
         const bitmap = await createImageBitmap(file)
         try {
-            for (const width of IMAGE_VARIANT_WIDTHS) {
-                const blob = await encodeWebp(bitmap, width)
-                if (!blob) return
-                const form = new FormData()
-                form.append('file', new File([blob], `${width}.webp`, { type: 'image/webp' }))
-                form.append('variantOf', key)
-                form.append('width', String(width))
-                const res = await fetch('/api/admin/upload', { method: 'POST', body: form })
-                if (!res.ok) console.warn(`Image variant ${width}px was not stored (${res.status})`)
-            }
+            await uploadVariantsFromBitmap(bitmap, key, IMAGE_VARIANT_WIDTHS, options)
         } finally {
             bitmap.close()
         }
@@ -105,12 +135,52 @@ let queue: Promise<void> = Promise.resolve()
  * Call without awaiting after the original upload succeeded: `void uploadImageVariants(file, result.url)`.
  * Calls are queued and processed one after another; the promise settles when this file is done.
  */
-export async function uploadImageVariants(file: File, uploadedUrl: string): Promise<void> {
+export async function uploadImageVariants(file: File, uploadedUrl: string, options: VariantOptions = {}): Promise<void> {
     const key = originalKeyFromUrl(uploadedUrl)
     if (!key || !file.type.startsWith('image/') || file.type === 'image/svg+xml' || file.type === 'image/gif') return
     if (typeof createImageBitmap !== 'function') return
 
-    const job = queue.then(() => createAndUploadVariants(file, key))
+    const job = queue.then(() => createAndUploadVariants(file, key, options))
     queue = job.catch(() => { })
+    return job
+}
+
+/**
+ * Backfill (Admin › Görsel Optimizasyonu): downloads an original that is already in R2 (`sourceUrl`, e.g.
+ * https://images.onopostore.com/<key>, which allows CORS) and stores the given missing `widths` of it.
+ * Shares the upload queue, so only one full-size image is decoded at a time. Never throws.
+ * `failed.reason`: 'no-webp', 'download' / 'download-<status>', 'decode', 'encode', 'upload' or the
+ * upload's HTTP status.
+ */
+export function createMissingVariants(sourceUrl: string, key: string, widths: readonly number[], options: VariantOptions = {}): Promise<VariantResult> {
+    const run = async (): Promise<VariantResult> => {
+        const first = widths[0] ?? IMAGE_VARIANT_WIDTHS[0]
+        if (typeof createImageBitmap !== 'function' || !(await canEncodeWebp())) {
+            return { stored: [], failed: { width: first, reason: 'no-webp' } }
+        }
+        let blob: Blob
+        try {
+            const res = await fetch(sourceUrl)
+            if (!res.ok) return { stored: [], failed: { width: first, reason: `download-${res.status}` } }
+            blob = await res.blob()
+        } catch {
+            return { stored: [], failed: { width: first, reason: 'download' } }
+        }
+        let bitmap: ImageBitmap
+        try {
+            bitmap = await createImageBitmap(blob)
+        } catch {
+            return { stored: [], failed: { width: first, reason: 'decode' } }
+        }
+        try {
+            return await uploadVariantsFromBitmap(bitmap, key, widths, options)
+        } catch {
+            return { stored: [], failed: { width: first, reason: 'upload' } }
+        } finally {
+            bitmap.close()
+        }
+    }
+    const job = queue.then(run)
+    queue = job.then(() => { }, () => { })
     return job
 }

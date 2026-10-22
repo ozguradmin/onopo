@@ -51,11 +51,17 @@ export function itemsTotal(lines: Array<{ price: number | string | null | undefi
     return total
 }
 
+// A stored value that does not parse (NULL, '', text) falls back to the default, as lib/catalog does for the
+// storefront: never a NaN shipping cost or total. Valid values parse exactly as before.
+function finiteOr(value: number, fallback: number): number {
+    return Number.isFinite(value) ? value : fallback
+}
+
 // Shipping settings as the order API reads them from the shipping_settings row (or the defaults)
 export function parseShippingSettings(row: { free_shipping_threshold?: unknown, shipping_cost?: unknown } | null | undefined): ShippingSettings {
     return {
-        freeThreshold: row ? parseFloat(row.free_shipping_threshold as string) : DEFAULT_SHIPPING_SETTINGS.freeThreshold,
-        shippingCost: row ? parseFloat(row.shipping_cost as string) : DEFAULT_SHIPPING_SETTINGS.shippingCost
+        freeThreshold: row ? finiteOr(parseFloat(row.free_shipping_threshold as string), DEFAULT_SHIPPING_SETTINGS.freeThreshold) : DEFAULT_SHIPPING_SETTINGS.freeThreshold,
+        shippingCost: row ? finiteOr(parseFloat(row.shipping_cost as string), DEFAULT_SHIPPING_SETTINGS.shippingCost) : DEFAULT_SHIPPING_SETTINGS.shippingCost
     }
 }
 

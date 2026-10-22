@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Edit, Trash2, Plus, Upload, Trash, Loader2, Search } from 'lucide-react'
 import { formatPrice } from '@/lib/formatPrice'
 import { getImageUrl, parseProductImages } from '@/lib/utils'
+import { productImageUrl } from '@/lib/images'
+import { FallbackImage } from '@/components/ui/FallbackImage'
 import { toast } from 'sonner'
 import { ProductEditModal } from '@/components/admin/ProductEditModal'
 
@@ -54,7 +56,7 @@ export default function AdminProductsPage() {
         Promise.all([
             // includeInactive: hidden products too (shown with a 'Gizli' badge; admin sessions only)
             fetch('/api/products?includeAll=true&includeInactive=true').then(r => r.json()),
-            fetch('/api/categories').then(r => r.json())
+            fetch('/api/categories', { cache: 'no-store' }).then(r => r.json())
         ]).then(([prods, cats]) => {
             setProducts(prods || [])
             setCategories(cats || [])
@@ -267,9 +269,9 @@ export default function AdminProductsPage() {
 
     return (
         <div>
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
                 <h1 className="text-2xl font-bold text-slate-900">Ürünler</h1>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <Button
                         onClick={handleBulkDelete}
                         variant="outline"
@@ -368,8 +370,14 @@ export default function AdminProductsPage() {
                             {paginatedProducts.map(product => (
                                 <tr key={product.id} className={isHidden(product) ? 'bg-slate-50/70 hover:bg-slate-100' : 'hover:bg-slate-50'}>
                                     <td className="p-4">
-                                        <img
-                                            src={getImageUrl(parseProductImages(product.images)[0]) || '/placeholder.svg'}
+                                        {/* 200w variant when variants are on (one 48px thumb instead of a multi-MB original); falls back to the original once */}
+                                        <FallbackImage
+                                            src={productImageUrl(parseProductImages(product.images)[0], 200)}
+                                            fallbackSrc={getImageUrl(parseProductImages(product.images)[0])}
+                                            alt=""
+                                            width={48}
+                                            height={48}
+                                            loading="lazy"
                                             className={`w-12 h-12 rounded-lg object-cover bg-slate-100 ${isHidden(product) ? 'opacity-50' : ''}`}
                                         />
                                     </td>
@@ -420,7 +428,7 @@ export default function AdminProductsPage() {
 
             {/* Pagination Controls */}
             {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-4">
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
                     <Button
                         variant="outline"
                         onClick={() => handlePageChange(Math.max(1, currentPage - 1))}

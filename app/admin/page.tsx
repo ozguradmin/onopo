@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ShoppingBag, TrendingUp, Package, DollarSign, Plus, Edit, Trash2, Wrench, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
+import { orderStatusInfo } from '@/components/admin/orderStatuses'
 
 export default function AdminDashboard() {
     const router = useRouter()
@@ -17,7 +18,7 @@ export default function AdminDashboard() {
     React.useEffect(() => {
         Promise.all([
             // includeAll: every active product (the plain list is the storefront's: in stock only, 24 items)
-            fetch('/api/products?includeAll=true').then(r => r.json()).catch(() => []),
+            fetch('/api/products?includeAll=true', { cache: 'no-store' }).then(r => r.json()).catch(() => []),
             fetch('/api/orders').then(r => r.json()).catch(() => []),
             fetch('/api/analytics?range=day').then(r => r.json()).catch(() => ({ totalViews: 0 })),
             fetch('/api/site-settings').then(r => r.json()).catch(() => ({}))
@@ -199,15 +200,8 @@ export default function AdminDashboard() {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {orders.slice(0, 5).map(order => {
-                                const statusLabels: Record<string, { label: string; bg: string }> = {
-                                    pending: { label: 'Beklemede', bg: 'bg-yellow-100 text-yellow-700' },
-                                    processing: { label: 'Hazırlanıyor', bg: 'bg-blue-100 text-blue-700' },
-                                    shipped: { label: 'Kargoda', bg: 'bg-purple-100 text-purple-700' },
-                                    delivered: { label: 'Teslim Edildi', bg: 'bg-green-100 text-green-700' },
-                                    completed: { label: 'Tamamlandı', bg: 'bg-green-100 text-green-700' },
-                                    cancelled: { label: 'İptal', bg: 'bg-red-100 text-red-700' }
-                                }
-                                const status = statusLabels[order.status] || { label: order.status, bg: 'bg-slate-100 text-slate-700' }
+                                // Same labels as Siparişler (BirFatura's list); an unknown value is shown as it is
+                                const status = orderStatusInfo(order.status)
                                 const items = order.items ? (typeof order.items === 'string' ? JSON.parse(order.items) : order.items) : []
                                 return (
                                     <tr
@@ -227,7 +221,7 @@ export default function AdminDashboard() {
                                         </td>
                                         <td className="p-4 font-bold text-slate-900">{order.total_amount?.toFixed(2)} ₺</td>
                                         <td className="p-4">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${status.bg}`}>
+                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${status.badge}`}>
                                                 {status.label}
                                             </span>
                                         </td>
