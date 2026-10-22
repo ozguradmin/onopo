@@ -343,6 +343,12 @@ function toPublicSettings(rows: Record<string, any>[]): PublicSiteSettings {
     }
     ;(['site_name', 'site_description', 'site_url', 'footer_text', 'footer_email', 'footer_phone', 'footer_address',
         'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url', 'linkedin_url', 'tiktok_url', 'whatsapp_number', 'ai_whatsapp_number'] as const).forEach(text)
+    // The store has no separate WhatsApp setting today: fall back to the assistant's number, then to the
+    // footer phone when it is a mobile (05…) number, so the menu, footer and help pages show WhatsApp too
+    if (!s.whatsapp_number.trim()) {
+        const mobile = (v: string) => /^(?:90)?0?5\d{9}$/.test(v.replace(/\D/g, ''))
+        s.whatsapp_number = [s.ai_whatsapp_number, s.footer_phone].find(v => v.trim() && mobile(v))?.trim() ?? ''
+    }
     if (!s.site_name.trim()) s.site_name = DEFAULT_SETTINGS.site_name
     s.logo_url = kv.logo_url?.trim() || null
     s.favicon_url = kv.favicon_url?.trim() || null

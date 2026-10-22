@@ -55,6 +55,9 @@ export function AssistantIcon({ className, variant = 'line' }: { className?: str
     )
 }
 
+/** The product-page nudge; tapping it sends this exact question. */
+const NUDGE_QUESTION = 'Bu ürün telefonuma uyar mı?'
+
 const INTRO_KEY = 'onopo:assistant:intro'
 const NUDGE_KEY = 'onopo:assistant:nudge'
 const NUDGE_SESSION_KEY = 'onopo:assistant:nudged'
@@ -137,16 +140,30 @@ export function AssistantLauncher() {
             )}
         >
             {nudge.show && !hidden && (
+                // Tapping the bubble asks the question right away (owner): the panel opens and sends it, and the
+                // assistant answers for this product (or first asks which phone, when it does not know yet)
                 <div
                     aria-hidden="true"
                     onClick={() => {
                         nudge.hide()
-                        openAssistant({ source: 'nudge' })
+                        openAssistant({ source: 'nudge', prompt: NUDGE_QUESTION })
                     }}
                     onPointerDown={preloadAssistant}
-                    className="absolute bottom-full right-0 mb-2 flex w-max max-w-[240px] cursor-pointer items-start gap-1 rounded-card border border-line bg-white py-2.5 pl-3 pr-1 text-[13px] leading-5 text-ink-2 shadow-overlay"
+                    className="animate-ai-launcher-in absolute bottom-full right-0 mb-3 flex w-[min(272px,calc(100vw-32px))] cursor-pointer items-start gap-2.5 rounded-2xl bg-white p-3 pr-1.5 shadow-[0_14px_34px_-10px_rgb(11_18_32/0.32),0_2px_6px_rgb(11_18_32/0.08)] ring-1 ring-line/80"
                 >
-                    <span className="py-0.5">Bu ürün telefonuna uyar mı? Sor, hemen söyleyeyim.</span>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+                        <AssistantIcon className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                        <span className="block text-[14px] font-bold leading-5 text-ink">{NUDGE_QUESTION}</span>
+                        <span className="mt-0.5 block text-xs leading-4 text-muted">Dokun, hemen bakayım.</span>
+                        <span className="mt-2 inline-flex h-8 items-center gap-1 rounded-full bg-brand-600 px-3 text-xs font-semibold text-white">
+                            Asistana sor
+                            <span aria-hidden="true">→</span>
+                        </span>
+                    </span>
+                    {/* tail pointing at the launcher */}
+                    <span aria-hidden="true" className="absolute -bottom-1.5 right-6 h-3 w-3 rotate-45 bg-white shadow-[2px_2px_3px_-1px_rgb(11_18_32/0.08)]" />
                     <button
                         type="button"
                         tabIndex={-1}
