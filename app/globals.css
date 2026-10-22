@@ -448,6 +448,13 @@ body:has([data-hide-bottom-nav]) [data-bottom-nav] {
   display: none;
 }
 
+/* Pages whose last block is grey (bg-surface: checkout, the product page's related rail) run straight
+   into the grey pre-footer trust band instead of leaving a white stripe above it. Pages that end on
+   white keep the footer's top margin. Only the page root or its last child count (not cards deeper inside). */
+#main-content:has(> .bg-surface:last-child, > :last-child > .bg-surface:last-child) + footer {
+  margin-top: 0;
+}
+
 /* Toasts sit above the mobile bottom nav (sonner's own mobile breakpoint is 600px) */
 @media (max-width: 767px) {
   body:not(:has([data-hide-bottom-nav])) [data-sonner-toaster][data-y-position="bottom"] {

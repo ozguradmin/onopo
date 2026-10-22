@@ -71,7 +71,7 @@ function FooterInner({ variant }: { variant: 'store' | 'checkout' }) {
             <footer className="mt-12">
                 <TrustBand />
                 <div className="bg-ink text-white">
-                    <div className="container-store flex flex-wrap gap-x-5 gap-y-2 pt-5 text-[13px] text-white/75">
+                    <div className="container-store flex flex-wrap gap-x-5 gap-y-2 py-5 text-[13px] text-white/75">
                         {SUPPORT_LINKS.filter(l => l.href.startsWith('/page/')).map(l => (
                             <Link key={l.href} href={l.href} prefetch={false} className="hover:text-white">
                                 {l.label}
