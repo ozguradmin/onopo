@@ -231,7 +231,8 @@ function scenarios() {
         { id: 'soldout_filler', title: 'Ücretsiz kargo dolgusu tükenen ürün içermez', cart: C(cheap), turns: [
             { input: 'kargonun bedava olması için ne kadar kaldı, ne ekleyebilirim', checks: [noCartProducts] }] },
         { id: 'soldout_asked', title: 'Adıyla sorulan tükenen ürün: Tükendi + WhatsApp', cart: [], turns: [
-            { input: `${short(soldOut?.name ?? 'ürün')} var mı?`, allowSoldOut: true, checks: [text(/tükendi|stokta yok|kalmadı/i), has('whatsapp')] }] },
+            // Name the sold-out product unambiguously: its code when it has one (a generic name prefix matches many)
+            { input: soldOut?.product_code ? `${soldOut.product_code} kodlu ürün var mı?` : `${soldOut?.name ?? 'ürün'} var mı?`, allowSoldOut: true, checks: [text(/tükendi|stokta yok|kalmadı/i), has('whatsapp')] }] },
         { id: 'soldout_generic', title: 'Genel öneride tükenen ürün yok', cart: [], turns: [
             { input: soldOut ? `${fold(short(soldOut.name)).split(' ').slice(-2).join(' ')} öner` : 'aksesuar öner', checks: [] }] },
         // ---- store questions → full WhatsApp ----
