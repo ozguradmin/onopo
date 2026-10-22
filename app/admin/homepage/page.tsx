@@ -111,8 +111,8 @@ export default function AdminHomepagePage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 type,
-                title: type === 'products' ? 'Trend Ürünler' : type === 'new_products' ? 'Yeni Ürünler' : type === 'features' ? 'Özellikler' : type === 'custom_code' ? 'Özel Bölüm' : 'Yeni Bölüm',
-                config: (type === 'products' || type === 'new_products') ? { selection_type: type === 'new_products' ? 'newest' : 'all', limit: 8 } : type === 'custom_code' ? { html_content: '' } : {}
+                title: type === 'products' ? 'En Çok İncelenenler' : type === 'new_products' ? 'Yeni Ürünler' : type === 'features' ? 'Özellikler' : type === 'custom_code' ? 'Özel Bölüm' : 'Yeni Bölüm',
+                config: (type === 'products' || type === 'new_products') ? { selection_type: type === 'new_products' ? 'newest' : 'most_viewed', limit: 8 } : type === 'custom_code' ? { html_content: '' } : {}
             })
         })
         if (res.ok) {
@@ -335,10 +335,28 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
                                 >
                                     <option value="all">Tüm Ürünler</option>
                                     <option value="newest">En Yeni Eklenenler</option>
+                                    <option value="most_viewed">En çok incelenenler</option>
                                     <option value="category">Kategoriye Göre</option>
                                     <option value="manual">Manuel Seçim</option>
                                 </select>
+                                {config.selection_type === 'most_viewed' && (
+                                    <p className="text-xs text-slate-500 mt-2">
+                                        Son 30 günde sayfası en çok açılan, stokta olan ürünler. Yeterli veri yoksa en yeni ürünlerle tamamlanır.
+                                    </p>
+                                )}
                             </div>
+
+                            {config.selection_type !== 'most_viewed' && (
+                                <label className="flex items-center gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        checked={config.order === 'random'}
+                                        onChange={e => setConfig({ ...config, order: e.target.checked ? 'random' : undefined })}
+                                        className="w-4 h-4 rounded border-slate-300"
+                                    />
+                                    Sırayı her ziyarette karıştır
+                                </label>
+                            )}
 
                             {config.selection_type === 'category' && (
                                 <div>

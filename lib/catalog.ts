@@ -30,6 +30,8 @@ import {
     type PreparedQuery,
 } from '@/lib/search'
 import { categoryPath } from '@/lib/seo'
+import { orderSectionProducts, rankMostViewed } from '@/lib/analytics'
+import { recentProductViews, type D1Lite as AnalyticsDb } from '@/lib/analytics-db'
 
 // ---------------------------------------------------------------------------------------------
 // Types
@@ -763,23 +765,17 @@ export const getHeroSlides = cache(async (): Promise<HeroSlide[]> => {
     }
 })
 
-function shuffled<T>(list: T[]): T[] {
-    const out = [...list]
-    for (let i = out.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1))
-        ;[out[i], out[j]] = [out[j], out[i]]
-    }
-    return out
-}
-
 /**
  * Active homepage sections (Admin › Ana Sayfa) in display order, with their data resolved on the
- * server. Product selection is exactly the previous client logic (HomePageClient), run over the same
- * pool (in-stock active products, newest first, max 200):
- *   selection_type 'category' + category → products whose category equals it (case-insensitive)
- *   selection_type 'manual' + product_ids → those products (pool order)
- *   'newest' / 'all' / anything else     → the whole pool
- *   type 'products' is shuffled (per request), 'new_products' is not; then config.limit || 8.
+ * server. Products come from one pool (in-stock active products, newest first, max 200):
+ *   selection_type 'category' + category → products whose category equals it (case-insensitive), pool order
+ *   selection_type 'manual' + product_ids → those products in the admin's order
+ *   selection_type 'most_viewed'          → most product-page views of the last 30 days (lib/analytics),
+ *                                           filled up with the newest products when there is too little data
+ *   'newest' / 'all' / anything else     → the whole pool (newest first)
+ * then config.limit || 8. The order is stable: "products" sections used to be shuffled on every render,
+ * which made "Öne Çıkan Ürünler" look different on each visit; now only an explicit config.order 'random'
+ * (Admin › Ana Sayfa: "Sırayı her ziyarette karıştır") shuffles.
  */
 export const getHomepageSections = cache(async (): Promise<HomeSection[]> => {
     const d = await db()
@@ -799,19 +795,24 @@ export const getHomepageSections = cache(async (): Promise<HomeSection[]> => {
     const needsProducts = sections.some(s => s.type === 'products' || s.type === 'new_products')
     const pool = needsProducts ? (await getInStockProducts()).slice(0, 200) : []
 
+    // Product views of the last 30 days, read once and only when a section asks for them
+    let views: Promise<Map<number, number>> | null = null
+    const recentViews = () => (views ??= recentProductViews(d as unknown as AnalyticsDb, 30))
+
     for (const s of sections) {
         const cfg = s.config
         if (s.type === 'products' || s.type === 'new_products') {
+            const limit = num(cfg.limit) || 8
+            const manual = cfg.selection_type === 'manual' && Array.isArray(cfg.product_ids) && cfg.product_ids.length > 0
             let list = pool
             if (cfg.selection_type === 'category' && cfg.category) {
                 const want = String(cfg.category).toLowerCase()
                 list = list.filter(p => p.category && p.category.toLowerCase() === want)
-            } else if (cfg.selection_type === 'manual' && Array.isArray(cfg.product_ids) && cfg.product_ids.length > 0) {
-                const ids = new Set(cfg.product_ids.map((x: unknown) => num(x)))
-                list = list.filter(p => ids.has(p.id))
+            } else if (cfg.selection_type === 'most_viewed') {
+                list = rankMostViewed(pool, await recentViews(), limit)
             }
-            if (s.type === 'products') list = shuffled(list)
-            s.products = list.slice(0, num(cfg.limit) || 8)
+            list = orderSectionProducts(list, manual ? cfg.product_ids : undefined, cfg.order === 'random')
+            s.products = list.slice(0, limit)
             const viewAllCategory = cfg.selection_type === 'category' && cfg.category ? await findCategory(String(cfg.category)) : null
             s.viewAllHref = viewAllCategory
                 ? categoryHref(viewAllCategory)
