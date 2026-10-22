@@ -2,10 +2,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Tag, Ticket } from 'lucide-react'
+import { Plus, Trash2, Tag, Ticket, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+// The cart and checkout show the coupon box only when this is true (the order API does not apply coupons yet)
+import { COUPONS_ENABLED } from '@/store/cart-store'
 
 export default function CouponsPage() {
     const [coupons, setCoupons] = useState<any[]>([])
@@ -105,13 +107,26 @@ export default function CouponsPage() {
                     <h1 className="text-2xl font-bold text-slate-900">Kupon Yönetimi</h1>
                     <p className="text-slate-500">İndirim kuponlarını buradan yönetebilirsiniz.</p>
                 </div>
-                <Button onClick={() => setShowForm(!showForm)} className="gap-2">
+                <Button onClick={() => setShowForm(!showForm)} className="gap-2" disabled={!COUPONS_ENABLED}>
                     <Plus className="w-4 h-4" />
                     {showForm ? 'Vazgeç' : 'Yeni Kupon'}
                 </Button>
             </div>
 
-            {showForm && (
+            {!COUPONS_ENABLED && (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                    <Info className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                    <div className="text-sm">
+                        <p className="font-semibold">Kuponlar şu an mağazada kapalı</p>
+                        <p className="mt-1 text-amber-800">
+                            Sepette ve ödeme sayfasında kupon alanı gösterilmiyor ve sipariş tutarına kupon uygulanmıyor.
+                            Bu yüzden yeni kupon oluşturma da kapalı. Mevcut kuponları aşağıda görebilir ve silebilirsin.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {COUPONS_ENABLED && showForm && (
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-top-4">
                     <h2 className="font-semibold mb-4 text-lg">Yeni Kupon Oluştur</h2>
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
