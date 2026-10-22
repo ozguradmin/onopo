@@ -5,9 +5,10 @@
  * Rendered once by the root shell (`fromShell`) and present in the server HTML, so its space is
  * reserved from the first paint (body has pb-16 on mobile). Only the cart badge fills in after mount.
  * - "Kategoriler" opens the menu drawer, "Ara" the full-screen search sheet, "Sepet" the cart drawer.
- * - Hidden on /odeme (LayoutProvider), while a drawer or the search sheet is open, and on pages that
- *   render an element with `data-hide-bottom-nav` (e.g. the product page's sticky buy bar), see
- *   app/globals.css.
+ * - Not rendered on /odeme, /siparis-basarili and /siparis-hata (LayoutProvider, and by pathname here).
+ *   Slid away while a drawer or the search sheet is open. display: none (so out of the tab order and
+ *   the accessibility tree) on pages that render an element with `data-hide-bottom-nav` (e.g. the
+ *   product page's sticky buy bar), see app/globals.css.
  * - No login check on load: "Hesabım" always goes to /profile/ (which sends guests to the login).
  */
 import * as React from "react"
@@ -25,6 +26,8 @@ export function MobileNav({ fromShell = false }: { fromShell?: boolean }) {
     return <MobileNavInner />
 }
 
+const NO_BOTTOM_NAV_PATHS = ['/odeme', '/siparis-basarili', '/siparis-hata']
+
 const ITEM = 'relative flex h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-semibold leading-none transition-colors'
 
 function MobileNavInner() {
@@ -38,6 +41,9 @@ function MobileNavInner() {
     const openMenu = useShellUI(s => s.openMenu)
     const count = items.reduce((n, i) => n + (Number(i.quantity) || 0), 0)
     const overlayOpen = cartOpen || menuOpen || searchOpen
+
+    // Never on checkout and PayTR's result pages (not in the DOM at all, so not focusable or tappable)
+    if (NO_BOTTOM_NAV_PATHS.includes(path)) return null
 
     const tone = (active: boolean) => (active ? 'text-brand-600' : 'text-muted hover:text-ink')
 

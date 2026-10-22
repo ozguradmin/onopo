@@ -37,10 +37,8 @@ export function HeroFallback({ stats, freeShippingThreshold, className }: { stat
         : stats?.minPrice
             ? `Şarj aletleri ve kablolar ${formatAmount(stats.minPrice)}'den başlayan fiyatlarla`
             : 'Hızlı şarj, sağlam kablo, net ekran'
-    const facts = [
-        stats?.productCount ? `${stats.productCount} ürün` : null,
-        freeShippingThreshold > 0 ? `${formatAmount(freeShippingThreshold)} üzeri kargo bedava` : null,
-    ].filter(Boolean)
+    // The product count is in the intro lead right next to (or under) the banner: not repeated here
+    const facts = [freeShippingThreshold > 0 ? `${formatAmount(freeShippingThreshold)} üzeri kargo bedava` : null].filter(Boolean)
     return (
         <div className={cn('relative h-full overflow-hidden rounded-sheet bg-ink text-white', className)}>
             <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(120%_90%_at_100%_0%,rgb(0_144_200/.55),transparent_60%)]" />
@@ -50,7 +48,7 @@ export function HeroFallback({ stats, freeShippingThreshold, className }: { stat
                 <BatteryCharging className="h-20 w-20 lg:h-36 lg:w-36" strokeWidth={1.25} />
             </div>
             <div className="relative flex h-full max-w-[560px] flex-col justify-end p-4 pb-5 sm:p-6 lg:justify-center lg:p-10">
-                <p className="type-micro text-brand-100">Onopo Store</p>
+                <p className="type-micro text-brand-100">{discount ? 'Fırsatlar' : 'Onopo Store'}</p>
                 <p className="mt-1.5 text-[22px] leading-7 font-extrabold tracking-[-0.02em] text-balance sm:text-[28px] sm:leading-[34px] lg:mt-3 lg:text-[40px] lg:leading-[48px]">
                     {title}
                 </p>

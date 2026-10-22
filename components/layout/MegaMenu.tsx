@@ -9,7 +9,8 @@
  *   Without admin links: [Kategoriler] [Tüm ürünler] + product-type quick links.
  * - Mega menu: categories with counts (Admin › Kategoriler, hideEmpty), "Ürün tipine göre" and
  *   "Cihazına göre" quick links (or the admin menu columns when menus with children exist), and a
- *   promo card built from the real shipping/installment data.
+ *   promo card built from the real shipping/installment data (from xl; below it the link columns
+ *   take its room).
  * - Disclosure-button pattern: click, or hover with a 150 ms intent delay; Escape closes and returns
  *   focus to the trigger; closes on outside click and on navigation. The panel follows its trigger in
  *   the DOM, so Tab walks into it naturally.
@@ -246,9 +247,11 @@ function MegaPanel({ hasMenus, tree, onNavigate }: { hasMenus: boolean; tree: Me
     const columns = hasMenus ? tree.filter(m => m.children.length > 0).slice(0, 2) : []
     const totalCount = categories.reduce((n, c) => n + c.product_count, 0)
 
+    // Below xl (1024–1279) the promo card is left out and the three link columns share its room
+    // (5/4/3 of 12), so category names stay whole and the device links stay on one line.
     return (
         <div className="grid grid-cols-12 gap-8 p-6 xl:p-8">
-            <div className="col-span-4">
+            <div className="col-span-5 xl:col-span-4">
                 <p className="type-micro mb-2 text-muted">Kategoriler</p>
                 <ul className="flex flex-col gap-0.5">
                     {categories.map(c => (
@@ -263,7 +266,7 @@ function MegaPanel({ hasMenus, tree, onNavigate }: { hasMenus: boolean; tree: Me
                                     <CategoryIcon name={c.icon} />
                                 </span>
                                 <span className="min-w-0 flex-1">
-                                    <span className="block truncate text-[15px] font-semibold text-ink">{c.name}</span>
+                                    <span className="line-clamp-2 text-[15px] font-semibold text-ink">{c.name}</span>
                                     <span className="block text-[13px] text-muted">{c.product_count} ürün</span>
                                 </span>
                                 <ChevronRight className="h-4 w-4 text-subtle opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />
@@ -283,7 +286,7 @@ function MegaPanel({ hasMenus, tree, onNavigate }: { hasMenus: boolean; tree: Me
             </div>
 
             {columns.length < 2 && (
-                <div className="col-span-3">
+                <div className="col-span-4 xl:col-span-3">
                     <p className="type-micro mb-3 text-muted">Ürün tipine göre</p>
                     <ul className="flex flex-col">
                         {PRODUCT_TYPE_LINKS.map(t => {
@@ -307,7 +310,7 @@ function MegaPanel({ hasMenus, tree, onNavigate }: { hasMenus: boolean; tree: Me
                 </div>
             )}
             {columns.length === 0 && (
-                <div className="col-span-2">
+                <div className="col-span-3 xl:col-span-2">
                     <p className="type-micro mb-3 text-muted">Cihazına göre</p>
                     <ul className="flex flex-col">
                         {CONNECTOR_LINKS.map(t => {
@@ -332,7 +335,7 @@ function MegaPanel({ hasMenus, tree, onNavigate }: { hasMenus: boolean; tree: Me
             )}
             {/* Admin › Menüler items with children become columns (Cihaz, Markalar, …) */}
             {columns.map((col, i) => (
-                <div key={col.id} className={cn(columns.length === 2 && i === 0 ? 'col-span-3' : 'col-span-2')}>
+                <div key={col.id} className={cn(columns.length === 2 && i === 0 ? 'col-span-4 xl:col-span-3' : 'col-span-3 xl:col-span-2')}>
                     <p className="type-micro mb-3 text-muted">{col.title}</p>
                     <ul className="flex flex-col">
                         {col.children.map(child => (
@@ -350,7 +353,7 @@ function MegaPanel({ hasMenus, tree, onNavigate }: { hasMenus: boolean; tree: Me
                 </div>
             ))}
 
-            <div className="col-span-3">
+            <div className="hidden xl:col-span-3 xl:block">
                 <div className="relative flex h-full min-h-[220px] flex-col justify-between overflow-hidden rounded-sheet bg-ink p-6 text-white">
                     <div aria-hidden="true" className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-brand-600/40 blur-2xl" />
                     <div className="relative">

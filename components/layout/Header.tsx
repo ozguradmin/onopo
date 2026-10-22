@@ -17,10 +17,12 @@
  */
 import * as React from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { ChevronLeft, Heart, Lock, Menu, ShoppingBag, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatTL } from "@/lib/format"
-import { originalImageUrl } from "@/lib/images"
+import { originalImageUrl, productImageSrcSet, productImageUrl } from "@/lib/images"
+import { hasSessionHint } from "@/lib/session-hint"
 import { itemsTotal } from "@/lib/pricing"
 import { useCartStore } from "@/store/cart-store"
 import { useShellChrome, useSiteSettings } from "@/components/layout/store-data"
@@ -206,16 +208,39 @@ function CheckoutHeader() {
     )
 }
 
-/** Logo from Admin › Ayarlar (logo_url, 5:1), site name as text if it is missing or fails to load. */
+/** Rendered logo width: 28px tall on phones, 32px from lg, at 5:1. */
+export const LOGO_SIZES = '(min-width: 1024px) 160px, 140px'
+
+/**
+ * Logo image candidates, in fallback order. With image variants on (lib/images), the 200w/400w WebP
+ * copies (alpha kept) come first and the 1080px original is the one-shot fallback; otherwise only the
+ * original. The footer uses the same URLs, so the browser downloads the logo once.
+ */
+export function logoSources(url: string | null | undefined): { src: string; srcSet?: string }[] {
+    if (!url) return []
+    const original = originalImageUrl(url)
+    const variant = productImageUrl(url, 400)
+    if (variant === original) return [{ src: original }]
+    return [{ src: variant, srcSet: productImageSrcSet(url, [200, 400]) }, { src: original }]
+}
+
+/**
+ * Logo from Admin › Ayarlar (logo_url, 5:1): the variant, then the original once, then the site name as
+ * text. React preloads this <img> from the server render (a Link header for a plain src, a
+ * <link rel="preload" imagesrcset> in <head> when it has a srcset), so the preload always names the URL
+ * the <img> really uses.
+ */
 function Logo({ className }: { className?: string }) {
     const settings = useSiteSettings()
     const siteName = settings.site_name || 'Onopo'
-    const src = settings.logo_url ? originalImageUrl(settings.logo_url) : null
-    const [failed, setFailed] = React.useState(false)
+    const sources = React.useMemo(() => logoSources(settings.logo_url), [settings.logo_url])
+    const [stage, setStage] = React.useState(0)
+    const current = sources[stage]
     const imgRef = React.useRef<HTMLImageElement>(null)
     React.useEffect(() => {
+        // Failed before hydration (React's onError missed it)
         const img = imgRef.current
-        if (img && img.complete && img.naturalWidth === 0) setFailed(true)
+        if (img && img.complete && img.naturalWidth === 0) setStage(s => s + 1)
     }, [])
 
     return (
@@ -225,16 +250,18 @@ function Logo({ className }: { className?: string }) {
             aria-label={`${siteName} ana sayfa`}
             className={cn('flex shrink-0 items-center rounded-thumb', className)}
         >
-            {src && !failed ? (
+            {current ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                     ref={imgRef}
-                    src={src}
+                    src={current.src}
+                    srcSet={current.srcSet}
+                    sizes={current.srcSet ? LOGO_SIZES : undefined}
                     alt={`${siteName} Store`}
                     width={1080}
                     height={216}
                     decoding="async"
-                    onError={() => setFailed(true)}
+                    onError={() => setStage(s => s + 1)}
                     className="h-7 w-auto lg:h-8"
                 />
             ) : (
@@ -250,11 +277,29 @@ function Logo({ className }: { className?: string }) {
 const ICON_BTN =
     'relative inline-flex h-11 min-w-11 items-center justify-center gap-2 rounded-card px-2.5 text-ink transition-colors duration-150 hover:bg-surface-2'
 
+/**
+ * "Giriş yap" (/login/) in the server HTML, which the edge cache shares between all anonymous visitors.
+ * After hydration, and again after each navigation (logout is a client navigation), the readable session
+ * hint (lib/session-hint) switches it to "Hesabım" (/profile/). Decided in an effect, so the server and
+ * the first client render match. The label box always reserves the width of the longer label (the
+ * other one sits in an invisible ::after), so the swap never moves the header.
+ */
 function AccountLink() {
+    const pathname = usePathname()
+    const [signedIn, setSignedIn] = React.useState(false)
+    React.useEffect(() => {
+        setSignedIn(hasSessionHint())
+    }, [pathname])
+    const label = signedIn ? 'Hesabım' : 'Giriş yap'
     return (
-        <Link href="/profile/" prefetch={false} aria-label="Hesabım" className={ICON_BTN}>
+        <Link href={signedIn ? '/profile/' : '/login/'} prefetch={false} aria-label={label} className={ICON_BTN}>
             <User className="h-[22px] w-[22px]" aria-hidden="true" strokeWidth={1.75} />
-            <span className="hidden text-sm font-semibold xl:inline">Hesabım</span>
+            <span
+                data-alt={signedIn ? 'Giriş yap' : 'Hesabım'}
+                className="hidden text-sm font-semibold after:invisible after:col-start-1 after:row-start-1 after:h-0 after:content-[attr(data-alt)] xl:inline-grid"
+            >
+                <span className="col-start-1 row-start-1">{label}</span>
+            </span>
         </Link>
     )
 }

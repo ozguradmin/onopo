@@ -16,8 +16,9 @@ import * as React from "react"
 import Link from "next/link"
 import { ChevronDown, Facebook, Instagram, Linkedin, Lock, Mail, MapPin, MessageCircle, Phone, Twitter, Youtube } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { originalImageUrl } from "@/lib/images"
+import { FallbackImage } from "@/components/ui/FallbackImage"
 import { useShellChrome, useStoreData } from "@/components/layout/store-data"
+import { LOGO_SIZES, logoSources } from "./Header"
 import { PaymentMarks, TrustBand } from "./trust"
 import { SUPPORT_LINKS, telHref, whatsappHref } from "./nav-data"
 
@@ -48,6 +49,7 @@ function FooterInner({ variant }: { variant: 'store' | 'checkout' }) {
     const { settings: s, categories: allCategories } = useStoreData()
     const siteName = s.site_name || 'Onopo'
     const text = footerText(s.footer_text, siteName)
+    const logo = logoSources(s.logo_url)
 
     const bottomBar = (
         <div className="border-t border-white/10">
@@ -69,7 +71,7 @@ function FooterInner({ variant }: { variant: 'store' | 'checkout' }) {
             <footer className="mt-12">
                 <TrustBand />
                 <div className="bg-ink text-white">
-                    <div className="container-store flex flex-wrap gap-x-5 gap-y-2 pt-5 text-[13px] text-white/75">
+                    <div className="container-store flex flex-wrap gap-x-5 gap-y-2 py-5 text-[13px] text-white/75">
                         {SUPPORT_LINKS.filter(l => l.href.startsWith('/page/')).map(l => (
                             <Link key={l.href} href={l.href} prefetch={false} className="hover:text-white">
                                 {l.label}
@@ -109,16 +111,19 @@ function FooterInner({ variant }: { variant: 'store' | 'checkout' }) {
                     {/* Brand */}
                     <div className="pb-4 lg:col-span-4 lg:pb-0 lg:pr-8">
                         <Link href="/" prefetch={false} aria-label={`${siteName} ana sayfa`} className="inline-flex rounded-thumb">
-                            {s.logo_url ? (
-                                // Black wordmark → white, the cyan "STORE" keeps its hue (invert + 180° hue rotation)
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                    src={originalImageUrl(s.logo_url)}
+                            {logo.length > 0 ? (
+                                // Black wordmark → white, the cyan "STORE" keeps its hue (invert + 180° hue rotation).
+                                // Same URLs as the header logo (variant, then the original once), so it is one download.
+                                <FallbackImage
+                                    src={logo[0].src}
+                                    srcSet={logo[0].srcSet}
+                                    sizes={LOGO_SIZES}
+                                    fallbackSrc={logo[1]?.src}
+                                    placeholderSrc={null}
                                     alt={`${siteName} Store`}
                                     width={1080}
                                     height={216}
                                     loading="lazy"
-                                    decoding="async"
                                     className="h-8 w-auto [filter:invert(1)_hue-rotate(180deg)_saturate(1.4)]"
                                 />
                             ) : (
@@ -204,7 +209,11 @@ function FooterInner({ variant }: { variant: 'store' | 'checkout' }) {
     )
 }
 
-/** Link column: a plain list on desktop, an accordion on phones (content stays in the HTML). */
+/**
+ * Link column: a plain list on desktop, an accordion on phones (content stays in the HTML). The title is
+ * one heading with one text node at every width; on phones the toggle button, named by that heading,
+ * covers the heading row, and from lg it is not rendered (display: none).
+ */
 function FooterColumn({
     id,
     title,
@@ -220,20 +229,20 @@ function FooterColumn({
 }) {
     const [open, setOpen] = React.useState(defaultOpen)
     return (
-        <div className={cn('border-t border-white/10 lg:border-0', className)}>
-            <h2 className="text-sm font-semibold text-white">
-                <button
-                    type="button"
-                    aria-expanded={open}
-                    aria-controls={`${id}-list`}
-                    onClick={() => setOpen(o => !o)}
-                    className="flex min-h-[52px] w-full items-center justify-between text-left lg:hidden"
-                >
-                    {title}
-                    <ChevronDown className={cn('h-5 w-5 text-white/60 transition-transform duration-200', open && 'rotate-180')} aria-hidden="true" />
-                </button>
-                <span className="hidden lg:mb-4 lg:block">{title}</span>
+        <div className={cn('relative border-t border-white/10 lg:border-0', className)}>
+            <h2 id={`${id}-title`} className="flex min-h-[52px] items-center pr-8 text-sm font-semibold text-white lg:mb-4 lg:block lg:min-h-0 lg:pr-0">
+                {title}
             </h2>
+            <button
+                type="button"
+                aria-labelledby={`${id}-title`}
+                aria-expanded={open}
+                aria-controls={`${id}-list`}
+                onClick={() => setOpen(o => !o)}
+                className="absolute inset-x-0 top-0 flex h-[52px] items-center justify-end lg:hidden"
+            >
+                <ChevronDown className={cn('h-5 w-5 text-white/60 transition-transform duration-200', open && 'rotate-180')} aria-hidden="true" />
+            </button>
             <ul id={`${id}-list`} className={cn('flex-col gap-1 pb-4 text-sm lg:flex lg:gap-2.5 lg:pb-0', open ? 'flex' : 'hidden')}>
                 {children}
             </ul>

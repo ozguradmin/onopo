@@ -443,9 +443,25 @@
 }
 
 /* Pages with their own sticky bottom bar (product page buy bar, checkout) hide the mobile bottom nav:
-   render any element with the attribute `data-hide-bottom-nav` in the page. */
+   render any element with the attribute `data-hide-bottom-nav` in the page. display: none also takes
+   its links out of the tab order and the accessibility tree. */
 body:has([data-hide-bottom-nav]) [data-bottom-nav] {
   display: none;
+}
+
+/* Store pages without a bottom nav at all (/odeme, the PayTR result pages) reserve no room for it.
+   Pages that only hide it keep the room: their own bottom bar sits there. */
+@media (max-width: 767px) {
+  body:has(main#main-content):not(:has([data-bottom-nav])) {
+    padding-bottom: 0;
+  }
+}
+
+/* Pages whose last block is grey (bg-surface: checkout, the product page's related rail) run straight
+   into the grey pre-footer trust band instead of leaving a white stripe above it. Pages that end on
+   white keep the footer's top margin. Only the page root or its last child count (not cards deeper inside). */
+#main-content:has(> .bg-surface:last-child, > :last-child > .bg-surface:last-child) + footer {
+  margin-top: 0;
 }
 
 /* Toasts sit above the mobile bottom nav (sonner's own mobile breakpoint is 600px) */

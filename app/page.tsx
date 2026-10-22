@@ -46,11 +46,13 @@ export default async function Home() {
         throw new Error('Home page data unavailable')
     }
 
-    // Where the admin slider goes: at the top unless the admin moved an active 'hero' section below
-    // another section (then the top shows the data-built banner and the slider renders in place).
+    // The admin slider shows only for an active 'hero' section (Admin › Ana Sayfa switch, as on the old
+    // site): at the top when that section comes first, otherwise where it sits. The top then shows
+    // the banner built from store data. No active hero section → no slides anywhere.
     const heroSection = sections.find(s => s.type === 'hero')
-    const heroInPlace = !!heroSection && sections[0]?.id !== heroSection.id && slides.length > 0
-    const topSlides = heroInPlace ? [] : slides
+    const heroOnTop = !!heroSection && sections[0]?.id === heroSection.id
+    const heroInPlace = !!heroSection && !heroOnTop && slides.length > 0
+    const topSlides = heroOnTop ? slides : []
 
     const hasCategoriesSection = sections.some(s => s.type === 'categories')
     const categoryShortcuts = shortcuts.filter(s => s.kind === 'category')
