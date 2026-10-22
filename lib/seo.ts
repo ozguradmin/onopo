@@ -391,10 +391,14 @@ export function cleanDescriptionText(html: string | null | undefined): string {
     const beforeSpecs = html.split(/Teknik Özellikler/i)[0]
     let text = stripHtml(beforeSpecs, 100000)
         .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+        .replace(/&le;/gi, '≤')
+        .replace(/&ge;/gi, '≥')
         .replace(/&[a-z]+;/gi, ' ')
         .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ') // emoji and other astral symbols
         .replace(/[←-⇿⌀-⏿☀-➿⬀-⯿️‍]/g, ' ') // ✅ ➝ ★ etc.
         .replace(/([a-zçğıöşü0-9)%])([.!?])([A-ZÇĞİÖŞÜ])/g, '$1$2 $3')
+        // "kablo.30 watt" / "kablo.220 volt": a sentence that starts with a number (not "3.4A", where a digit precedes the dot)
+        .replace(/([a-zçğıöşü])\.(\d)/g, '$1. $2')
     text = collapseWs(text)
     return text
 }
@@ -447,6 +451,7 @@ export function fitDescription(lead: string, tail: string, opts: { min?: number;
     }
     for (const f of opts.fillers || []) {
         if (result.length >= min) break
+        if (result.includes(f)) continue // the lead already says it ("… uygun fiyatla Onopo Store'da.")
         if (result.length + 1 + f.length <= max) result = `${result} ${f}`
     }
     return result
@@ -528,7 +533,7 @@ const TITLE_TYPES: Array<{ re: RegExp; forms: string[]; cable?: boolean }> = [
     { re: /Şarj Adaptörü Başlığı/g, forms: ['Şarj Adaptörü'] },
     { re: /(?:Hızlı\s+)?Şarj Adaptörü/g, forms: ['Şarj Adaptörü'] },
     { re: /Şarj Başlığı/g, forms: [] },
-    { re: /(?:AUX |Data )?Kablosu/g, forms: [], cable: true },
+    { re: /(?:AUX |Data )?Kablosu(?![a-zçğıöşü])/g, forms: [], cable: true }, // not the "Kablosu" in "Kablosuz"
     { re: /Kablosuz Kulaklık|Kulaklık|Powerbank|El Süpürgesi|Hepa Filtre|Toz Haznesi Aparatı|Oyun Konsolu|Oyun Kumandası|Fiş Yazıcı/g, forms: [] },
 ]
 
@@ -708,14 +713,18 @@ export function productBrand(p: Pick<ProductSeoInput, 'name' | 'description'>): 
     return undefined
 }
 
+/** Brand words written with a lowercase first letter: "iPhone …" starts a sentence, it is not a cut mid-sentence. */
+const LOWERCASE_BRAND_WORD = 'i(?:Phone|Pad|Pod|OS|Mac|Cloud|Watch)(?![a-zçğıöşü])'
+const LOWERCASE_BRAND = new RegExp(`^${LOWERCASE_BRAND_WORD}`)
+
 /** Lead sentence(s) of a product description without the repeated product name / category label. */
 export function productDescriptionLead(p: Pick<ProductSeoInput, 'name' | 'description'>): string {
     // Imported descriptions look like "Ürün Açıklaması<title>Detaylı Bilgi<body>Teknik Özellikler<specs>": use the body
     const raw = String(p.description || '')
     const bodyAt = raw.search(/Detaylı Bilgi/i)
     const text = cleanDescriptionText(bodyAt >= 0 ? raw.slice(bodyAt + 'Detaylı Bilgi'.length) : raw)
-        .replace(/(^|\s)[İI]phone(?=\s|$|[,.])/g, '$1iPhone')
-        .replace(/(^|\s)[İI]pad(?=\s|$|[,.])/g, '$1iPad')
+        .replace(/(^|\s)[İIi][Pp]hone(?=\s|$|[,.'’])/g, '$1iPhone')
+        .replace(/(^|\s)[İIi][Pp]ad(?=\s|$|[,.'’])/g, '$1iPad')
     if (!text) return ''
     const folded = foldTr(text)
     const nameCore = stripBrandPrefix(p.name).split(/\s+[|–—]\s+|\s+-\s+/)[0]
@@ -749,22 +758,111 @@ export function productDescriptionLead(p: Pick<ProductSeoInput, 'name' | 'descri
             .trim()
         start = start || 1
     }
+    // "Model - F1 Yüksek kaliteli …": a spec-table fragment left in front of the text
+    const modelLabel = rest.match(/^Model\s*[-–:]\s*[A-Z]{1,3}\d{1,3}[A-Z]?(?=\s|$)\s*/)
+    if (modelLabel) { rest = rest.slice(modelLabel[0].length); start = start || 1 }
+    // "Adaptör Şarj Kablosu M2 Android ve …": the rest of the echoed title, up to the model code
+    if (code && start > 0) {
+        const echo = rest.match(new RegExp(`^(?:[A-ZÇĞİÖŞÜ0-9+&/][^\\s.!?]*\\s+){1,8}?${code}\\s+(?=[A-ZÇĞİÖŞÜ]|${LOWERCASE_BRAND_WORD})`))
+        if (echo) rest = rest.slice(echo[0].length)
+    }
 
-    // A cut in the middle of a sentence: continue from the next sentence
-    if (start > 0 && /^[a-zçğıöşü]/.test(rest)) {
+    // A cut in the middle of a sentence: continue from the next sentence ("iPhone …" is a sentence start)
+    if (start > 0 && /^[a-zçğıöşü]/.test(rest) && !LOWERCASE_BRAND.test(rest)) {
         const next = rest.search(/[.!?]\s+[A-ZÇĞİÖŞÜ0-9]/)
         rest = next >= 0 ? rest.slice(next + 1).trim() : ''
     }
     return rest
 }
 
+const MODEL_BRAND = /^(?:iPhone|iPad|Galaxy|Samsung|Xiaomi|Redmi|Infinix|Huawei|Media|Mediapad|MediaPad|Mate|Matepad|MatePad)$/
+const MODEL_WORD = /^(?:Pro|Max|Plus|Ultra|Lite|Mini|Note|Air|FE|Mi|Pad|Tab|TAB|\/|[A-Z]{0,3}\d{1,4}[A-Za-z]{0,2})$/
+/** Specs that look like model numbers: "20W", "12D", "100cm" ("10A" stays: Redmi 10A). */
+const SPEC_WORD = /^\d+(?:W|w|V|mAh|mm|cm|m|M|D|Hz)$/
+/** A screen size ("11 inç", "7''") ends the device model. */
+const SCREEN_SIZE_UNIT = /^(?:inç|inc|İnc|İnç|''|")$/i
+
+/**
+ * What tells a product apart from its siblings that share the same template text: the device it fits
+ * ("iPhone 13 Pro Max", "Redmi Note 12 Pro Plus", "Samsung Galaxy Tab S6 Lite") and its model code
+ * ("Q8" from "… - Q8", "BT1" from "BT1 Gürültü Önleyici …").
+ */
+export function productModelTokens(name: string): { device?: string; code?: string } {
+    let s = stripBrandPrefix(name)
+    for (const [re, rep] of TITLE_CASE_FIXES) s = s.replace(re, rep)
+    s = collapseWs(s)
+    const code = (s.match(/[-–]\s*([A-Z]{1,3}\d{1,3}[A-Z]?)\s*$/) || s.match(/^([A-Z]{1,3}\d{1,4}[A-Z]?)(?=\s)/) || [])[1]
+    const words = s.split(' ')
+    let device: string | undefined
+    for (let i = 0; i < words.length && !device; i++) {
+        if (!MODEL_BRAND.test(words[i])) continue
+        let j = i + 1
+        while (
+            j < words.length
+            && (MODEL_WORD.test(words[j]) || MODEL_BRAND.test(words[j]))
+            && !SPEC_WORD.test(words[j])
+            && !SCREEN_SIZE_UNIT.test(words[j + 1] || '')
+        ) j++
+        const phrase = words.slice(i, j)
+        while (phrase[phrase.length - 1] === '/') phrase.pop()
+        if (phrase.slice(1).some((w) => /\d/.test(w))) device = phrase.join(' ')
+    }
+    return { ...(device ? { device } : {}), ...(code ? { code } : {}) }
+}
+
+/**
+ * Whole-word containment, ignoring case and Turkish accents. A longer model does not count:
+ * "iPhone 13 Pro" is not mentioned by "iPhone 13 Pro Max modeliyle".
+ */
+function mentions(text: string, token: string): boolean {
+    const norm = (s: string) => foldTr(collapseWs(s)).replace(/\s*\/\s*/g, '/')
+    const t = norm(token).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`(^|[^a-z0-9])${t}(?![a-z0-9]|\\s+(?:pro|max|plus|ultra|lite|mini|fe)(?![a-z]))`).test(norm(text))
+}
+
+/** "ekran koruyucu", "şarj kablosu", "kablosuz kulaklık": the product type of a name, for running text. */
+function productTypeLabel(name: string): string {
+    let s = stripBrandPrefix(name)
+    for (const [re, rep] of TITLE_CASE_FIXES) s = s.replace(re, rep)
+    const t = findTitleType(collapseWs(s))
+    if (!t) return ''
+    const label = t.forms[t.forms.length - 1] || t.text
+    if (label === 'Kablosu') return 'kablo'
+    return label.split(' ').map((w) => (/^[A-ZÇĞİÖŞÜ][a-zçğıöşü]+$/.test(w) ? w.toLocaleLowerCase('tr-TR') : w)).join(' ')
+}
+
+/**
+ * Many descriptions come from one template per product family and never name the model
+ * ("Apple marka cihazlarınız için …" on ten iPhone screen protectors). When the text that is shown (`shown`, the
+ * fitted description; default the lead) does not mention the device or the model code, the lead gets a short model
+ * phrase in front, so every product page has its own description:
+ * "iPhone 13 Pro Max ekran koruyucu: Apple marka …", "Onopo Q8 şarj kablosu: Apple cihazlarınız …".
+ */
+export function withModelPhrase(p: Pick<ProductSeoInput, 'name' | 'description'>, lead: string, shown: string = lead): string {
+    const { device, code } = productModelTokens(p.name)
+    // The device as descriptions name it: without the maker ("Galaxy Tab S7", "Redmi Note 12") and only the first
+    // of a list ("iPhone 13" for "iPhone 13 / 13 Pro").
+    const deviceCore = device && device.replace(/^(?:(?:Samsung|Xiaomi|Huawei)\s+)+/, '').split(/\s*\/\s*/)[0]
+    const missing: string[] = []
+    if (device && deviceCore && !mentions(shown, deviceCore)) missing.push(device)
+    if (code && !mentions(shown, code)) missing.push(code)
+    if (!missing.length) return lead
+    const brand = !missing.includes(device as string) && productBrand(p) === 'Onopo' ? 'Onopo' : ''
+    const phrase = [brand, ...missing, productTypeLabel(p.name)].filter(Boolean).join(' ')
+    return `${phrase}: ${lead}`
+}
+
 /** Meta description for a product page (Turkish, about 140–160 chars, from the real description and shop facts). */
 export function productMetaDescription(p: ProductSeoInput, site: SiteSeo = DEFAULT_SITE_SEO): string {
     const price = roundPrice(p.price)
-    const lead = productDescriptionLead(p) || `${productTitle(p.name)} uygun fiyatla Onopo Store'da.`
     const stockFact = Number(p.stock) > 0 ? null : 'Şu an stokta yok.'
     const tail = [stockFact, factsTail(site, price, Boolean(Number(p.free_shipping)))].filter(Boolean).join(' ')
-    return fitDescription(lead, tail, { fillers: ["Onopo Store'da."] })
+    const fit = (lead: string) => fitDescription(lead, tail, { fillers: ["Onopo Store'da."] })
+    const own = productDescriptionLead(p)
+    if (!own) return fit(`${productTitle(p.name)} uygun fiyatla Onopo Store'da.`)
+    const plain = fit(own)
+    const lead = withModelPhrase(p, own, plain)
+    return lead === own ? plain : fit(lead)
 }
 
 // ---------------------------------------------------------------------------------------------
