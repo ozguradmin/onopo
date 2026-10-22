@@ -175,8 +175,9 @@ export function localWhatsapp(opts: {
 }
 
 /**
- * wa.me base for local WhatsApp cards until the server's `meta` event names one (owner decision: the
- * public whatsapp_number, else the footer phone of Site Ayarları). Only a Turkish mobile number counts
+ * wa.me base for local WhatsApp cards until the server's `meta` event names one (owner decision, same chain
+ * as the server: the Admin › AI Asistan number, else whatsapp_number, else the footer phone of Site
+ * Ayarları). Only a Turkish mobile number counts
  * (wa.me/90 + 5xx + 7 digits): a landline cannot receive WhatsApp, so it means no WhatsApp UI at all.
  * The first usable number of the list wins.
  */

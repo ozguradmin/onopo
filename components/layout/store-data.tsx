@@ -34,6 +34,7 @@ const FALLBACK: StorefrontData = {
         products_per_page: 20,
         topbar_messages: null,
         ai_assistant_enabled: false,
+        ai_whatsapp_number: '',
     },
     shipping: { freeShippingThreshold: 500, shippingCost: 100 },
     maxInstallments: null,

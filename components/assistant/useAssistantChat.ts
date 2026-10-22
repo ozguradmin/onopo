@@ -126,10 +126,11 @@ export interface AssistantChat {
 
 export function useAssistantChat(): AssistantChat {
     const settings = useSiteSettings()
-    // Before the first `meta` event: the store's own number (whatsapp_number, else the footer phone; mobile only)
+    // Before the first `meta` event (and on error rows, which never get one): the same chain as the server,
+    // the Admin › AI Asistan number, else whatsapp_number, else the footer phone; mobile numbers only
     const fallbackWaBase = React.useMemo(
-        () => mobileWaBase(settings.whatsapp_number, settings.footer_phone),
-        [settings.whatsapp_number, settings.footer_phone],
+        () => mobileWaBase(settings.ai_whatsapp_number, settings.whatsapp_number, settings.footer_phone),
+        [settings.ai_whatsapp_number, settings.whatsapp_number, settings.footer_phone],
     )
 
     const [restored] = React.useState(() => loadChat(sessionStore()))

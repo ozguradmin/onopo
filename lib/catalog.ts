@@ -112,6 +112,12 @@ export interface PublicSiteSettings {
     topbar_messages: string[] | null
     /** Kill switch of the Onopo Asistan chat (Admin › AI Asistan). Off: no launcher, the API answers 503. */
     ai_assistant_enabled: boolean
+    /**
+     * The assistant's WhatsApp number (Admin › AI Asistan; '' = not set). Public so the chat UI picks the same
+     * number as the server (ai_whatsapp_number → whatsapp_number → footer_phone) before its first reply and on
+     * error rows that never get a `meta` event. Every wa.me link the chat shows contains it anyway.
+     */
+    ai_whatsapp_number: string
 }
 
 export interface ShippingSettings {
@@ -310,6 +316,7 @@ const DEFAULT_SETTINGS: PublicSiteSettings = {
     products_per_page: 20,
     topbar_messages: null,
     ai_assistant_enabled: false,
+    ai_whatsapp_number: '',
 }
 
 const DEFAULT_SHIPPING: ShippingSettings = { freeShippingThreshold: 500, shippingCost: 100 }
@@ -333,7 +340,7 @@ function toPublicSettings(rows: Record<string, any>[]): PublicSiteSettings {
         if (kv[k] != null) (s as any)[k] = kv[k]
     }
     ;(['site_name', 'site_description', 'site_url', 'footer_text', 'footer_email', 'footer_phone', 'footer_address',
-        'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url', 'linkedin_url', 'tiktok_url', 'whatsapp_number'] as const).forEach(text)
+        'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url', 'linkedin_url', 'tiktok_url', 'whatsapp_number', 'ai_whatsapp_number'] as const).forEach(text)
     if (!s.site_name.trim()) s.site_name = DEFAULT_SETTINGS.site_name
     s.logo_url = kv.logo_url?.trim() || null
     s.favicon_url = kv.favicon_url?.trim() || null
