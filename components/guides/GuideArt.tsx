@@ -43,7 +43,8 @@ export function GuideArt({
     const shown = images.slice(0, 3)
     const tilt = shown.length >= 3 ? ['-rotate-6', 'rotate-0', 'rotate-6'] : shown.length === 2 ? ['-rotate-3', 'rotate-3'] : ['rotate-0']
     return (
-        <div className={cn('relative overflow-hidden bg-linear-to-br from-brand-50 via-brand-50 to-surface', v.box, className)}>
+        // isolate: the raised middle tile (z-[1]) stays inside this picture, under a card's stretched title link
+        <div className={cn('relative isolate overflow-hidden bg-linear-to-br from-brand-50 via-brand-50 to-surface', v.box, className)}>
             <span aria-hidden="true" className="absolute -right-[8%] -top-[40%] aspect-square w-[55%] rounded-full bg-white/70 blur-2xl" />
             <span aria-hidden="true" className="absolute -bottom-[45%] -left-[10%] aspect-square w-[45%] rounded-full bg-white/60 blur-2xl" />
             <div className="absolute inset-0 flex items-center justify-center">
