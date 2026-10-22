@@ -67,7 +67,7 @@ const DAY = 24 * 60 * 60 * 1000
  * A product page ("/<slug>/"): the same rule as page-context.ts isProductPath, repeated here so the shell does
  * not carry the whole page-context module (it is only needed once the chat chunk loads).
  */
-const PRODUCT_PATH = /^\/(?!(?:admin|api|categories|kategori|login|maintenance|odeme|orders|page|product|products|profile|register|siparis-basarili|siparis-hata|help|policy|shipping|terms)\/?$)[a-z0-9-]{1,120}\/?$/
+const PRODUCT_PATH = /^\/(?!(?:admin|api|categories|kategori|kategoriler|login|maintenance|odeme|orders|page|product|products|profile|register|siparis-basarili|siparis-hata|help|policy|shipping|terms)\/?$)[a-z0-9-]{1,120}\/?$/
 
 function isTextField(el: EventTarget | null): boolean {
     if (!(el instanceof HTMLElement)) return false

@@ -14,7 +14,7 @@ const FACET = /^[a-z0-9-]{1,40}$/
 
 /** First path segments that are app routes, never a product slug (app/*). */
 const RESERVED = new Set([
-    'admin', 'api', 'categories', 'kategori', 'login', 'maintenance', 'odeme', 'orders', 'page', 'product',
+    'admin', 'api', 'categories', 'kategori', 'kategoriler', 'login', 'maintenance', 'odeme', 'orders', 'page', 'product',
     'products', 'profile', 'register', 'siparis-basarili', 'siparis-hata',
 ])
 
