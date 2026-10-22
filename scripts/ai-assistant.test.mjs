@@ -1961,3 +1961,62 @@ test('boldProductIds: products named in **bold** match one in-stock row each (Tu
     assert.deepEqual(turn.boldProductIds('**60W Type-C Örgülü Kablo** ya da **60W Type-C Kablo**', rows), [])
     assert.deepEqual(turn.boldProductIds('Düz metin, kalın yok.', rows), [])
 })
+
+// ---------------------------------------------------------------------------------------------
+// Chip answers from the catalogue (lib/assistant/chip-actions.ts)
+// ---------------------------------------------------------------------------------------------
+{
+    const ca = await import('../lib/assistant/chip-actions.ts')
+    const row = (id, group, displayPrice, inStock = true) => ({ id, name: `P${id}`, displayName: `P${id}`, slug: `p${id}`, href: `/p${id}/`, price: displayPrice, displayPrice, originalPrice: null, category: null, group, isBestSeller: false, inStock, image: null, code: null, freeShipping: false, hasVariations: false, whatsappOrder: false, whatsappNumber: null })
+    const rows = [row(1, 'sarj-aleti', 269.99), row(2, 'sarj-aleti', 199.99), row(3, 'sarj-aleti', 349.99), row(4, 'sarj-aleti', 149.99, false), row(5, 'kablo', 99.99), row(6, 'sarj-aleti', 279.99)]
+
+    test('chip actions: typed or tapped chip text is recognised, other text is not', () => {
+        assert.equal(ca.shownChipOf('Benzerlerini göster'), 'similar')
+        assert.equal(ca.shownChipOf('  benzerlerini GÖSTER '), 'similar')
+        assert.equal(ca.shownChipOf('Daha uygun fiyatlısı var mı?'), 'cheaper')
+        assert.equal(ca.shownChipOf('daha uygun fiyatlisi var mi'), 'cheaper')
+        assert.equal(ca.shownChipOf('Benzerlerini göster ama kablo olsun'), null)
+        assert.equal(ca.shownChipOf('iPhone 15 için şarj aleti'), null)
+    })
+
+    test('chip actions: similar = same group, in stock, not shown, closest price first', () => {
+        const { anchor, picked } = ca.pickForShownChip('similar', rows, [1])
+        assert.equal(anchor.id, 1)
+        assert.deepEqual(picked.map(r => r.id), [6, 2, 3], 'kablo and the sold-out charger are left out (|199.99-269.99| < |349.99-269.99|)')
+    })
+
+    test('chip actions: cheaper = below the cheapest shown of that group, closest first; none -> honest text', () => {
+        assert.deepEqual(ca.pickForShownChip('cheaper', rows, [1]).picked.map(r => r.id), [2])
+        assert.deepEqual(ca.pickForShownChip('cheaper', rows, [2]).picked, [])
+        assert.match(ca.shownChipText('cheaper', 0), /en uygun/)
+        assert.deepEqual(ca.pickForShownChip('similar', rows, [1], new Set([6])).picked.map(r => r.id), [2, 3], 'cart products are excluded')
+        assert.equal(ca.pickForShownChip('similar', rows, [999]).anchor, null)
+    })
+}
+
+test('chip actions: never a Lightning product after a USB-C one (and the other way round)', async () => {
+    const ca = await import('../lib/assistant/chip-actions.ts')
+    const row = (id, name, displayPrice) => ({ id, name, displayName: name, slug: `p${id}`, href: `/p${id}/`, price: displayPrice, displayPrice, originalPrice: null, category: null, group: 'sarj-aleti', isBestSeller: false, inStock: true, image: null, code: null, freeShipping: false, hasVariations: false, whatsappOrder: false, whatsappNumber: null })
+    const rows = [
+        row(1, 'Onopo 30W Type-C Girişli Şarj Adaptörü - M1', 239.99),
+        row(2, 'Onopo iPhone Apple Uyumlu Lightning USB 3.4A Hızlı Şarj Cihazı 18W - X8', 229.99),
+        row(3, 'Onopo 67W USB Turbo Hızlı Şarj Aleti Seti Esnek Kablo Type-C - M6', 299.99),
+        row(4, 'Onopo 3.4A USB Girişli Hızlı Şarj Adaptörü - X9', 199.99),
+        row(5, 'Onopo Android Xiaomi ve Samsung Uyumlu Micro USB 2.6A Hızlı Şarj Cihazı 12W - X3', 189.99),
+    ]
+    assert.deepEqual(ca.pickForShownChip('similar', rows, [1]).picked.map(r => r.id), [4, 3], 'Lightning (2) and Micro (5) are left out; a plain USB adapter (4) stays')
+    assert.deepEqual(ca.pickForShownChip('similar', rows, [2]).picked.map(r => r.id), [4], 'after a Lightning charger: no USB-C or Micro product')
+    assert.deepEqual([...ca.connectorsOf('T120 USB-A to Type-C Turbo Şarj ve Data Kablosu')], ['usb-c'])
+})
+
+test('chip actions: no charger made for other (old) phones after a USB-C charger', async () => {
+    const ca = await import('../lib/assistant/chip-actions.ts')
+    const row = (id, name, displayPrice) => ({ id, name, displayName: name, slug: `p${id}`, href: `/p${id}/`, price: displayPrice, displayPrice, originalPrice: null, category: null, group: 'sarj-aleti', isBestSeller: false, inStock: true, image: null, code: null, freeShipping: false, hasVariations: false, whatsappOrder: false, whatsappNumber: null })
+    const rows = [
+        row(1, 'Onopo iPhone ve Android Uyumlu 20W Type-C Girişli Şarj Başlığı - M3', 269.99),
+        row(2, 'Onopo D880 GT-E1190 GT-E1150 GT-E1205 GT-E1207 SM-D880 Uyumlu Şarj Cihazı - X1', 129.99),
+        row(3, 'Onopo 3.4A USB Girişli Hızlı Şarj Adaptörü - X9', 199.99),
+        row(4, 'Onopo G810 C5510 C6712 Chat 222 Chat 322 C3262s3570 S7500 Uyumlu Şarj Cihazı - X2', 119.99),
+    ]
+    assert.deepEqual(ca.pickForShownChip('cheaper', rows, [1]).picked.map(r => r.id), [3], 'X1 and X2 are for old feature phones; the plain USB adapter X9 stays')
+})

@@ -320,7 +320,8 @@ export const FACETS: FacetDefinition[] = [
     { key: 'kulaklik', label: 'Kulaklık', test: n => /\bkulaklik/.test(n) },
     { key: 'ekran-koruyucu', label: 'Ekran koruyucu', test: n => /\bekran koruyucu|\b(temperli|kirilmaz|nano) cam\b/.test(n) },
     { key: 'kablo', label: 'Kablo', test: n => /\bkablo/.test(n) },
-    { key: 'sarj-aleti', label: 'Şarj aleti', test: n => /\bsarj (aleti|cihazi|adaptoru)|\badaptor|\bbaslik\b/.test(n) },
+    // "baslik" and its possessive "basligi" ("Şarj Başlığı - M3" was the one charger left out)
+    { key: 'sarj-aleti', label: 'Şarj aleti', test: n => /\bsarj (aleti|cihazi|adaptoru)|\badaptor|\bbasli(k|gi)\b/.test(n) },
     { key: '20w', label: '20W ve üzeri', test: n => wattOf(n) >= 20 },
     { key: 'orgulu', label: 'Örgülü', test: n => /\borgulu\b/.test(n) },
 ]

@@ -32,6 +32,7 @@ import { DATA_TOOLS, TOOL_STEP, TOOLS, catalogLinesFor, flushCart, isKnownTool, 
 import { addToolText, collectAllowed, createTextGuard } from './validator'
 import { CANNED, DEFAULT_TEXT, faqAnswer, POLICY_REASON, policyText, policyTopic, smallTalkText } from './canned'
 import { buildSuggestions, type TurnEnd } from './suggestions'
+import { pickForShownChip, shownChipOf, shownChipText } from './chip-actions'
 import { detectDevice } from './device'
 import { costMicroUsd } from './limits'
 import { foldTr, normalizeText } from '../search'
@@ -201,7 +202,8 @@ export interface TurnLog {
 }
 
 // 14 s to the first byte: at 10 s about 1 turn in 10 fell back although DeepSeek answered at 10-12 s (live test)
-const DEFAULT_TIMEOUTS = { routerMs: 700, firstByteMs: 14_000, turnMs: 30_000 }
+// routerMs: Clef answers in 0.8-1.6 s (measured 2026-10-22); at 700 ms it timed out on almost every turn
+const DEFAULT_TIMEOUTS = { routerMs: 1500, firstByteMs: 14_000, turnMs: 30_000 }
 
 /** In-isolate circuit breaker: after a 429/3040 from the primary model, use the fallback for 60 s. */
 let circuitOpenUntil = 0
@@ -482,6 +484,35 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
         const visitorCart = normalizeCart(req.context.cart)
         const soldOutOk = namedSoldOut(k.rows, masked).map(r => r.id)
         state = newToolState({ pageProduct, maskedInput: masked, loggedIn: deps.loggedIn, cart: visitorCart, shownBefore, soldOutOk })
+
+        // ---- "Benzerlerini göster" / "Daha uygun fiyatlısı var mı?" after a product card: from the catalogue,
+        // no model call (instant, and still answered while the model is slow; chip-actions.ts) ----
+        const shownChip = shownChipOf(masked)
+        if (shownChip && shownBefore.length) {
+            const { anchor, picked } = pickForShownChip(shownChip, k.rows, shownBefore, new Set(visitorCart.map(c => c.id)))
+            if (anchor) {
+                log.mode = 'canned'
+                log.outcome = 'canned'
+                log.intent = `chip_${shownChip}`
+                out({ t: 'meta', turnId, mode: 'canned', waBase: k.waBase })
+                out({ t: 'text', v: shownChipText(shownChip, picked.length) })
+                const chipCtx: ToolContext = { k, getProductDetail: deps.getProductDetail, state }
+                if (picked.length) {
+                    const r = await runTool('show_products', JSON.stringify({ ids: picked.map(p => p.id) }), chipCtx)
+                    r.events.forEach(out)
+                }
+                whatsappEvents(chipCtx, { reason: 'other', summary: masked, productIds: [], variant: 'compact' })?.forEach(out)
+                const chips = buildSuggestions(
+                    picked.length ? { kind: 'products', group: anchor.group } : { kind: 'other' },
+                    { remaining: cartSummary()?.remaining ?? null, waShown: state.waVariant != null },
+                )
+                if (chips.length) out({ t: 'suggestions', chips })
+                finishLog()
+                finish(picked.length ? 'cards' : 'canned')
+                return log
+            }
+        }
+
         out({ t: 'meta', turnId, mode: 'llm', waBase: k.waBase })
         out({ t: 'step', id: 'understand', state: 'active' })
         const route = await routeP
@@ -872,13 +903,20 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
         }
         flushCart(ctx).forEach(out)
         let unsure = false
+        let modelFailed = false
         if (!textSent) {
             const first = state.shown[0]
             if (first === 'cart' || first === 'cart_ops') out({ t: 'text', v: cartSummaryText(priceCart(state.cart, k.byId, k.facts.freeThreshold)) })
             else if (first === 'links' && followUp?.offer.kind === 'categories') out({ t: 'text', v: 'Kategorilerimiz şunlar:' })
             else if (first) out({ t: 'text', v: DEFAULT_TEXT[first] })
             else if (cartWish && !state.cart.length) out({ t: 'text', v: 'Sepetin şu an boş. Ne aradığını yazarsan birlikte bulalım.' })
-            else {
+            else if (useFallback || flags.has('first_byte_timeout') || flags.has('primary_error')) {
+                // The model failed (slow or erroring provider), it did not doubt the answer: say so and offer a
+                // retry instead of "Bundan emin değilim" and a WhatsApp card
+                flags.add('model_unavailable')
+                modelFailed = true
+                out({ t: 'error', code: 'upstream' })
+            } else {
                 out({ t: 'text', v: CANNED.unsure })
                 unsure = true
             }
@@ -907,16 +945,17 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
                     : state.shown.includes('products')
                         ? { kind: 'products', group: state.productGroup }
                         : { kind: 'other' }
-        const chips = buildSuggestions(end, { remaining: nowCart.lines.length ? nowCart.remaining : null, waShown: state.waVariant != null })
+        const chips = modelFailed ? [] : buildSuggestions(end, { remaining: nowCart.lines.length ? nowCart.remaining : null, waShown: state.waVariant != null })
         if (chips.length) out({ t: 'suggestions', chips })
 
         if (useFallback) {
             log.mode = 'fallback'
             log.outcome = 'fallback'
         }
+        if (modelFailed) log.outcome = 'error'
         finishLog()
         // The compact WhatsApp row alone (every answer has it) does not make a "cards" answer
-        finish(state.shown.some(c => c !== 'whatsapp') || state.waVariant === 'full' ? 'cards' : 'stop')
+        finish(modelFailed ? 'error' : state.shown.some(c => c !== 'whatsapp') || state.waVariant === 'full' ? 'cards' : 'stop')
         return log
     } catch (err) {
         if (timedOut) {
