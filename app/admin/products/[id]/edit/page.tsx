@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft, Upload, Loader2, X, Plus, ArrowRight } from 'lucide-react'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import { uploadImageVariants } from '@/lib/imageVariants'
+import { useUsdTryRate } from '@/components/admin/useUsdTryRate'
 
 export default function EditProductPage() {
     const router = useRouter()
@@ -56,15 +57,15 @@ export default function EditProductPage() {
         free_shipping: false
     })
 
-    const [exchangeRate, setExchangeRate] = React.useState<number>(0)
+    // Stored daily rate (or a 3 s background lookup): the form never waits for it
+    const exchangeRate = useUsdTryRate()
 
     // Fetch product and categories
     React.useEffect(() => {
         Promise.all([
             fetch(`/api/products/${productId}`).then(r => r.json()),
-            fetch('/api/categories').then(r => r.json()),
-            fetch('https://api.exchangerate-api.com/v4/latest/USD').then(r => r.json()).catch(() => ({ rates: { TRY: 0 } }))
-        ]).then(([product, cats, rateData]) => {
+            fetch('/api/categories', { cache: 'no-store' }).then(r => r.json())
+        ]).then(([product, cats]) => {
             if (product && !product.error) {
                 setFormData({
                     name: product.name || '',
@@ -86,7 +87,6 @@ export default function EditProductPage() {
                 })
             }
             setCategories(cats || [])
-            if (rateData?.rates?.TRY) setExchangeRate(rateData.rates.TRY)
             setLoading(false)
         }).catch(() => setLoading(false))
     }, [productId])
