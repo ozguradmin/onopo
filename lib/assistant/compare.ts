@@ -11,8 +11,9 @@
  *
  * The model may add the differences it found (show_comparison `rows`). It writes text, so every cell is
  * checked against that product's data: each number (with its unit) must be in the data, every word must be
- * in the data, and "Var"/"Yok" needs the data to name the feature with the same polarity. Cells that fail are
- * dropped; the model never sets Fiyat, Stok or Kargo.
+ * in the data, a plain number needs the data to name the label's feature, and "Var"/"Yok" needs the data to
+ * name the feature with the same polarity. Cells that fail are dropped; the model never sets Fiyat, Stok, Kargo
+ * or Garanti (the server's own rows).
  */
 import type { GroupKey } from './contract'
 import { formatPriceTR } from './contract'
@@ -191,15 +192,16 @@ function chargerPorts(p: Parsed): string {
     }
     const named = fromPhrase(p.fn) || fromPhrase(field(p, 'baglanti'))
     if (named) return named
-    // No phrase: the name's connectors are the ports only when the product is the adapter alone, or when the
-    // cable's connector is the one written next to "kablo" (the X7 "Type-C USB … Şarj Cihazı" says neither)
+    // No phrase: the name's connectors are the ports only when the product is the adapter alone. A set's name
+    // does not say it: the "USB" of "67W USB Turbo … Seti Esnek Kablo Type-C" (M6) is not a port the data names
+    // (its description says "USB Type-C bağlantı", M7's facts "çoklu çıkış"), and the X7 "Type-C USB … Şarj
+    // Cihazı" says neither which is the port nor which the cable
     const box = field(p, 'kutu')
-    const cable = cableConnector(p.fn)
     const adapterOnly = /^(?:yalnizca |sadece )?adaptor(?: basligi)?$|yalnizca adaptor|sadece adaptor|kablo yok/.test(box.trim())
         || (/adaptor|baslig/.test(p.fn) && !/\bset|kablo/.test(p.fn))
         || (p.item.group === 'arac-sarj' && !/kablo/.test(p.fn))
-    if (!adapterOnly && !cable) return ''
-    return portText(connectorList(p.fn).filter(c => (c.conn === 'Type-C' || c.conn === 'USB-A') && (!cable || c.at !== cable.at)))
+    if (!adapterOnly || /coklu/.test(field(p, 'baglanti'))) return ''
+    return portText(connectorList(p.fn).filter(c => c.conn === 'Type-C' || c.conn === 'USB-A'))
 }
 
 /** "Var (Type-C)", "Var", "Yok": from the facts' Kutu field, else the name ("Başlığı" / "Seti … Kablo"). */
@@ -415,6 +417,8 @@ interface NumToken {
     unit: string | null
     /** other letters right after the number ("9h", "15 pro"), when they are not a unit */
     suffix: string | null
+    /** one part of an ambiguous "1.499" (the data side only needs it; a cell is checked by its whole number) */
+    part?: boolean
 }
 
 function numTokens(t: string): NumToken[] {
@@ -429,8 +433,9 @@ function numTokens(t: string): NumToken[] {
         let u = unit
         if (u === 'm') { n *= 100; u = 'cm' } else if (u === 'mm') { n /= 10; u = 'cm' }
         out.push({ n: String(Math.round(n * 1000) / 1000), unit: u, suffix })
-        // "1.499" may be a thousand or a decimal: keep the parts as plain numbers too
-        if (!unit) for (const part of m[1].split('.')) if (part) out.push({ n: String(Number(part)), unit: null, suffix: null })
+        // "1.499" may be a thousand or a decimal: keep the parts as plain numbers too (only that shape: the "2" of
+        // "6.2-3.25A" is not a number the data says)
+        if (!unit && /^\d{1,3}(\.\d{3})+$/.test(m[1])) for (const part of m[1].split('.')) if (part) out.push({ n: String(Number(part)), unit: null, suffix: null, part: true })
     }
     return out
 }
@@ -438,10 +443,10 @@ function numTokens(t: string): NumToken[] {
 const YES = new Set(['var', 'evet', 'mevcut', 'destekler', 'dahil'])
 const NO = new Set(['yok', 'hayir', 'desteklemez', 'degil', 'haric', 'icermez'])
 const SKIP_WORDS = new Set(['ve', 'ile', 'veya', 'icin', 'to', 'ya', 'da', 'de', 'tek', 'adet', 'her', 'iki', ...Object.keys(UNITS)])
-const LABEL_FILLER = new Set(['ozellik', 'ozelligi', 'ozellikli', 'destek', 'destegi', 'durumu', 'var', 'mi', 'mı', 'turu', 'tipi'])
+const LABEL_FILLER = new Set(['ozellik', 'ozelligi', 'ozellikli', 'destek', 'destegi', 'durumu', 'var', 'mi', 'mı', 'turu', 'tipi', 'sayisi', 'adedi'])
 const NEGATION = /\b(?:yok|yoktur|degil|degildir|bulunmamaktadir|bulunmuyor|desteklemez|desteklenmez|desteklemiyor|haric|icermez)\b/
 /** Labels the model may not set: server values, or things it must never claim. */
-const RESERVED_LABEL = /fiyat|stok|kargo|ucret|indirim|kampanya|kupon|puan|yorum|taksit|\btl\b/
+const RESERVED_LABEL = /fiyat|stok|kargo|garanti|ucret|indirim|kampanya|kupon|puan|yorum|taksit|\btl\b/
 
 export interface DataIndex {
     text: string
@@ -494,9 +499,14 @@ export function featurePolarity(label: string, d: DataIndex): 'yes' | 'no' | 'bo
 /** Whether one model cell is backed by this product's data. */
 export function cellSupported(label: string, value: string, d: DataIndex): boolean {
     const v = norm(value)
+    // A cell that is only a number ("Çıkış sayısı: 2") also needs the data to name what it counts: any "2" in a
+    // spec table is not that ("iPhone 15" is checked by its words)
+    const bareCell = /^[\d.\s]+$/.test(v.trim())
     // Numbers (with their unit) must be in the data
     for (const tok of numTokens(v)) {
+        if (tok.part) continue
         if (tok.unit ? !d.keyed.has(`${tok.n}${tok.unit}`) : !d.bare.has(tok.n)) return false
+        if (bareCell && !featurePolarity(label, d)) return false
         // "9H" needs a 9 written with that word ("9D" is not it); "2 çıkışlı" matches "2 çıkış"
         const suffix = tok.suffix
         if (suffix) {

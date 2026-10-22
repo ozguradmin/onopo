@@ -2096,7 +2096,14 @@ test('compare: chargers read ports from "… girişli/çıkışlı" and the box 
     ])
     assert.deepEqual(valuesOf(m3)['Hızlı şarj'], ['Yok', 'Var'])
     assert.deepEqual(valuesOf(m3)['Kutuda kablo'], ['Yok', 'Var (Type-C)'])
-    assert.deepEqual(valuesOf(m3)['Çıkış'], ['Type-C', 'USB-A'], 'M9: the Type-C next to "Kablo" is the cable, the USB is the port')
+    assert.deepEqual(valuesOf(m3)['Çıkış'], ['Type-C', '—'], 'M9: a set\'s name does not say its port (the data says "USB Type-C bağlantı")')
+    // Sets with "USB" in the name (M6, M7: "çoklu çıkış"): no port is guessed, so the row is dropped
+    const sets = cmp.specRows([
+        { row: named(401, 'Onopo 67W USB Turbo Hızlı Şarj Aleti Seti Esnek Kablo Type-C - M6'), facts: 'Kutu: adaptör ve 1 metre Type-C kablo seti; Güç: 67W; Hızlı şarj: var; Bağlantı: Type-C' },
+        { row: named(403, 'Onopo 120W USB Turbo Hızlı Şarj Aleti Seti Esnek Kablo Type-C - M7'), facts: 'Kutu: adaptör ve 1 metre Type-C kablo seti; Güç: 120W; Bağlantı: USB, Type-C, çoklu çıkış' },
+    ])
+    assert.ok(!labelsOf(sets).includes('Çıkış'))
+    assert.deepEqual(valuesOf(sets)['Kutuda kablo'], ['Var (Type-C)', 'Var (Type-C)'])
     // "Type-C USB … Şarj Cihazı" says neither which is the port nor which the cable: unknown, row dropped
     const x7 = cmp.specRows([
         { row: named(401, 'Onopo Android Uyumlu Hızlı Şarj Type-C USB 3.4A Hızlı Şarj Cihazı 20W - X7'), facts: null },
@@ -2160,6 +2167,27 @@ test('compare: model cells must be backed by the product data', () => {
     assert.equal(cmp.cellSupported('Kablosuz şarj', 'Yok', d), true)
     assert.equal(cmp.cellSupported('Su geçirmez', 'Var', d), false, 'the data does not mention the feature')
     assert.equal(cmp.cellSupported('Su geçirmez', 'Yok', d), false, 'not mentioned is not "Yok"')
+})
+
+test('compare: a plain number needs its feature in the data, and a decimal is not split into numbers', () => {
+    // M6's spec table: "Hızlı Çıkış : DC 5.0-20.0V = 6.2-3.25A (67.0W Max)"
+    const m6 = cmp.dataIndex('Onopo 67W USB Turbo Hızlı Şarj Aleti Seti Esnek Kablo Type-C - M6 \n Normal Çıkış : DC 5.0V = 3.0A 15.0W Hızlı Çıkış : DC 5.0-20.0V = 6.2-3.25A (67.0W Max) Kablo : 1 Metre')
+    assert.equal(cmp.cellSupported('Çıkış sayısı', '2', m6), false, 'the "2" of 6.2 is not an output count')
+    assert.equal(cmp.cellSupported('Voltaj', '20V', m6), true)
+    const a8 = cmp.dataIndex('Onopo 3.4A Type-C (PD) ve Çift USB Girişli Turbo Hızlı Araç Şarjı 55W - A8 \n Bağlantı: Type-C, çift USB, 3 port')
+    assert.equal(cmp.cellSupported('Port sayısı', '3', a8), true)
+    assert.equal(cmp.cellSupported('Ağırlık', '3', a8), false, 'a number for a feature the data does not name')
+    assert.equal(cmp.cellSupported('Kapasite', '1.499', cmp.dataIndex('Kapasite: 1.499 mAh')), true)
+})
+
+test('compare: a model "Garanti" row never doubles the server\'s', () => {
+    const out = cmp.buildCompareRows({
+        items: [cmpItem(442, 'Garanti: 5 yıl ithalatçı garantisi'), cmpItem(443, 'Garanti: ithalatçı garantisi')],
+        freeThreshold: 750,
+        modelRows: [{ label: 'Garanti', values: ['5 yıl', '2 yıl'] }],
+    })
+    assert.equal(labelsOf(out.rows).filter(l => l === 'Garanti').length, 1)
+    assert.deepEqual(valuesOf(out.rows).Garanti, ['5 yıl', '—'])
 })
 
 test('compare: show_comparison rows from the model are checked, capped and never set Fiyat/Stok/Kargo', async () => {
