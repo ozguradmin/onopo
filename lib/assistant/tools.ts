@@ -8,14 +8,14 @@
  * TOOLS is part of the cached prompt prefix: keep it byte-identical (SPEC section 4, do not reorder).
  */
 import type { AssistantEvent, CardProduct, HandoffReason, LinkItem, StepId } from './contract'
-import { buildWhatsappMessage, formatPriceTR, maskPII } from './contract'
+import { buildWhatsappMessage, maskPII } from './contract'
 import type { CatalogRow } from './catalog-block'
 import { catalogLine, isGroupKey, priceText, rowTags, searchCatalog, toCardProduct } from './catalog-block'
 import { applyCartOps, cartEvent, priceCart, type CartItem } from './cart'
-import { INFO_TOPICS, infoRows, amountText } from './facts'
+import { INFO_TOPICS, infoRows } from './facts'
 import { safeJson } from './sse-parser'
 import type { Knowledge } from './turn'
-import { specChips } from '../search'
+import { buildCompareRows } from './compare'
 import { cleanDescriptionText } from '../seo'
 import { infoText, parseDescription } from '../../components/pdp/description-parser'
 
@@ -134,7 +134,7 @@ export const TOOLS = deepFreeze([
         "type": "function",
         "function": {
             "name": "show_comparison",
-            "description": "2-3 ürünü yan yana karşılaştırma kartında gösterir.",
+            "description": "2-3 ürünü yan yana karşılaştırma kartında gösterir. Fiyat, stok ve ürün türüne uygun satırları (güç, uçlar, uzunluk, tür …) sistem veriden kendisi doldurur. Ürün verisinde bulduğun başka gerçek farkları rows ile ekleyebilirsin; veride olmayan değer kartta gösterilmez.",
             "parameters": {
                 "type": "object",
                 "additionalProperties": false,
@@ -149,6 +149,34 @@ export const TOOLS = deepFreeze([
                         },
                         "minItems": 2,
                         "maxItems": 3
+                    },
+                    "rows": {
+                        "type": "array",
+                        "maxItems": 5,
+                        "description": "İsteğe bağlı ek satırlar: values, ids ile aynı sırada; bilinmeyen değer için boş metin. Fiyat, stok ve kargo yazma.",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                                "label",
+                                "values"
+                            ],
+                            "properties": {
+                                "label": {
+                                    "type": "string",
+                                    "maxLength": 24
+                                },
+                                "values": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                        "maxLength": 40
+                                    },
+                                    "minItems": 2,
+                                    "maxItems": 3
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -662,10 +690,10 @@ function showProducts(args: Record<string, unknown>, ctx: ToolContext): ToolResu
     return { forModel: wrapForModel(result), events, steps: [step('prices')], isData: false, productIds: ids }
 }
 
-function connectorOf(chips: string[]): string {
-    return chips.find(c => c === 'Type-C' || c === 'Lightning' || c === 'Micro USB') ?? '—'
-}
-
+/**
+ * The comparison card. Rows come from each product's data (lib/assistant/compare.ts): the group's rows,
+ * then the model's `rows` (every cell checked against that product's data, unsupported cells dropped).
+ */
 async function showComparison(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
     const ids = idList(args.ids, 3).filter(id => ctx.k.byId.has(id) && (ctx.k.byId.get(id)!.inStock || ctx.state.soldOutOk.has(id)))
     if (ids.length < 2) {
@@ -673,30 +701,23 @@ async function showComparison(args: Record<string, unknown>, ctx: ToolContext): 
     }
     const rows = ids.map(id => ctx.k.byId.get(id)!)
     const events: AssistantEvent[] = []
+    const result: Record<string, unknown> = { gosterildi: ids }
     if (markShown(ctx.state, 'compare')) {
         addShownProducts(ctx.state, rows)
         const details = await Promise.all(rows.map(r => ctx.getProductDetail(r.id).catch(() => null)))
-        const chips = rows.map(r => specChips(r.name, 4))
-        const warranty = details.map(d => {
-            const t = infoText(d?.warranty_info ?? '')
-            return t ? (t.length > 40 ? `${t.slice(0, 39).trimEnd()}…` : t) : '—'
+        // The model's values follow ITS ids order: dropped ids must not shift the columns
+        const rawIds = (Array.isArray(args.ids) ? args.ids : [args.ids]).map(toInt)
+        const built = buildCompareRows({
+            items: rows.map((r, i) => ({ row: r, facts: ctx.k.productFacts?.get(r.id) ?? null, detail: details[i] })),
+            freeThreshold: ctx.k.facts.freeThreshold,
+            modelRows: args.rows,
+            valueIndex: ids.map(id => rawIds.indexOf(id)),
         })
-        const T = amountText(ctx.k.facts.freeThreshold)
-        events.push({
-            t: 'compare',
-            products: cards(ctx, ids),
-            rows: [
-                { label: 'Fiyat', values: rows.map(r => formatPriceTR(r.displayPrice)) },
-                { label: 'Güç', values: chips.map(c => c.find(x => /^\d+W$/.test(x)) ?? '—') },
-                { label: 'Bağlantı', values: chips.map(connectorOf) },
-                { label: 'Uzunluk', values: chips.map(c => c.find(x => / (m|cm)$/.test(x)) ?? '—') },
-                { label: 'Kargo', values: rows.map(r => (r.freeShipping ? 'Ücretsiz' : `${T} TL üzeri ücretsiz`)) },
-                { label: 'Garanti', values: warranty },
-                { label: 'Stok', values: rows.map(r => (r.inStock ? 'Var' : 'Tükendi')) },
-            ],
-        })
+        events.push({ t: 'compare', products: cards(ctx, ids), rows: built.rows })
+        if (built.added.length) result.eklenen_satirlar = built.added
+        if (built.rejected) result.veride_olmayan_hucre = built.rejected
     }
-    return { forModel: wrapForModel({ gosterildi: ids }), events, steps: [step('compare', ids.length)], isData: false, productIds: ids }
+    return { forModel: wrapForModel(result), events, steps: [step('compare', ids.length)], isData: false, productIds: ids }
 }
 
 function showCategory(args: Record<string, unknown>, ctx: ToolContext): ToolResult {

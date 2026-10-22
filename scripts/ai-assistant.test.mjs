@@ -323,14 +323,21 @@ test('get_product: details without old price, stock count or rating', async () =
     assert.match(missing.forModel, /urun_bulunamadi/)
 })
 
-test('show_comparison builds the server-side rows', async () => {
+test('show_comparison builds the server-side rows for chargers', async () => {
     const r = await tools.runTool('show_comparison', { ids: [401, 413] }, toolCtx())
     const ev = r.events[0]
     assert.equal(ev.t, 'compare')
-    assert.deepEqual(ev.rows.map(x => x.label), ['Fiyat', 'Güç', 'Bağlantı', 'Uzunluk', 'Kargo', 'Garanti', 'Stok'])
-    assert.deepEqual(ev.rows[0].values, ['249,99 TL', '544,99 TL'])
-    assert.deepEqual(ev.rows[1].values, ['20W', '67W'])
-    assert.deepEqual(ev.rows[6].values, ['Var', 'Var'])
+    // Same shipping and warranty for both: those rows only appear when they differ
+    assert.deepEqual(ev.rows.map(x => x.label), ['Fiyat', 'Güç', 'Çıkış', 'Hızlı şarj', 'Kutuda kablo', 'Stok'])
+    const v = Object.fromEntries(ev.rows.map(x => [x.label, x.values]))
+    assert.deepEqual(v.Fiyat, ['249,99 TL', '544,99 TL'])
+    assert.deepEqual(v['Güç'], ['20W', '67W'])
+    // 413's Type-C is its cable ("Type-C Kablolu"), so its port stays unknown
+    assert.deepEqual(v['Çıkış'], ['Type-C', '—'])
+    assert.deepEqual(v['Hızlı şarj'], ['PD', 'Var'])
+    assert.deepEqual(v['Kutuda kablo'], ['—', 'Var (Type-C)'])
+    assert.deepEqual(v.Stok, ['Var', 'Var'])
+    assert.equal(r.isData, false)
 })
 
 test('waBaseOf accepts Turkish mobile numbers only; pickStoreWhatsapp takes the first usable one', () => {
@@ -2019,4 +2026,192 @@ test('chip actions: no charger made for other (old) phones after a USB-C charger
         row(4, 'Onopo G810 C5510 C6712 Chat 222 Chat 322 C3262s3570 S7500 Uyumlu Şarj Cihazı - X2', 119.99),
     ]
     assert.deepEqual(ca.pickForShownChip('cheaper', rows, [1]).picked.map(r => r.id), [3], 'X1 and X2 are for old feature phones; the plain USB adapter X9 stays')
+})
+
+// ---------------------------------------------------------------------------------------------
+// Comparison card rows (lib/assistant/compare.ts)
+// ---------------------------------------------------------------------------------------------
+
+const cmp = await import('../lib/assistant/compare.ts')
+const cmpItem = (id, facts = null, description = '') => ({ row: row(id), facts, detail: { description, warranty_info: null } })
+const labelsOf = rows => rows.map(r => r.label)
+const valuesOf = rows => Object.fromEntries(rows.map(r => [r.label, r.values]))
+const noEmptyRow = rows => rows.every(r => r.values.some(v => v && v !== cmp.EMPTY_CELL))
+const named = (id, name) => ({ ...row(id), name, group: cb.groupOf(name, null) })
+
+test('compare: two screen protectors get protector rows, never four rows of "—"', async () => {
+    const r = await tools.runTool('show_comparison', { ids: [473, 533] }, toolCtx())
+    const rows = r.events[0].rows
+    assert.deepEqual(labelsOf(rows), ['Fiyat', 'Tür', 'Anti-statik', 'Yüzey', 'Uyumlu model', 'Stok'])
+    const v = valuesOf(rows)
+    assert.deepEqual(v['Tür'], ['12D seramik', '9D cam'])
+    assert.deepEqual(v['Anti-statik'], ['—', 'Var'], 'the seramik data does not mention anti-static: unknown, not "Yok"')
+    assert.deepEqual(v['Yüzey'], ['Mat', '—'])
+    assert.deepEqual(v['Uyumlu model'], ['iPhone 11', 'iPhone 11'])
+    for (const l of ['Güç', 'Bağlantı', 'Uzunluk', 'Çıkış', 'Uçlar']) assert.ok(!labelsOf(rows).includes(l), l)
+    assert.ok(noEmptyRow(rows))
+})
+
+test('compare: protector facts add coverage ("tam ekran") when the data says it', () => {
+    const rows = cmp.specRows([
+        cmpItem(499, 'Uyumlu: iPhone 15; Malzeme: şeffaf seramik cam; Not: 12D sertlik, tam kaplayan, çizilme ve darbelere karşı koruma'),
+        cmpItem(551, 'Uyumlu: iPhone 15; Not: anti statik özellikli, 9D tam ekran koruma'),
+    ])
+    assert.deepEqual(valuesOf(rows).Kaplama, ['Tam ekran', 'Tam ekran'])
+    assert.deepEqual(valuesOf(rows)['Uyumlu model'], ['iPhone 15', 'iPhone 15'])
+})
+
+test('compare: cables get ends, length, power, current and braiding', () => {
+    const rows = cmp.specRows([cmpItem(442), cmpItem(449), cmpItem(472)])
+    assert.deepEqual(labelsOf(rows), ['Uçlar', 'Uzunluk', 'Güç', 'Akım', 'Örgülü'])
+    const v = valuesOf(rows)
+    assert.deepEqual(v['Uçlar'], ['Type-C – Type-C', 'USB-A – Type-C', 'Lightning'])
+    assert.deepEqual(v.Uzunluk, ['1 m', '2 m', '—'])
+    assert.deepEqual(v['Güç'], ['60W', '—', '30W'])
+    assert.deepEqual(v['Akım'], ['—', '3A', '3,4A'])
+    assert.deepEqual(v['Örgülü'], ['Var', '—', 'Var'])
+    // "Lightning to USB" and "USB to Lightning" are the same cable; 100 cm is 1 m
+    const same = cmp.specRows([
+        { row: named(454, 'Lightning to USB Kablo 100CM'), facts: null },
+        { row: named(454, 'USB to Lightning Kablo 1 m'), facts: null },
+    ])
+    assert.deepEqual(valuesOf(same)['Uçlar'], ['USB-A – Lightning', 'USB-A – Lightning'])
+    assert.deepEqual(valuesOf(same).Uzunluk, ['1 m', '1 m'])
+})
+
+test('compare: chargers read ports from "… girişli/çıkışlı" and the box from the facts line', () => {
+    const rows = cmp.specRows([
+        { row: named(430, 'Onopo 3.4A Type-C (PD) ve Çift USB Girişli Turbo Hızlı Araç Şarjı 55W - A8'), facts: 'Kutu: adaptör; Güç: 55W; Hızlı şarj: var, PD, QC 3.0' },
+        { row: named(433, 'Onopo 3.4A Çift USB Çıkışlı Hızlı Araç Şarjı 20W - A6'), facts: 'Kutu: adaptör; Güç: 20W; Hızlı şarj: var' },
+    ])
+    const v = valuesOf(rows)
+    assert.deepEqual(v['Güç'], ['55W', '20W'])
+    assert.deepEqual(v['Çıkış'], ['Type-C + 2× USB-A', '2× USB-A'])
+    assert.deepEqual(v['Hızlı şarj'], ['PD, Quick Charge', 'Var'])
+    assert.deepEqual(v['Kutuda kablo'], ['Yok', 'Yok'])
+    // The facts win over the name: "20W" in the name, "Hızlı şarj: yok" in the description
+    const m3 = cmp.specRows([
+        { row: named(401, 'Onopo iPhone ve Android Uyumlu 20W Type-C Girişli Şarj Başlığı - M3'), facts: 'Kutu: yalnızca adaptör; Güç: 20W; Hızlı şarj: yok' },
+        { row: named(403, 'Onopo 22W USB Hızlı Şarj Aleti Seti Esnek Type-C Kablo - M9'), facts: 'Kutu: adaptör ve 1 metre Type-C kablo seti; Güç: 22W; Hızlı şarj: var' },
+    ])
+    assert.deepEqual(valuesOf(m3)['Hızlı şarj'], ['Yok', 'Var'])
+    assert.deepEqual(valuesOf(m3)['Kutuda kablo'], ['Yok', 'Var (Type-C)'])
+    assert.deepEqual(valuesOf(m3)['Çıkış'], ['Type-C', 'USB-A'], 'M9: the Type-C next to "Kablo" is the cable, the USB is the port')
+    // "Type-C USB … Şarj Cihazı" says neither which is the port nor which the cable: unknown, row dropped
+    const x7 = cmp.specRows([
+        { row: named(401, 'Onopo Android Uyumlu Hızlı Şarj Type-C USB 3.4A Hızlı Şarj Cihazı 20W - X7'), facts: null },
+        { row: named(403, 'Onopo Android Uyumlu Hızlı Şarj Micro USB 3.4A Hızlı Şarj Cihazı 20W - X6'), facts: null },
+    ])
+    assert.ok(!labelsOf(x7).includes('Çıkış'))
+})
+
+test('compare: power banks and headphones get their own rows', () => {
+    const pb = cmp.specRows([
+        cmpItem(605, 'Kutu: yalnızca powerbank; Bağlantı: Type-C giriş, 2 adet USB çıkış; Hızlı şarj: var'),
+        cmpItem(607, null),
+    ])
+    assert.deepEqual(labelsOf(pb), ['Kapasite', 'Çıkış', 'Güç', 'Hızlı şarj'])
+    assert.deepEqual(valuesOf(pb).Kapasite, ['10.000 mAh', '20.000 mAh'])
+    assert.deepEqual(valuesOf(pb)['Çıkış'], ['2× USB-A', '—'])
+    assert.deepEqual(valuesOf(pb)['Güç'], ['22,5W', '22,5W'])
+    const hp = cmp.specRows([cmpItem(589), cmpItem(598, 'Bağlantı: 3.5 mm jack; Uzunluk: 1.2 metre; Not: dahili mikrofon')])
+    assert.deepEqual(labelsOf(hp), ['Bağlantı', 'Gürültü önleme', 'Mikrofon', 'Uzunluk'])
+    assert.deepEqual(valuesOf(hp)['Bağlantı'], ['Bluetooth', '3,5 mm jak'])
+    assert.deepEqual(valuesOf(hp)['Gürültü önleme'], ['Var', '—'])
+    assert.deepEqual(valuesOf(hp).Uzunluk, ['—', '1,2 m'])
+})
+
+test('compare: a row empty for every product is dropped; Kargo and Garanti only when they differ', () => {
+    const plain = cmp.buildCompareRows({ items: [cmpItem(616), cmpItem(622)], freeThreshold: 750 })
+    assert.ok(noEmptyRow(plain.rows))
+    assert.deepEqual(labelsOf(plain.rows), ['Fiyat', 'Güç', 'Kargo', 'Stok'])
+    assert.deepEqual(valuesOf(plain.rows).Kargo, ['Ücretsiz', '750 TL üzeri ücretsiz'])
+    const same = cmp.buildCompareRows({ items: [cmpItem(401), cmpItem(403)], freeThreshold: 750 })
+    assert.ok(!labelsOf(same.rows).includes('Kargo'), 'neither has free shipping: no Kargo row')
+    const w = cmp.buildCompareRows({
+        items: [cmpItem(442, 'Garanti: 5 yıl ithalatçı garantisi'), cmpItem(443, 'Garanti: 24 ay'), cmpItem(445, 'Garanti: 2 yıl')],
+        freeThreshold: 750,
+    })
+    assert.deepEqual(valuesOf(w.rows).Garanti, ['5 yıl', '2 yıl', '2 yıl'], '24 ay is written as 2 yıl')
+    assert.equal(labelsOf(w.rows)[0], 'Fiyat')
+    assert.equal(labelsOf(w.rows).at(-1), 'Stok')
+    const w2 = cmp.buildCompareRows({ items: [cmpItem(443, 'Garanti: 24 ay'), cmpItem(445, 'Garanti: 2 yıl')], freeThreshold: 750 })
+    assert.ok(!labelsOf(w2.rows).includes('Garanti'))
+})
+
+test('compare: model cells must be backed by the product data', () => {
+    const d = cmp.dataIndex('Onopo iPhone 15 Anti Static 9D Cam Ekran Koruyucu \n Güç: 20W; Uzunluk: 1 metre; Hızlı şarj: yok; Not: kablosuz şarj yok, 2 adet USB çıkış, Bluetooth 5.3')
+    assert.equal(cmp.cellSupported('Güç', '20W', d), true)
+    assert.equal(cmp.cellSupported('Güç', '25W', d), false, 'a number the data does not have')
+    assert.equal(cmp.cellSupported('Uzunluk', '100 cm', d), true, '1 metre = 100 cm')
+    assert.equal(cmp.cellSupported('Uzunluk', '2 m', d), false)
+    assert.equal(cmp.cellSupported('Sertlik', '9D', d), true)
+    assert.equal(cmp.cellSupported('Sertlik', '9H', d), false, '9H is not 9D')
+    assert.equal(cmp.cellSupported('Çıkış', '2× USB-A', d), true)
+    assert.equal(cmp.cellSupported('Bluetooth', 'Bluetooth 5.3', d), true)
+    assert.equal(cmp.cellSupported('Uyumlu', 'iPhone 15 Pro', d), false, '"Pro" is not in the data')
+    assert.equal(cmp.cellSupported('Uyumlu', 'iPhone 15', d), true)
+    assert.equal(cmp.cellSupported('Malzeme', 'Temperli cam', d), false, 'a word the data does not have')
+    // Yes/no needs the feature named, with that polarity
+    assert.equal(cmp.cellSupported('Anti-statik', 'Var', d), true)
+    assert.equal(cmp.cellSupported('Anti-statik', 'Yok', d), false)
+    assert.equal(cmp.cellSupported('Hızlı şarj', 'Yok', d), true)
+    assert.equal(cmp.cellSupported('Hızlı şarj', 'Var', d), false)
+    assert.equal(cmp.cellSupported('Kablosuz şarj', 'Yok', d), true)
+    assert.equal(cmp.cellSupported('Su geçirmez', 'Var', d), false, 'the data does not mention the feature')
+    assert.equal(cmp.cellSupported('Su geçirmez', 'Yok', d), false, 'not mentioned is not "Yok"')
+})
+
+test('compare: show_comparison rows from the model are checked, capped and never set Fiyat/Stok/Kargo', async () => {
+    const ctx = toolCtx({ k: knowledge({ productFacts: new Map([
+        [473, 'Uyumlu: iPhone 11; Malzeme: seramik; Not: 12D sertlik, kolay uygulanır'],
+        [533, 'Uyumlu: iPhone 11; Not: anti statik özellikli, 9D tam ekran koruma, kolay uygulanır'],
+    ]) }) })
+    const r = await tools.runTool('show_comparison', {
+        // The model's order: 533 first; 9999 is not a product (dropped) and must not shift the columns
+        ids: [533, 9999, 473],
+        rows: [
+            { label: 'Fiyat', values: ['1 TL', '', '2 TL'] },
+            { label: 'Sertlik', values: ['9D', '', '12D'] },
+            { label: 'Kırılmazlık', values: ['9H', '', '10H'] },
+            { label: 'Kolay uygulama', values: ['Var', '', 'Var'] },
+            { label: 'Bu etiket yirmi dört karakterden uzun', values: ['Var', '', 'Var'] },
+            { label: 'Yedek', values: ['Var', '', 'Var'] },
+        ],
+    }, ctx)
+    const ev = r.events[0]
+    assert.deepEqual(ev.products.map(p => p.id), [533, 473])
+    const v = valuesOf(ev.rows)
+    assert.deepEqual(v.Fiyat, [contract.formatPriceTR(row(533).displayPrice), contract.formatPriceTR(row(473).displayPrice)])
+    assert.equal(labelsOf(ev.rows).filter(l => l === 'Fiyat').length, 1)
+    assert.deepEqual(v.Sertlik, ['9D', '12D'])
+    assert.ok(!('Kırılmazlık' in v), 'every cell invented: the row is dropped')
+    assert.deepEqual(v['Kolay uygulama'], ['Var', 'Var'])
+    assert.ok(!labelsOf(ev.rows).some(l => l.length > cmp.MODEL_LABEL_MAX))
+    assert.ok(!('Yedek' in v), 'only the first 5 rows are read')
+    assert.ok(noEmptyRow(ev.rows))
+    assert.match(r.forModel, /"veride_olmayan_hucre":2/)
+    assert.match(r.forModel, /Sertlik/)
+})
+
+test("compare: a model row with a server label only fills that row's empty cells", () => {
+    const out = cmp.buildCompareRows({
+        items: [cmpItem(473), cmpItem(533)],
+        freeThreshold: 750,
+        modelRows: [{ label: 'Anti-statik', values: ['Var', 'Yok'] }, { label: 'Yüzey', values: ['Parlak', 'Mat'] }],
+    })
+    const v = valuesOf(out.rows)
+    assert.deepEqual(v['Anti-statik'], ['—', 'Var'], 'the seramik data does not back "Var"; the server value stays')
+    assert.deepEqual(v['Yüzey'], ['Mat', '—'], 'the 9D data has no "mat": the cell stays empty')
+    assert.equal(out.rejected, 4)
+})
+
+test('show_comparison: the tool takes optional rows, and the prompt asks for an honest summary', () => {
+    const def = tools.TOOLS.find(t => t.function.name === 'show_comparison').function
+    assert.deepEqual(def.parameters.required, ['ids'])
+    assert.equal(def.parameters.properties.rows.maxItems, 5)
+    assert.equal(def.parameters.properties.rows.items.properties.label.maxLength, 24)
+    assert.equal(def.parameters.properties.rows.items.properties.values.items.maxLength, 40)
+    assert.match(prompt.SYSTEM_RULES, /show_comparison\(ids, rows\?\)/)
+    assert.match(prompt.SYSTEM_RULES, /fark uydurma/)
 })
