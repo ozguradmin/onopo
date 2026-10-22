@@ -135,10 +135,13 @@ export function policyTopic(text: string, fold: (s: string) => string): PolicyTo
     const f = ` ${fold(text).replace(/[^a-z0-9]+/g, ' ')} `
     const has = (re: RegExp) => re.test(f)
     if (has(/ (siparisim|siparisimi|siparisime|kargom|kargomu|kargo takip|takip no|takip numara|siparis (durum|nerede|ne zaman))/)) return 'order'
-    if (has(/ (bozuldu|bozuk geldi|arizali|ariza|calismiyor|calismadi|kirik geldi|hasarli|garanti (basvuru|kapsam)|garantiye|garantiden)/)) return 'warranty_claim'
+    // "Eski kablom çalışmıyor, yeni kablo öner" is a shopper, not a warranty claim: product-seeking
+    // words keep these topics with the model (which still shows the WhatsApp row under its answer)
+    const shopping = has(/ (oner\w*|tavsiye\w*|lazim|ariyorum|almak|alayim|alacagim|istiyorum|hangisi|yeni (bir )?(kablo|sarj|adaptor|baslik|cam|koruyucu|kulaklik))/)
+    if (!shopping && has(/ (bozuldu|bozuk geldi|arizali|ariza|calismiyor|calismadi|kirik geldi|hasarli|garanti (basvuru|kapsam)|garantiye|garantiden)/)) return 'warranty_claim'
     if (has(/ (iade|degisim|degisimi|cayma|geri gonder)/)) return 'returns'
-    if (has(/ (stok|stoga|stokta|stoklar|tukendi|tukenmis|tekrar gel|yeniden gel|ne zaman gelecek)/)) return 'stock'
-    if (has(/ (cumartesi\w*|pazar(a|i|in)?|hafta ?sonu\w*) /)) return 'weekend'
+    if (!shopping && has(/ (stok|stoga|stokta|stoklar|tukendi|tukenmis|tekrar gel|yeniden gel|ne zaman gelecek)/)) return 'stock'
+    if (!shopping && has(/ (cumartesi\w*|pazar(a|i|in)?|hafta ?sonu\w*) /)) return 'weekend'
     if (has(/ (kac gun(de)? (icinde )?(gelir|ulas|teslim|elime|kargo)|kargo(m|su|lar)? kac gun|ne zaman gelir|ne zaman elime|ne zaman ulas|teslim(at)? (suresi|tarihi|zamani|ne zaman)|kargo suresi|hangi kargo|kargo firma|yarin (gelir|elimde)|yarina gelir|bugun gelir mi|elime ne zaman)/)) return 'delivery'
     if (has(/ (kapida|havale|eft|nakit|kripto|paypal|papara|senetle|cek ile|odeme yontem|odeme secenek|baska (bir )?odeme)/)) return 'payment_other'
     if (has(/ (fatura|e fatura|efatura)/)) return 'invoice'

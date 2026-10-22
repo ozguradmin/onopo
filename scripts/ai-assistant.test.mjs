@@ -776,7 +776,7 @@ test('runTurn: store questions the owner cannot answer get a full WhatsApp card 
         assert.ok(!/ücretsiz iade|iade kargo ücreti mağazaya|cumartesi kargoya verilir|kapıda ödeme var/i.test(events.find(e => e.t === 'text').v))
     }
     // Product questions are not store questions
-    for (const input of ['Bu kablonun garantisi var mı?', 'Kutusunda kablo var mı?', 'iPhone 15 için şarj aleti', 'Taksit var mı?']) {
+    for (const input of ['Bu kablonun garantisi var mı?', 'Kutusunda kablo var mı?', 'iPhone 15 için şarj aleti', 'Taksit var mı?', 'Eski kablom çalışmıyor, yeni kablo öner', 'Cumartesi hediye edeceğim, iPhone 15 için şarj aleti önerir misin?']) {
         assert.equal(canned.policyTopic(input, foldTrTest), null, input)
     }
     // No usable WhatsApp number: the model answers as usual
