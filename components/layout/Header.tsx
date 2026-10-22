@@ -12,8 +12,8 @@
  *
  * The hide-on-scroll and the scrolled shadow are applied to the DOM directly from a passive,
  * rAF-throttled scroll listener (no React re-render while scrolling, transforms only: no layout shift).
- * Collapsed, the sticky header is 56px on phones and 72px on desktop. Its visible height (open or
- * collapsed) is published as `--header-offset` on <html> for sticky parts that sit under it.
+ * Collapsed, the sticky header is 56px on phones and 72px on desktop. Sticky parts that sit under it
+ * follow html[data-header-collapsed] and the --header-open / --header-collapsed heights (app/globals.css).
  * /odeme gets a reduced checkout header (logo, "Güvenli ödeme", "Alışverişe dön"), spec §13.
  */
 import * as React from "react"
@@ -61,13 +61,21 @@ function StoreHeader() {
         // Layout height of the open header (transforms do not change it), kept by a ResizeObserver
         let fullHeight = header.offsetHeight
 
-        // --header-offset on <html>: where the header's visible bottom edge ends up once stuck, open or
-        // collapsed. Sticky parts below it (listing toolbar and filter sidebar) use it as their `top`
-        // with the same 200 ms transition, so they move together with the header instead of chasing a
-        // measurement taken mid-animation.
-        const syncOffset = () => {
+        // Sticky parts under the header (listing toolbar and filter sidebar, [data-under-header] in
+        // app/globals.css) take the header's visible bottom edge once stuck as their `top`, with the same
+        // 200 ms transition, so they move together with it. Its two values, open and collapsed, are written
+        // on <html> only when the header's size or the breakpoint changes; collapsing only toggles
+        // html[data-header-collapsed]. A custom property changed on <html> while scrolling restyled the whole
+        // document (40-120 ms frames on phones); the attribute restyles only the elements its rules name.
+        let written = ''
+        const syncHeights = () => {
             const by = desktop.matches ? COLLAPSE_DESKTOP : COLLAPSE_MOBILE
-            root.style.setProperty('--header-offset', `${Math.max(0, collapsed ? fullHeight - by : fullHeight)}px`)
+            const open = `${fullHeight}px`
+            const shut = `${Math.max(0, fullHeight - by)}px`
+            if (`${open} ${shut}` === written) return
+            written = `${open} ${shut}`
+            root.style.setProperty('--header-open', open)
+            root.style.setProperty('--header-collapsed', shut)
         }
 
         const setCollapsed = (next: boolean) => {
@@ -77,7 +85,7 @@ function StoreHeader() {
             header.dataset.collapsed = next ? 'true' : 'false'
             header.style.transform = next ? `translateY(-${by}px)` : ''
             row1.style.transform = next ? `translateY(${by}px)` : ''
-            syncOffset()
+            root.toggleAttribute('data-header-collapsed', next)
         }
         // Un-hide at once (no slide) before a search opens: the mobile sheet is position:fixed inside
         // the header, so the header must not carry a transform, not even mid-transition.
@@ -120,17 +128,18 @@ function StoreHeader() {
         }
         const onBreakpoint = () => {
             setCollapsed(false)
-            syncOffset()
+            fullHeight = header.offsetHeight
+            syncHeights()
             update()
         }
         // Keyboard focus must never land on the hidden second row
         const onFocusIn = () => revealRef.current()
         const resize = new ResizeObserver(() => {
             fullHeight = header.offsetHeight
-            syncOffset()
+            syncHeights()
         })
         resize.observe(header)
-        syncOffset()
+        syncHeights()
         update()
         window.addEventListener('scroll', onScroll, { passive: true })
         desktop.addEventListener('change', onBreakpoint)
@@ -140,7 +149,9 @@ function StoreHeader() {
             desktop.removeEventListener('change', onBreakpoint)
             header.removeEventListener('focusin', onFocusIn)
             resize.disconnect()
-            root.style.removeProperty('--header-offset')
+            root.removeAttribute('data-header-collapsed')
+            root.style.removeProperty('--header-open')
+            root.style.removeProperty('--header-collapsed')
             revealRef.current = () => { }
         }
     }, [])

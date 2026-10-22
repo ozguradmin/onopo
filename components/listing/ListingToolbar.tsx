@@ -71,9 +71,11 @@ export function MobileToolbar({ panel, total, className }: { panel: PanelData; t
     return (
         <>
             <div
+                data-under-header="toolbar"
                 className={cn(
                     // Under the store header; `top` follows its open/collapsed state with the header's own timing
-                    'sticky top-[var(--header-offset,109px)] z-30 -mx-4 border-b border-line bg-white/95 backdrop-blur-sm transition-[top] duration-200 ease-out md:-mx-6 lg:hidden',
+                    // ([data-under-header] in app/globals.css)
+                    'sticky z-30 -mx-4 border-b border-line bg-white/95 backdrop-blur-sm transition-[top] duration-200 ease-out md:-mx-6 lg:hidden',
                     className,
                 )}
             >
