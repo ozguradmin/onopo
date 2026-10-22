@@ -194,10 +194,42 @@ test('resolveSlug: old shop URLs and legacy listings redirect permanently', asyn
     assert.equal((await routing.resolveSlug('tech', db)).path, '/products/')
     assert.deepEqual(await routing.resolveSlug('help', db), { kind: 'legacy-path', slug: 'help', path: '/page/help/', redirect: 'permanent' })
     assert.equal(await routing.resolveSlug('yok-boyle-bir-sayfa', db), null)
+    // the hidden Akakçe block's /cart?add=<id> and /checkout?product=<id> (Next adds the slash first)
+    assert.deepEqual(await routing.resolveSlug('cart', db), { kind: 'legacy-path', slug: 'cart', path: '/odeme/', redirect: 'permanent' })
+    assert.deepEqual(await routing.resolveSlug('checkout', db), { kind: 'legacy-path', slug: 'checkout', path: '/odeme/', redirect: 'permanent' })
+    assert.equal((await routing.resolveSlug('Checkout', db)).path, '/odeme/')
+    assert.ok(seo.productInfoHtml(product({ id: 7 })).includes('<a id="add-to-cart" href="/cart?add=7">'))
     // ?category=new keeps redirecting to the plain listing (app/products appends the visitor's own query)
     assert.equal(await routing.resolveListingCategory('new', db), '/products/')
     assert.equal(routing.LEGACY_PATH_REDIRECTS.find((r) => r.source === '/new').destination, '/products/?sort=newest')
     assert.equal(routing.LEGACY_CATEGORY_TARGETS, seo.LEGACY_CATEGORY_TARGETS)
+})
+
+test("category slug aliases: 'ok-satanlar' redirects to 'cok-satanlar' only once the category was renamed", async () => {
+    assert.equal(seo.CATEGORY_SLUG_ALIASES['ok-satanlar'], 'cok-satanlar')
+    // today: the category still has the old slug, nothing changes
+    const before = fakeDb({ categories: [{ slug: 'ok-satanlar', name: 'Çok Satanlar', count: 7 }] })
+    assert.deepEqual(await routing.resolveSlug('ok-satanlar', before),
+        { kind: 'category', slug: 'ok-satanlar', name: 'Çok Satanlar', path: '/kategori/ok-satanlar/', redirect: 'permanent' })
+    assert.equal(await routing.categorySlugAlias('ok-satanlar', before), null)
+    assert.equal(await routing.resolveListingCategory('ok-satanlar', before), '/kategori/ok-satanlar/')
+    // after UPDATE categories SET slug = 'cok-satanlar': the old URLs go to the new listing
+    const after = fakeDb({ categories: [{ slug: 'cok-satanlar', name: 'Çok Satanlar', count: 7 }] })
+    for (const slug of ['ok-satanlar', 'OK-SATANLAR']) {
+        assert.deepEqual(await routing.resolveSlug(slug, after),
+            { kind: 'category', slug: 'cok-satanlar', name: 'Çok Satanlar', path: '/kategori/cok-satanlar/', redirect: 'permanent' }, slug)
+        assert.equal((await routing.categorySlugAlias(slug, after)).path, '/kategori/cok-satanlar/', slug)
+    }
+    assert.equal(await routing.resolveListingCategory('ok-satanlar', after), '/kategori/cok-satanlar/')
+    assert.equal(await routing.resolveListingCategory('Çok Satanlar', after), '/kategori/cok-satanlar/')
+    // a target without products (or missing) is a 404 as before; other slugs are never aliases
+    const empty = fakeDb({ categories: [{ slug: 'cok-satanlar', name: 'Çok Satanlar', count: 0 }] })
+    assert.equal(await routing.categorySlugAlias('ok-satanlar', empty), null)
+    assert.equal(await routing.resolveSlug('ok-satanlar', empty), null)
+    assert.equal(await routing.categorySlugAlias('ok-satanlar', fakeDb()), null)
+    for (const slug of ['cok-satanlar', 'constructor', '__proto__', 'toString', '']) {
+        assert.equal(await routing.categorySlugAlias(slug, after), null, slug)
+    }
 })
 
 test('nav-data normalizeHref: legacy links go straight to their target', () => {

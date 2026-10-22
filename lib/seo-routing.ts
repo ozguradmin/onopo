@@ -11,20 +11,20 @@
  *                                listingSeo('/products/', searchParams, …) -> robots/canonical/out-of-range page
  */
 import { cache } from 'react'
-import { categoryPath, cmsPagePath, foldTr, LEGACY_CATEGORY_TARGETS, LISTING_NOINDEX_PARAMS, productPath, type D1Like } from './seo'
+import { CATEGORY_SLUG_ALIASES, categoryPath, cmsPagePath, foldTr, LEGACY_CATEGORY_TARGETS, LISTING_NOINDEX_PARAMS, productPath, type D1Like } from './seo'
 
 export type RedirectKind = 'permanent' | 'temporary'
 
 export type SlugResolution =
     /** Product. redirect=null: render it. 'permanent': other spelling (case) of the slug. 'temporary': fuzzy match of an old slug. */
     | { kind: 'product'; id: number; slug: string; path: string; redirect: RedirectKind | null }
-    /** A real category slug at the root (/cep-telefonu-aksesuarlari/): 308 to /kategori/<slug>/. */
+    /** A real category slug at the root (/cep-telefonu-aksesuarlari/), or a former one (CATEGORY_SLUG_ALIASES): 308 to /kategori/<slug>/. */
     | { kind: 'category'; slug: string; name: string; path: string; redirect: 'permanent' }
     /** /tech/ /gaming/ /beauty/ /new/ (old hard-coded listings with no products): 308 to their replacement. */
     | { kind: 'legacy-category'; slug: string; path: string; redirect: 'permanent' }
     /** A CMS page slug at the root (/help/ once app/help is removed): 308 to /page/<slug>/. */
     | { kind: 'page'; slug: string; path: string; redirect: 'permanent' }
-    /** A URL of the old shop platform from LEGACY_PATH_REDIRECTS (/sepet/, /uye-giris/): 308 to its replacement. */
+    /** A URL of the old shop platform from LEGACY_PATH_REDIRECTS (/sepet/, /uye-giris/, /cart/, /checkout/): 308 to its replacement. */
     | { kind: 'legacy-path'; slug: string; path: string; redirect: 'permanent' }
 
 /** Top-level paths owned by static routes. A product slug must never be one of these (the static route wins). */
@@ -48,6 +48,8 @@ export { LEGACY_CATEGORY_TARGETS }
  * redirect runs first, so /sepet takes /sepet → /sepet/ → /odeme/.
  * /help /policy /shipping /terms duplicate the CMS pages (and carry placeholder contacts): canonical is /page/<slug>/.
  * /sepet and /uye-giris are URLs of the old shop platform still requested from search engines.
+ * /cart and /checkout are the links of the hidden Akakçe block (/cart?add=<id>, /checkout?product=<id>, lib/seo.ts
+ * productInfoHtml, kept byte-identical): crawlers following them land on the cart/checkout page (the query is dropped).
  */
 export const LEGACY_PATH_REDIRECTS: ReadonlyArray<{ source: string; destination: string; permanent: true }> = [
     { source: '/help', destination: '/page/help/', permanent: true },
@@ -60,6 +62,8 @@ export const LEGACY_PATH_REDIRECTS: ReadonlyArray<{ source: string; destination:
     { source: '/gaming', destination: LEGACY_CATEGORY_TARGETS.gaming, permanent: true },
     { source: '/sepet', destination: '/odeme/', permanent: true },
     { source: '/uye-giris', destination: '/login/', permanent: true },
+    { source: '/cart', destination: '/odeme/', permanent: true },
+    { source: '/checkout', destination: '/odeme/', permanent: true },
 ]
 
 /** Lower-case root slug ("sepet") → its LEGACY_PATH_REDIRECTS destination. */
@@ -102,6 +106,21 @@ export async function legacyCategoryTarget(slug: string, db?: D1Like): Promise<s
     return fallback
 }
 
+/**
+ * A former category slug (CATEGORY_SLUG_ALIASES) → the category it was renamed to, or null. Only once no category
+ * has the old slug any more (before the rename the old slug is still the real one), and only when the new slug
+ * is a category with active products (else its listing would be a 404 anyway).
+ */
+export async function categorySlugAlias(slug: string, db?: D1Like): Promise<CategoryInfo | null> {
+    const key = String(slug ?? '').trim().toLowerCase()
+    const target = Object.prototype.hasOwnProperty.call(CATEGORY_SLUG_ALIASES, key) ? CATEGORY_SLUG_ALIASES[key] : null
+    if (!target) return null
+    const own = await resolveCategory(key, db)
+    if (own && own.slug.toLowerCase() === key) return null
+    const category = await resolveCategory(target, db)
+    return category && category.slug.toLowerCase() === target && category.productCount > 0 ? category : null
+}
+
 function escapeLike(s: string): string {
     return s.replace(/[\\%_]/g, (c) => `\\${c}`)
 }
@@ -109,8 +128,9 @@ function escapeLike(s: string): string {
 /**
  * Resolves the root segment /<slug>/:
  * 1. active product with exactly this slug -> render (redirect null)
- * 2. a category (real slug -> /kategori/<slug>/; legacy tech/gaming/beauty/new -> replacement)
- *    or an old shop URL from LEGACY_PATH_REDIRECTS (sepet -> /odeme/, uye-giris -> /login/)
+ * 2. a category (real slug -> /kategori/<slug>/; legacy tech/gaming/beauty/new -> replacement; a former slug
+ *    from CATEGORY_SLUG_ALIASES -> /kategori/<new slug>/) or an old shop URL from LEGACY_PATH_REDIRECTS
+ *    (sepet, cart, checkout -> /odeme/, uye-giris -> /login/)
  * 3. a CMS page -> /page/<slug>/
  * 4. active product whose slug differs only in case -> permanent redirect
  * 5. fuzzy match of an old/renamed product slug (same rule the client used: up to 3 words of >2 chars,
@@ -138,6 +158,9 @@ export async function resolveSlug(raw: string, dbArg?: D1Like): Promise<SlugReso
     } else if (LEGACY_CATEGORY_TARGETS[lower]) {
         const target = await legacyCategoryTarget(lower, db)
         if (target) return { kind: 'legacy-category', slug: lower, path: target, redirect: 'permanent' }
+    } else {
+        const renamed = await categorySlugAlias(lower, db)
+        if (renamed) return { kind: 'category', slug: renamed.slug, name: renamed.name, path: renamed.path, redirect: 'permanent' }
     }
 
     const legacy = legacyPathTarget(lower)
@@ -221,6 +244,10 @@ export async function resolveListingCategory(param: string | string[] | null | u
     const db = await getDb(dbArg)
     const cat = await resolveCategory(value, db)
     if (cat && cat.productCount > 0) return cat.path
+    if (!cat) {
+        const renamed = await categorySlugAlias(value, db)
+        if (renamed) return renamed.path
+    }
     // Path only: app/products appends the visitor's own listing query (a legacy target such as
     // '/products/?sort=newest' would otherwise end up as '/products/?sort=newest?page=2').
     const target = await legacyCategoryTarget(cat ? cat.slug : value, db)

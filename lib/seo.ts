@@ -269,6 +269,16 @@ export const LEGACY_CATEGORY_TARGETS: Readonly<Record<string, string>> = {
 }
 
 /**
+ * Former category slugs → the slug the category has now. Once no category has the old slug any more, its URLs
+ * (/<old>/, /kategori/<old>/, /products/?category=<old>) answer 308 to /kategori/<new>/ (lib/seo-routing.ts
+ * categorySlugAlias). While a category still has the old slug nothing changes.
+ * 'ok-satanlar' was made by the old slugifier for "Çok Satanlar"; docs/SEO.md §10 renames it before launch.
+ */
+export const CATEGORY_SLUG_ALIASES: Readonly<Record<string, string>> = {
+    'ok-satanlar': 'cok-satanlar',
+}
+
+/**
  * Absolute canonical URL: apex https host, path with a trailing slash, and only the query
  * parameters passed explicitly (e.g. { page: 2 }); empty, null, "1"-pages and others are dropped.
  */

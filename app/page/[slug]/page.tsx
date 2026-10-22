@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { ChevronRight, Mail, MessageCircle, Phone } from 'lucide-react'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { CmsContent } from '@/components/cms/CmsContent'
@@ -10,12 +10,20 @@ import { getSiteSettings } from '@/lib/catalog'
 import { formatDateTR } from '@/lib/format'
 import { buildMetadata, cmsPageDescription } from '@/lib/seo'
 import { getSiteSeo } from '@/lib/seo-server'
-import { resolveCmsPageCached } from '@/lib/seo-routing'
+import { normalizeSlugParam, resolveCmsPageCached } from '@/lib/seo-routing'
 import { cn } from '@/lib/utils'
 
 // CMS pages (Admin › Sayfalar) at their canonical URL /page/<slug>/. Server-rendered; an unknown slug is
-// a real 404. No loading.tsx / Suspense around this page: the status code must be decided first.
+// a real 404, another spelling of a lowercase slug (/page/Help/) a 308 to it, like root and /kategori/ slugs.
+// No loading.tsx / Suspense around this page: the status code must be decided first.
 type Params = Promise<{ slug: string }>
+
+/** The canonical path when `slug` only differs in case from an existing lowercase page slug, else null. */
+async function otherCasePath(slug: string): Promise<string | null> {
+    const lower = normalizeSlugParam(slug)?.toLowerCase()
+    if (!lower || lower === normalizeSlugParam(slug)) return null
+    return (await resolveCmsPageCached(lower))?.path ?? null
+}
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
     const page = await resolveCmsPageCached((await params).slug)
@@ -47,7 +55,11 @@ function telHref(phone: string): string {
 export default async function CmsPage({ params }: { params: Params }) {
     const { slug } = await params
     const page = await resolveCmsPageCached(slug)
-    if (!page) notFound()
+    if (!page) {
+        const canonical = await otherCasePath(slug)
+        if (canonical) permanentRedirect(canonical)
+        notFound()
+    }
 
     const [links, settings] = await Promise.all([getCmsPageLinks(), getSiteSettings()])
     const updated = formatDateTR(page.updatedAt)
