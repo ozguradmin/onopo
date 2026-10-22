@@ -9,6 +9,7 @@
 import type { Metadata } from 'next'
 import { stripHtml } from './stripHtml'
 import { roundPrice } from './roundPrice'
+import { gtinJsonLdKey, isValidGtin, normalizeGtin } from './gtin'
 
 // ---------------------------------------------------------------------------------------------
 // Site constants
@@ -717,6 +718,8 @@ export interface ProductSeoInput {
     category?: string | null
     free_shipping?: number | boolean | null
     is_active?: number | boolean | null
+    /** products.gtin (Admin › Ürünler "Barkod"); null/absent until migrations/2026-10-22-product-gtin.sql has run. */
+    gtin?: string | null
 }
 
 /** Specs table appended to descriptions ("Teknik Özellikler Marka … Ürün Kodu … Barkod … Desi …"). */
@@ -734,14 +737,8 @@ export function parseProductSpecs(description: string | null | undefined): { bra
     return { brand: grab('Marka'), code: grab('Ürün Kodu'), barcode }
 }
 
-/** GS1 check digit validation for GTIN-8/12/13/14. */
-export function isValidGtin(code: string | null | undefined): boolean {
-    if (!code || !/^(\d{8}|\d{12,14})$/.test(code)) return false
-    const digits = code.split('').map(Number)
-    const check = digits.pop() as number
-    const sum = digits.reverse().reduce((acc, d, i) => acc + d * (i % 2 === 0 ? 3 : 1), 0)
-    return (10 - (sum % 10)) % 10 === check
-}
+/** GS1 check digit validation for GTIN-8/12/13/14 (lib/gtin.ts; re-exported for existing callers). */
+export { isValidGtin }
 
 /** Brand for structured data: Onopo for own products, the spec-table brand for others, else none. */
 export function productBrand(p: Pick<ProductSeoInput, 'name' | 'description'>): string | undefined {
@@ -947,6 +944,11 @@ function pageSuffix(page?: number): string {
 
 /** Category names that are a selection, not a kind of product ("Çok Satanlar", "Yeni Gelenler", "İndirimli Ürünler"). */
 const MERCHANDISING_CATEGORY = /(^|\s)(cok satan|en cok|yeni gelen|yeni urun|indirim|kampanya|firsat|outlet|one cikan|populer|trend)/
+
+/** Whether a category name is a selection ("Çok Satanlar") rather than a kind of product. */
+export function isMerchandisingCategory(name: string | null | undefined): boolean {
+    return MERCHANDISING_CATEGORY.test(foldTr(name || ''))
+}
 
 /** "<Category> Modelleri ve Fiyatları" when it fits, else shorter; a selection like "Çok Satanlar" keeps its plain name. */
 export function categoryTitle(name: string, page?: number): string {
@@ -1259,18 +1261,86 @@ export function itemListJsonLd(items: Array<{ path: string; name?: string }>, op
     }
 }
 
+export interface ArticleSeoInput {
+    headline: string
+    description: string
+    /** Canonical path, e.g. "/rehber/<slug>/". */
+    path: string
+    /** YYYY-MM-DD */
+    datePublished: string
+    dateModified: string
+}
+
+/**
+ * Article for an editorial page (the shopping guides). Author and publisher are the store itself (the root
+ * layout's OnlineStore node, same @id); the image is the site's og-image, as no guide has its own picture.
+ */
+export function articleJsonLd(article: ArticleSeoInput, site: Pick<SiteSeo, 'name' | 'logo'> = DEFAULT_SITE_SEO): JsonLdObject {
+    const url = canonicalUrl(article.path)
+    const organization = {
+        '@type': 'Organization',
+        '@id': ORGANIZATION_ID,
+        name: site.name,
+        url: `${SITE_URL}/`,
+        ...(site.logo ? { logo: { '@type': 'ImageObject', url: site.logo } } : {}),
+    }
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'Article',
+        headline: article.headline,
+        description: article.description,
+        url,
+        mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+        inLanguage: SITE.language,
+        datePublished: article.datePublished,
+        dateModified: article.dateModified,
+        image: [DEFAULT_OG_IMAGE.url],
+        author: organization,
+        publisher: organization,
+    }
+}
+
+/** FAQPage: only for questions and answers that are visible on the page, as plain text. */
+export function faqPageJsonLd(items: Array<{ question: string; answer: string }>): JsonLdObject {
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: items.map(it => ({
+            '@type': 'Question',
+            name: it.question,
+            acceptedAnswer: { '@type': 'Answer', text: it.answer },
+        })),
+    }
+}
+
 export interface ReviewStats {
     count: number
     average: number
 }
 
+/** One real review for the Product JSON-LD `review` list (lib/product-data.ts ProductReview has these fields). */
+export interface ReviewJsonLdInput {
+    rating: number
+    comment?: string | null
+    created_at?: string | null
+    /** Display name as the product page shows it ("Ayşe K."). */
+    author: string
+}
+
+/** At most this many reviews go into the JSON-LD (newest first, as passed). */
+export const JSON_LD_REVIEW_LIMIT = 5
+
 /**
  * Product JSON-LD. The first keys and their formats are the ones Akakçe parses today and must stay:
  * name, description (stripHtml 500), image[] (absolute), sku (product_code or ONOPO-<id>), brand, url,
  * offers { url, priceCurrency TRY, price "1499.99" (roundPrice, = checkout price), priceValidUntil, availability, seller },
- * category. Added after them: mpn, gtin, itemCondition, shippingDetails, hasMerchantReturnPolicy, aggregateRating.
+ * category. Added after them: mpn, gtin, itemCondition, shippingDetails, hasMerchantReturnPolicy, aggregateRating,
+ * review (up to JSON_LD_REVIEW_LIMIT real reviews, only together with aggregateRating).
  */
-export function productJsonLd(p: ProductSeoInput, opts: { site?: SiteSeo; reviews?: ReviewStats | null; now?: Date } = {}): JsonLdObject {
+export function productJsonLd(
+    p: ProductSeoInput,
+    opts: { site?: SiteSeo; reviews?: ReviewStats | null; reviewItems?: ReviewJsonLdInput[] | null; now?: Date } = {},
+): JsonLdObject {
     const site = opts.site || DEFAULT_SITE_SEO
     const url = canonicalUrl(productPath(p.slug))
     const images = parseImages(p.images).map((i) => resolveImageUrl(i)).filter((x): x is string => Boolean(x))
@@ -1302,9 +1372,12 @@ export function productJsonLd(p: ProductSeoInput, opts: { site?: SiteSeo; review
                 : {}),
         }
 
-    const gtin = isValidGtin(specs.barcode) ? specs.barcode as string : null
-    const gtinKey = gtin ? (gtin.length === 8 ? 'gtin8' : gtin.length === 12 ? 'gtin12' : gtin.length === 14 ? 'gtin14' : 'gtin13') : null
+    // The admin's barcode field first, else a barcode in the description's spec table; only valid GS1 codes
+    const ownGtin = normalizeGtin(p.gtin)
+    const gtin = isValidGtin(ownGtin) ? ownGtin : isValidGtin(specs.barcode) ? specs.barcode as string : null
+    const gtinKey = gtin ? gtinJsonLdKey(gtin) : null
     const reviews = opts.reviews && opts.reviews.count > 0 && opts.reviews.average > 0 ? opts.reviews : null
+    const reviewItems = reviews ? reviewJsonLdItems(opts.reviewItems) : []
 
     return {
         '@context': 'https://schema.org',
@@ -1341,7 +1414,29 @@ export function productJsonLd(p: ProductSeoInput, opts: { site?: SiteSeo; review
                 },
             }
             : {}),
+        ...(reviewItems.length ? { review: reviewItems } : {}),
     }
+}
+
+/** Real reviews as schema.org Review objects: rating 1–5, the shown name, the date (YYYY-MM-DD), the text if any. */
+function reviewJsonLdItems(items: ReviewJsonLdInput[] | null | undefined): JsonLdObject[] {
+    const out: JsonLdObject[] = []
+    for (const r of items ?? []) {
+        const rating = Math.round(Number(r.rating))
+        const author = String(r.author ?? '').trim()
+        if (!(rating >= 1 && rating <= 5) || !author) continue
+        const date = d1DateToIso(r.created_at ?? null)
+        const body = collapseWs(String(r.comment ?? ''))
+        out.push({
+            '@type': 'Review',
+            reviewRating: { '@type': 'Rating', ratingValue: rating, bestRating: 5, worstRating: 1 },
+            author: { '@type': 'Person', name: author },
+            ...(date ? { datePublished: date.slice(0, 10) } : {}),
+            ...(body ? { reviewBody: body } : {}),
+        })
+        if (out.length >= JSON_LD_REVIEW_LIMIT) break
+    }
+    return out
 }
 
 /**

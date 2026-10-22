@@ -11,8 +11,11 @@
 //   - old URLs (the previous shop's links still in Google, renamed products, /_next/image?url=…): a GET that
 //     would answer 404 gets a 301 to its live replacement when lib/redirects.ts finds one; the rest is counted
 //     in not_found_log for Admin › Yönlendirmeler,
-//   - the cron (scheduled) handler (daily price update, image variants and assistant product facts; on Mondays
-//     also the assistant's popular questions). Failures are written to the system log (Admin › Sistem kayıtları).
+//   - Strict-Transport-Security (lib/edge-cache.ts hstsHeader) on every HTTPS response returned here, the
+//     redirects and edge-cache HITs included (one place: withHsts in fetch below),
+//   - the cron (scheduled) handler (daily price update, review-request e-mails, image variants and assistant
+//     product facts; on Mondays also the assistant's popular questions). Failures are written to the system
+//     log (Admin › Sistem kayıtları).
 // See https://opennext.js.org/cloudflare/howtos/custom-worker
 //
 // .open-next/worker.js already imports the 8 MB Next server handler lazily, so a cache HIT answered
@@ -29,6 +32,7 @@ import {
     cacheKeyUrl,
     canonicalRedirect,
     hasAuthCookie,
+    hstsHeader,
     isCacheableRequest,
     isMaintenanceBody,
     isRscRequest,
@@ -365,65 +369,79 @@ async function withOldUrlRedirect(request: Request, url: URL, response: Response
     return response
 }
 
+// Strict-Transport-Security on the outgoing response (HTTPS only; the value and why there is no
+// includeSubDomains are in lib/edge-cache.ts). Stored edge-cache copies do not need it: every HIT passes here.
+function withHsts(response: Response, url: URL): Response {
+    const value = hstsHeader(url)
+    if (!value || response.headers.get('strict-transport-security') === value) return response
+    const out = new Response(response.body, response)
+    out.headers.set('Strict-Transport-Security', value)
+    return out
+}
+
+async function handleFetch(request: Request, env: Env, ctx: Ctx): Promise<Response> {
+    const url = new URL(request.url)
+    const method = request.method
+
+    const redirectTo = canonicalRedirect(url, method)
+    if (redirectTo) {
+        return new Response(null, {
+            status: 301,
+            headers: { Location: redirectTo, 'Cache-Control': 'public, max-age=86400' },
+        })
+    }
+
+    // Writes (checkout, PayTR/BirFatura callbacks, admin saves) are passed through untouched
+    if (method !== 'GET' && method !== 'HEAD') {
+        const response: Response = await handler.fetch(request, env, ctx)
+        if (response.ok && shouldBumpCacheVersion(url.pathname, method, hasAuthCookie(request.headers.get('cookie')))) {
+            try {
+                await bumpCacheVersion(env)
+            } catch (error) {
+                console.error('[edge-cache] cache_version bump failed', error)
+            }
+        }
+        return withSessionHint(request, url, response)
+    }
+
+    // Next renders the page as if tracking parameters weren't there (the cache key ignores them too), so a
+    // stored page never carries the first visitor's click ids; a redirect Next answers gets them back
+    // (withTrackingParams)
+    const clean = stripTrackingParams(url)
+    const target = clean ? new Request(clean.href, request) : request
+    const targetUrl = clean ?? url
+    const finish = (response: Response) =>
+        withSessionHint(request, targetUrl, clean ? withTrackingParams(response, url, clean) : response)
+    // A 404 with a live replacement becomes a 301 (its Location gets the tracking parameters back in finish)
+    const oldUrl = (response: Response) => withOldUrlRedirect(target, targetUrl, response, env, ctx)
+
+    if (isCacheableRequest({ method, url: targetUrl, headers: target.headers })) {
+        return finish(await oldUrl(await serveFromEdgeCache(target, targetUrl, env, ctx)))
+    }
+    // HEAD of a store page during maintenance: rendered as a GET so the 503 status and headers match
+    if (method === 'HEAD' && mayRenderMaintenance(targetUrl.pathname)) {
+        const settings = await getEdgeSettings(env)
+        if (settings?.maintenance) {
+            const get = new Request(targetUrl.href, { method: 'GET', headers: target.headers })
+            const full = await passThrough(await handler.fetch(get, env, ctx), targetUrl, 'GET', settings)
+            return finish(new Response(null, full))
+        }
+    }
+    const [response, settings] = await Promise.all([
+        handler.fetch(target, env, ctx) as Promise<Response>,
+        method === 'GET' && mayRenderMaintenance(targetUrl.pathname) ? getEdgeSettings(env) : null,
+    ])
+    // A client-side navigation during maintenance: the router falls back to a full page load (the 503 page)
+    if (settings?.maintenance && isRscRequest(target.headers, targetUrl) && blocksRscDuringMaintenance(targetUrl.pathname)) {
+        await response.body?.cancel().catch(() => {})
+        return finish(maintenanceRscResponse())
+    }
+    return finish(await oldUrl(await passThrough(response, targetUrl, method, settings)))
+}
+
 const worker = {
     async fetch(request: Request, env: Env, ctx: Ctx): Promise<Response> {
-        const url = new URL(request.url)
-        const method = request.method
-
-        const redirectTo = canonicalRedirect(url, method)
-        if (redirectTo) {
-            return new Response(null, {
-                status: 301,
-                headers: { Location: redirectTo, 'Cache-Control': 'public, max-age=86400' },
-            })
-        }
-
-        // Writes (checkout, PayTR/BirFatura callbacks, admin saves) are passed through untouched
-        if (method !== 'GET' && method !== 'HEAD') {
-            const response: Response = await handler.fetch(request, env, ctx)
-            if (response.ok && shouldBumpCacheVersion(url.pathname, method, hasAuthCookie(request.headers.get('cookie')))) {
-                try {
-                    await bumpCacheVersion(env)
-                } catch (error) {
-                    console.error('[edge-cache] cache_version bump failed', error)
-                }
-            }
-            return withSessionHint(request, url, response)
-        }
-
-        // Next renders the page as if tracking parameters weren't there (the cache key ignores them too), so a
-        // stored page never carries the first visitor's click ids; a redirect Next answers gets them back
-        // (withTrackingParams)
-        const clean = stripTrackingParams(url)
-        const target = clean ? new Request(clean.href, request) : request
-        const targetUrl = clean ?? url
-        const finish = (response: Response) =>
-            withSessionHint(request, targetUrl, clean ? withTrackingParams(response, url, clean) : response)
-        // A 404 with a live replacement becomes a 301 (its Location gets the tracking parameters back in finish)
-        const oldUrl = (response: Response) => withOldUrlRedirect(target, targetUrl, response, env, ctx)
-
-        if (isCacheableRequest({ method, url: targetUrl, headers: target.headers })) {
-            return finish(await oldUrl(await serveFromEdgeCache(target, targetUrl, env, ctx)))
-        }
-        // HEAD of a store page during maintenance: rendered as a GET so the 503 status and headers match
-        if (method === 'HEAD' && mayRenderMaintenance(targetUrl.pathname)) {
-            const settings = await getEdgeSettings(env)
-            if (settings?.maintenance) {
-                const get = new Request(targetUrl.href, { method: 'GET', headers: target.headers })
-                const full = await passThrough(await handler.fetch(get, env, ctx), targetUrl, 'GET', settings)
-                return finish(new Response(null, full))
-            }
-        }
-        const [response, settings] = await Promise.all([
-            handler.fetch(target, env, ctx) as Promise<Response>,
-            method === 'GET' && mayRenderMaintenance(targetUrl.pathname) ? getEdgeSettings(env) : null,
-        ])
-        // A client-side navigation during maintenance: the router falls back to a full page load (the 503 page)
-        if (settings?.maintenance && isRscRequest(target.headers, targetUrl) && blocksRscDuringMaintenance(targetUrl.pathname)) {
-            await response.body?.cancel().catch(() => {})
-            return finish(maintenanceRscResponse())
-        }
-        return finish(await oldUrl(await passThrough(response, targetUrl, method, settings)))
+        return withHsts(await handleFetch(request, env, ctx), new URL(request.url))
     },
 
     // Triggered by [triggers] crons in wrangler.toml (0 7 * * * = 10:00 Turkey time). A scheduled invocation may
@@ -488,10 +506,11 @@ const worker = {
             await logSystemEvent(logDb, { source: 'cron', level: 'error', message: 'Günlük döviz kuru ve fiyat güncellemesi yapılamadı; USD fiyatlı ürünlerin TL fiyatı eski kaldı.', detail: priceFailure })
         }
 
-        // Automatic upkeep (app/api/cron/automation): missing image variants, then the assistant's product facts.
-        // Each job gets the time left (the route caps it); a job's own failures are logged by the job.
+        // Automatic upkeep (app/api/cron/automation): review-request e-mails (short, so they never run out of
+        // time), missing image variants, then the assistant's product facts. Each job gets the time left (the
+        // route caps it); a job's own failures are logged by the job.
         const CRON_WALL_MS = 14 * 60_000
-        const automation = async (job: 'images' | 'facts', maxMs: number) => {
+        const automation = async (job: 'reviews' | 'images' | 'facts', maxMs: number) => {
             const left = CRON_WALL_MS - (Date.now() - startedAt) - 30_000
             const ms = Math.min(maxMs, left)
             if (ms < 15_000) {
@@ -513,6 +532,7 @@ const worker = {
                 await logSystemEvent(logDb, { source: 'cron', level: 'error', message: 'Günlük otomatik iş çalışmadı.', detail: error instanceof Error ? error.message : 'error', ref: job })
             }
         }
+        await automation('reviews', 2 * 60_000)
         await automation('images', 4 * 60_000)
         await automation('facts', 9 * 60_000)
 

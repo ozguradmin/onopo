@@ -7,6 +7,8 @@ import { CurrencyInput } from '@/components/ui/currency-input'
 import { VariationsSection, Variation } from './VariationsSection'
 import { uploadImageVariants } from '@/lib/imageVariants'
 import { useUsdTryRate } from './useUsdTryRate'
+import { GtinField } from './GtinField'
+import { gtinError } from '@/lib/gtin'
 
 interface ProductEditModalProps {
     isOpen: boolean
@@ -38,6 +40,7 @@ export function ProductEditModal({ isOpen, onClose, productId, onSuccess }: Prod
         installment_info: '',
         is_active: true,
         product_code: '',
+        gtin: '',
         whatsapp_order_enabled: false,
         whatsapp_number: '',
         free_shipping: false
@@ -72,6 +75,7 @@ export function ProductEditModal({ isOpen, onClose, productId, onSuccess }: Prod
                     installment_info: product.installment_info || '',
                     is_active: product.is_active !== undefined ? !!product.is_active : true,
                     product_code: product.product_code || '',
+                    gtin: product.gtin || '',
                     whatsapp_order_enabled: !!product.whatsapp_order_enabled,
                     whatsapp_number: product.whatsapp_number || '',
                     free_shipping: !!product.free_shipping
@@ -148,6 +152,11 @@ export function ProductEditModal({ isOpen, onClose, productId, onSuccess }: Prod
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!productId) return
+        const gtinProblem = gtinError(formData.gtin)
+        if (gtinProblem) {
+            alert(gtinProblem)
+            return
+        }
 
         setSaving(true)
         try {
@@ -167,6 +176,8 @@ export function ProductEditModal({ isOpen, onClose, productId, onSuccess }: Prod
             })
 
             if (!res.ok) throw new Error('Failed to update')
+            const saved = await res.json().catch(() => null)
+            if (saved?.warning) alert(saved.warning)
 
             // Save variations
             await fetch(`/api/products/${productId}/variations`, {
@@ -354,6 +365,9 @@ export function ProductEditModal({ isOpen, onClose, productId, onSuccess }: Prod
                                 className="w-full p-2 border rounded-lg"
                             />
                         </div>
+
+                        {/* Barcode */}
+                        <GtinField value={formData.gtin} onChange={gtin => setFormData(prev => ({ ...prev, gtin }))} />
 
                         {/* Toggles Row */}
                         <div className="grid grid-cols-3 gap-3">

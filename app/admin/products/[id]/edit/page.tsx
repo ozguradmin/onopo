@@ -7,6 +7,8 @@ import { ArrowLeft, Upload, Loader2, X, Plus, ArrowRight } from 'lucide-react'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import { uploadImageVariants } from '@/lib/imageVariants'
 import { useUsdTryRate } from '@/components/admin/useUsdTryRate'
+import { GtinField } from '@/components/admin/GtinField'
+import { gtinError } from '@/lib/gtin'
 
 export default function EditProductPage() {
     const router = useRouter()
@@ -52,6 +54,7 @@ export default function EditProductPage() {
         installment_info: '',
         is_active: true,
         product_code: '',
+        gtin: '',
         whatsapp_order_enabled: false,
         whatsapp_number: '',
         free_shipping: false
@@ -81,6 +84,7 @@ export default function EditProductPage() {
                     installment_info: product.installment_info || '',
                     is_active: product.is_active !== undefined ? !!product.is_active : true,
                     product_code: product.product_code || '',
+                    gtin: product.gtin || '',
                     whatsapp_order_enabled: !!product.whatsapp_order_enabled,
                     whatsapp_number: product.whatsapp_number || '',
                     free_shipping: !!product.free_shipping
@@ -147,6 +151,11 @@ export default function EditProductPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+        const gtinProblem = gtinError(formData.gtin)
+        if (gtinProblem) {
+            alert(gtinProblem)
+            return
+        }
         setSaving(true)
 
         try {
@@ -169,6 +178,8 @@ export default function EditProductPage() {
             })
 
             if (!res.ok) throw new Error('Failed to update')
+            const saved = await res.json().catch(() => null)
+            if (saved?.warning) alert(saved.warning)
             router.push(getReturnUrl())
         } catch (error) {
             alert('Güncelleme hatası')
@@ -397,6 +408,7 @@ export default function EditProductPage() {
                             className="w-full p-2 border rounded-lg"
                         />
                     </div>
+                    <GtinField value={formData.gtin} onChange={gtin => setFormData(prev => ({ ...prev, gtin }))} />
                 </div>
 
                 <div className="flex items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-200">

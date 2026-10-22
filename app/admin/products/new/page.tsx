@@ -8,6 +8,8 @@ import { CurrencyInput } from '@/components/ui/currency-input'
 import { VariationsSection, Variation } from '@/components/admin/VariationsSection'
 import { uploadImageVariants } from '@/lib/imageVariants'
 import { useUsdTryRate } from '@/components/admin/useUsdTryRate'
+import { GtinField } from '@/components/admin/GtinField'
+import { gtinError } from '@/lib/gtin'
 
 export default function AddProductPage() {
     const router = useRouter()
@@ -30,6 +32,7 @@ export default function AddProductPage() {
         installment_info: '',
         is_active: true,
         product_code: '',
+        gtin: '',
         whatsapp_order_enabled: false,
         whatsapp_number: '',
         free_shipping: false
@@ -103,6 +106,11 @@ export default function AddProductPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+        const gtinProblem = gtinError(formData.gtin)
+        if (gtinProblem) {
+            alert(gtinProblem)
+            return
+        }
         setLoading(true)
 
         try {
@@ -126,6 +134,7 @@ export default function AddProductPage() {
 
             if (!res.ok) throw new Error('Failed to create product')
             const data = await res.json()
+            if (data?.warning) alert(data.warning)
 
             // Save variations if any
             if (variations.length > 0 && data.id) {
@@ -352,6 +361,7 @@ export default function AddProductPage() {
                             className="w-full p-2 border rounded-lg"
                         />
                     </div>
+                    <GtinField value={formData.gtin} onChange={gtin => setFormData(prev => ({ ...prev, gtin }))} />
                 </div>
 
                 <div className="flex items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-200">

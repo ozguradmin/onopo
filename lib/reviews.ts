@@ -1,7 +1,9 @@
 /**
  * Review statistics for product cards, listings and the product page (server only).
  *
- * Source: the `reviews` table (id, product_id, user_id, rating 1–5, comment, created_at). There is no
+ * Source: the `reviews` table (id, product_id, user_id, rating 1–5, comment, created_at; since
+ * migrations/2026-10-22-guest-reviews.sql also order_id, reviewer_name, verified for reviews written through an
+ * order's review link, lib/order-reviews.ts). There is no
  * approval or visibility flag: every row is public (GET /api/products/<id>/reviews lists them all and
  * the admin can only edit or delete), so every row counts here too.
  *

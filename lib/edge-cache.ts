@@ -15,7 +15,7 @@
 //
 // Also here (pure rules used by worker.ts): tracking parameters stripped before Next renders (and put back
 // on Next's same-origin redirects), the browser Cache-Control of anonymous allowlisted HTML (bfcache), the
-// maintenance render (503) and the readable session hint cookie kept in sync with auth_token.
+// maintenance render (503), the readable session hint cookie kept in sync with auth_token, and HSTS.
 
 // Set to false to switch the edge cache off completely (every response is then BYPASS).
 export const EDGE_CACHE_ENABLED = true
@@ -58,17 +58,19 @@ export function hasAuthCookie(cookieHeader: string | null): boolean {
 // Never cached, whatever the other rules say
 const DENY = [
     /^\/api\/(orders|auth|birfatura|payment|cron|analytics|favorites|user|installment-token|admin|ai)/,
-    /^\/(admin|odeme|profile|orders|login|register|siparis-)/,
+    /^\/(admin|odeme|profile|orders|login|register|siparis-|degerlendir)/,
 ]
 
 // Single-segment paths that are not product pages
-const RESERVED_SEGMENTS = new Set(['admin', 'odeme', 'profile', 'orders', 'login', 'register', 'api', 'maintenance', 'categories'])
+const RESERVED_SEGMENTS = new Set(['admin', 'odeme', 'profile', 'orders', 'login', 'register', 'api', 'maintenance', 'categories', 'degerlendir'])
 
 const PAGE_ALLOW = [
     /^\/$/,
     /^\/products\/?$/,
     /^\/kategori\/[a-z0-9-]+(\/[a-z0-9-]+)*\/?$/,
     /^\/page\/[a-z0-9-]+\/?$/,
+    // Shopping guides: the hub and the articles (text in code, related products from D1)
+    /^\/rehber\/([a-z0-9-]+\/?)?$/,
     /^\/(help|policy|shipping|terms)\/?$/,
     /^\/product\/\d+\/?$/,
     /^\/sitemap\.xml$/,
@@ -78,8 +80,9 @@ const PAGE_ALLOW = [
 // Product pages /<slug>/ (slugs are lowercase a-z, 0-9 and '-')
 const PRODUCT_SLUG = /^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/
 
-// Single-segment pages on PAGE_ALLOW that are not product pages
-const NON_PRODUCT_PAGES = new Set(['products', 'help', 'policy', 'shipping', 'terms'])
+// Single-segment pages that are not product pages (stored without the product-page marker check). kategoriler:
+// the /kategoriler/ hub was never stored before, because the check wanted id="product-info" in it
+const NON_PRODUCT_PAGES = new Set(['products', 'help', 'policy', 'shipping', 'terms', 'rehber', 'kategoriler'])
 
 const API_ALLOW = [
     /^\/api\/categories\/?$/,
@@ -256,9 +259,10 @@ const CONTENT_WRITE = /^\/api\/(admin|products|categories|homepage-sections|hero
 // password reset and the client error log; optimize-images only reports image copy coverage (GET);
 // email/send only sends mail; profile changes the admin's own login; users is
 // read-only; redirects only changes what 404 URLs answer (never cached), and its resolve POST only reads;
-// system-logs only marks admin log entries "Çözüldü"; assistant/facts writes the assistant's product facts lines
-// (the storefront HTML does not show them; the "Ürün bilgilerini yenile" button posts every ~20 s).
-const CONTENT_WRITE_EXCEPTIONS = /^\/api\/admin\/(forgot-password|reset-password|log|optimize-images|email|profile|users|redirects|system-logs|assistant\/facts)(\/|$)/
+// system-logs only marks admin log entries "Çözüldü"; review-requests only switches the review e-mails on/off;
+// assistant/facts writes the assistant's product facts lines (the storefront HTML does not show them; the
+// "Ürün bilgilerini yenile" button posts every ~20 s).
+const CONTENT_WRITE_EXCEPTIONS = /^\/api\/admin\/(forgot-password|reset-password|log|optimize-images|email|profile|users|redirects|system-logs|review-requests|assistant\/facts)(\/|$)/
 
 export function shouldBumpCacheVersion(pathname: string, method: string, hasSession: boolean): boolean {
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false
@@ -325,6 +329,21 @@ export function maintenanceHeaders(): Record<string, string> {
         'X-Robots-Tag': 'noindex',
         'Cache-Control': 'no-store',
     }
+}
+
+// ---- HSTS ----
+
+/**
+ * Strict-Transport-Security, sent by worker.ts on every HTTPS response it returns (pages, APIs, edge-cache HITs,
+ * the www -> apex and old-URL 301s, 404s). One year, for the requested host only: NO includeSubDomains (other
+ * subdomains such as printfast.onopostore.com are separate services that must not be forced onto HTTPS by this
+ * site) and NO preload. Static assets served before the Worker get the same header from public/_headers.
+ */
+export const HSTS_VALUE = 'max-age=31536000'
+
+/** The HSTS value for a response to this URL, or null (plain http: browsers ignore it there, so it is not sent). */
+export function hstsHeader(url: URL): string | null {
+    return url.protocol === 'https:' ? HSTS_VALUE : null
 }
 
 // ---- readable session hint (lib/session-hint.ts) ----

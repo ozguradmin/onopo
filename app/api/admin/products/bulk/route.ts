@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import { slugifyTr } from '@/lib/seo'
 import { runInBackground } from '@/lib/automation/background'
 import { refreshFactsForProducts } from '@/lib/assistant/data'
+import { gtinForStorage, writeProductGtin } from '@/lib/gtin'
 
 export const dynamic = 'force-dynamic'
 
@@ -97,6 +98,14 @@ export async function POST(req: NextRequest) {
 
                 const newId = Number(inserted.meta?.last_row_id)
                 if (Number.isInteger(newId) && newId > 0) insertedIds.push(newId)
+                // Barcode column of the file (valid GS1 codes only); skipped while products.gtin does not exist yet
+                if (Number.isInteger(newId) && newId > 0 && gtinForStorage(product.gtin)) {
+                    try {
+                        await writeProductGtin(db, newId, product.gtin)
+                    } catch (gtinErr) {
+                        console.warn('Bulk import gtin skipped:', gtinErr)
+                    }
+                }
                 successCount++
             } catch (err: any) {
                 console.error('Bulk import item error:', err)

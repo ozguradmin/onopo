@@ -105,9 +105,12 @@ test('isStorableResponse: header rules', () => {
 test('isProductSlugPath: only /<slug>/ paths that can be products', () => {
     assert.equal(isProductSlugPath('/onopo-t67-usb-a-to-type-c-67w/'), true)
     assert.equal(isProductSlugPath('/onopo-t67'), true)
-    for (const p of ['/', '/products/', '/help/', '/policy/', '/shipping/', '/terms/', '/maintenance/', '/admin/', '/kategori/x/', '/page/help/', '/sitemap.xml']) {
+    for (const p of ['/', '/products/', '/help/', '/policy/', '/shipping/', '/terms/', '/maintenance/', '/admin/', '/kategori/x/', '/page/help/', '/sitemap.xml', '/kategoriler/', '/rehber/']) {
         assert.equal(isProductSlugPath(p), false, p)
     }
+    // The /kategoriler/ hub is cacheable and stored without a product marker
+    assert.equal(isCacheablePath('/kategoriler/'), true)
+    assert.equal(isStorableBody('/kategoriler/', HTML, '<html><body><h1>Kategoriler</h1></body></html>'), true)
 })
 
 test('isStorableBody: the no-cache marker is never stored', () => {

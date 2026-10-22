@@ -25,6 +25,7 @@ import {
     type ShippingSettings,
 } from '@/lib/catalog'
 import { resolveCategory } from '@/lib/seo-routing'
+import { listProductReviews, maskReviewerName, type ReviewsDb } from '@/lib/order-reviews'
 
 export interface ProductReview {
     id: number
@@ -33,6 +34,8 @@ export interface ProductReview {
     created_at: string | null
     /** "Ünal M." — first name + initial of the last name; the full name never leaves the server. */
     author: string
+    /** Written through the review link of a real order ("Doğrulanmış alıcı"). */
+    verified: boolean
 }
 
 export interface ReviewStats {
@@ -81,39 +84,12 @@ async function db(): Promise<D1Like> {
     return (await getDB()) as unknown as D1Like
 }
 
-/** First name + last-name initial ("Ünal Mert" → "Ünal M."); "Onopo müşterisi" when unknown. */
-export function maskReviewerName(fullName: unknown): string {
-    const parts = String(fullName ?? '').trim().split(/\s+/).filter(Boolean)
-    if (!parts.length) return 'Onopo müşterisi'
-    const first = parts[0]
-    const firstNice = first === first.toLocaleUpperCase('tr-TR') && first.length > 1
-        ? first.charAt(0) + first.slice(1).toLocaleLowerCase('tr-TR')
-        : first
-    if (parts.length === 1) return firstNice
-    const last = parts[parts.length - 1]
-    return `${firstNice} ${last.charAt(0).toLocaleUpperCase('tr-TR')}.`
-}
+// Moved to lib/order-reviews.ts (shared with the review link page and the cron); re-exported for the API routes
+export { maskReviewerName }
 
 const loadReviews = cache(async (productId: number): Promise<ProductReview[]> => {
-    const d = await db()
-    const { results } = await d
-        .prepare(
-            `SELECT r.id, r.rating, r.comment, r.created_at, u.full_name
-             FROM reviews r LEFT JOIN users u ON r.user_id = u.id
-             WHERE r.product_id = ?
-             ORDER BY r.created_at DESC, r.id DESC`,
-        )
-        .bind(productId)
-        .all<{ id: number; rating: number; comment: string | null; created_at: string | null; full_name: string | null }>()
-    return (results ?? [])
-        .map(r => ({
-            id: Number(r.id),
-            rating: Math.max(1, Math.min(5, Math.round(Number(r.rating) || 0))),
-            comment: String(r.comment ?? '').trim(),
-            created_at: r.created_at ? String(r.created_at) : null,
-            author: maskReviewerName(r.full_name),
-        }))
-        .filter(r => Number.isFinite(r.rating) && r.rating >= 1)
+    const rows = await listProductReviews((await db()) as unknown as ReviewsDb, productId)
+    return rows.map(r => ({ id: r.id, rating: r.rating, comment: r.comment, created_at: r.created_at, author: r.author, verified: r.verified }))
 })
 
 export function reviewStatsOf(reviews: ProductReview[]): ReviewStats {

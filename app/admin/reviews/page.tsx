@@ -1,8 +1,103 @@
 'use client'
 
 import * as React from 'react'
-import { Star, Trash2, Edit, Save, X } from 'lucide-react'
+import { Star, Trash2, Edit, Save, X, Mail, BadgeCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+
+// Admin › Yorumlar: every review (account reviews and reviews written through an order's review link) with
+// edit/delete, and the switch + last 30 days of the review-request e-mails (/api/admin/review-requests).
+
+interface RequestStats {
+    ready: boolean
+    enabled: boolean
+    days: number
+    sent: number
+    failed: number
+    reviews: number
+}
+
+function ReviewRequestsBox() {
+    const [stats, setStats] = React.useState<RequestStats | null>(null)
+    const [saving, setSaving] = React.useState(false)
+    const [error, setError] = React.useState('')
+
+    React.useEffect(() => {
+        fetch('/api/admin/review-requests/', { cache: 'no-store' })
+            .then(r => (r.ok ? r.json() : null))
+            .then(data => { if (data && typeof data.enabled === 'boolean') setStats(data) })
+            .catch(() => setError('E-posta bilgileri okunamadı.'))
+    }, [])
+
+    const toggle = async () => {
+        if (!stats || saving) return
+        setSaving(true)
+        setError('')
+        try {
+            const res = await fetch('/api/admin/review-requests/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: !stats.enabled }),
+            })
+            const data = await res.json().catch(() => null)
+            if (!res.ok || !data || typeof data.enabled !== 'boolean') throw new Error('save')
+            setStats(data)
+        } catch {
+            setError('Ayar kaydedilemedi.')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                    <span className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+                        <Mail className="w-4 h-4" />
+                    </span>
+                    <div>
+                        <h2 className="font-semibold text-slate-900">Değerlendirme e-postaları</h2>
+                        <p className="mt-0.5 max-w-xl text-sm text-slate-500">
+                            Teslim edilen siparişlere (Tamamlandı, ya da 7 günden uzun süredir Kargoya Verildi; sipariş 5–45 gün önce)
+                            her gün en fazla 20 e-posta gider. Her sipariş tek bir kez sorulur; misafir müşteriler de bağlantıyla
+                            &quot;Doğrulanmış alıcı&quot; olarak değerlendirme yazabilir.
+                        </p>
+                    </div>
+                </div>
+                {stats && (
+                    <label className="relative inline-flex cursor-pointer items-center gap-3">
+                        <span className="text-sm font-medium text-slate-700">{stats.enabled ? 'Açık' : 'Kapalı'}</span>
+                        <input type="checkbox" className="peer sr-only" checked={stats.enabled} onChange={toggle} disabled={saving} />
+                        <span className="h-6 w-11 rounded-full bg-slate-200 transition-colors after:absolute after:right-[22px] after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-emerald-500 peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-400" />
+                    </label>
+                )}
+            </div>
+            {stats && !stats.ready && (
+                <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    Veritabanı güncellemesi (migrations/2026-10-22-guest-reviews.sql) henüz çalıştırılmadı; e-postalar gönderilmiyor.
+                </p>
+            )}
+            {stats && stats.ready && (
+                <dl className="mt-4 grid grid-cols-3 gap-3 text-center">
+                    <div className="rounded-lg bg-slate-50 p-3">
+                        <dt className="text-xs text-slate-500">Gönderilen</dt>
+                        <dd className="text-xl font-bold text-slate-900 tabular-nums">{stats.sent}</dd>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-3">
+                        <dt className="text-xs text-slate-500">Gönderilemeyen</dt>
+                        <dd className={`text-xl font-bold tabular-nums ${stats.failed > 0 ? 'text-red-600' : 'text-slate-900'}`}>{stats.failed}</dd>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-3">
+                        <dt className="text-xs text-slate-500">Gelen değerlendirme</dt>
+                        <dd className="text-xl font-bold text-emerald-700 tabular-nums">{stats.reviews}</dd>
+                    </div>
+                    <p className="col-span-3 text-xs text-slate-400">Son {stats.days} gün</p>
+                </dl>
+            )}
+            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+        </div>
+    )
+}
 
 export default function AdminReviewsPage() {
     const [reviews, setReviews] = React.useState<any[]>([])
@@ -64,6 +159,8 @@ export default function AdminReviewsPage() {
                 <span className="text-sm text-slate-500">{reviews.length} yorum</span>
             </div>
 
+            <ReviewRequestsBox />
+
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                 <table className="w-full">
                     <thead className="bg-slate-50 border-b border-slate-200">
@@ -84,8 +181,14 @@ export default function AdminReviewsPage() {
                                 </td>
                                 <td className="px-4 py-3">
                                     <div>
-                                        <p className="font-medium text-slate-900">{review.user_name || 'Anonim'}</p>
-                                        <p className="text-xs text-slate-500">{review.user_email}</p>
+                                        <p className="font-medium text-slate-900">{review.user_name || review.reviewer_name || 'Anonim'}</p>
+                                        {review.user_email && <p className="text-xs text-slate-500">{review.user_email}</p>}
+                                        {Number(review.verified) === 1 && (
+                                            <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                                                <BadgeCheck className="w-3.5 h-3.5" />
+                                                Doğrulanmış alıcı{review.order_id ? ` · Sipariş #${review.order_id}` : ''}
+                                            </p>
+                                        )}
                                     </div>
                                 </td>
                                 <td className="px-4 py-3">

@@ -1,6 +1,7 @@
 
 import { Resend } from 'resend'
 import { getDB } from './db'
+import { isPermanentMailError, type ReviewMailResult, type ReviewRequestMail } from './order-reviews'
 
 // Initialize Resend with API key from environment
 const resend = new Resend(process.env.RESEND_API_KEY || 're_123456789')
@@ -429,6 +430,90 @@ export async function sendAdminPasswordReset(resetUrl: string, expiresMinutes: n
     } catch (error) {
         console.error('Failed to send admin password reset email:', error)
         return { success: false, error }
+    }
+}
+
+// ---- Review request (daily cron, lib/order-reviews.ts sendReviewRequests): one per delivered order, sent once ----
+
+function escapeHtml(value: unknown): string {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+}
+
+export const reviewRequestTemplate = (mail: ReviewRequestMail, settings: any) => {
+    const greeting = mail.firstName ? `Merhaba ${escapeHtml(mail.firstName)},` : 'Merhaba,'
+    const many = mail.items.length > 1
+    const items = mail.items.slice(0, 10).map(item => {
+        const image = item.imageUrl
+            ? `<img src="${escapeHtml(item.imageUrl)}" alt="" width="56" height="56" style="width: 56px; height: 56px; object-fit: contain; border-radius: 8px; background: #ffffff; border: 1px solid #e2e8f0;" />`
+            : ''
+        const name = item.url
+            ? `<a href="${escapeHtml(item.url)}" style="color: #1e293b; text-decoration: none; font-weight: 600;">${escapeHtml(item.name)}</a>`
+            : `<span style="color: #1e293b; font-weight: 600;">${escapeHtml(item.name)}</span>`
+        return `
+                        <tr>
+                            <td style="padding: 8px 12px 8px 0; width: 56px; vertical-align: middle;">${image}</td>
+                            <td style="padding: 8px 0; font-size: 15px; line-height: 21px; vertical-align: middle;">${name}</td>
+                        </tr>`
+    }).join('')
+    return {
+        subject: many ? 'Aldığın ürünleri nasıl buldun?' : 'Aldığın ürünü nasıl buldun?',
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                ${emailHeader('Görüşün bizim için değerli', settings, '⭐')}
+                <div style="padding: 30px; background: #f8fafc;">
+                    <p style="font-size: 16px; color: #334155;">${greeting}</p>
+                    <p style="font-size: 16px; color: #334155; line-height: 24px;">
+                        <strong>#${mail.orderId}</strong> numaralı siparişin eline ulaştıysa ${many ? 'ürünleri' : 'ürünü'} nasıl bulduğunu
+                        bizimle ve diğer alışverişçilerle paylaşır mısın? Bir dakikanı alır: yıldız ver, istersen birkaç cümle yaz.
+                    </p>
+                    <div style="background: white; border-radius: 12px; padding: 12px 20px; margin: 20px 0; border: 1px solid #e2e8f0;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">${items}
+                        </table>
+                    </div>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${escapeHtml(mail.reviewUrl)}"
+                           style="background: #0077A8; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                            Değerlendir
+                        </a>
+                    </div>
+                    <p style="font-size: 14px; color: #64748b; line-height: 21px;">
+                        Bu e-postayı yalnızca bir kez gönderiyoruz; tekrar hatırlatma yapmayacağız. Bağlantı 60 gün geçerlidir
+                        ve giriş yapmanı gerektirmez.
+                    </p>
+                </div>
+                ${emailFooter(settings)}
+            </div>
+        `,
+    }
+}
+
+// Errors about this one address are recorded as failed and never retried (isPermanentMailError). Anything else
+// (key, sender domain, quota, rate limit, outage) is transient: the order is tried again on another day.
+export async function sendReviewRequestEmail(toEmail: string, mail: ReviewRequestMail): Promise<ReviewMailResult> {
+    try {
+        const settings = await getEmailSettings()
+        const template = reviewRequestTemplate(mail, settings)
+        const { error } = await resend.emails.send({
+            from: FROM_EMAIL,
+            to: toEmail,
+            subject: template.subject,
+            html: template.html,
+        })
+        if (error) {
+            const name = String((error as { name?: unknown }).name ?? '')
+            const message = String((error as { message?: unknown }).message ?? '')
+            return { ok: false, permanent: isPermanentMailError(name, message), error: `${name || 'error'}: ${message}` }
+        }
+        // No address in the log
+        console.log(`Review request email sent for order ${mail.orderId}`)
+        return { ok: true }
+    } catch (error) {
+        return { ok: false, permanent: false, error: error instanceof Error ? error.message : String(error) }
     }
 }
 

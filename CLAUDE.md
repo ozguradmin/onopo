@@ -9,6 +9,8 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - **Kod:** Next.js 16 (App Router) + React 19 + Tailwind 4, Cloudflare Workers üzerinde OpenNext ile.
 - **Cloudflare:** Worker `onopo-app`, D1 veritabanı `onopo-db` (binding `DB`), R2 `onopo-storage` (binding `BUCKET`).
   Hesap ve kaynak ID'leri `wrangler.toml`'da. Giriş noktası `worker.ts` (OpenNext worker'ını sarar, aşağıda).
+  `workers_dev = false`, `preview_urls = false`: `*.workers.dev` ve önizleme adresleri kapalı; site yalnızca
+  onopostore.com / www'den (dashboard'daki custom domain/route) açılır.
 - **Ödeme:** PayTR (`lib/payment/paytr.ts`). `test_mode` kodda sabit `'0'` → ödemeler **gerçek**.
   Ayarlar `payment_settings` tablosunda; gizli alanlar sadece admin'e döner.
 - **E-posta:** Resend (`lib/email.ts`). Admin bildirimi `site_settings.admin_email` adresine gider.
@@ -42,8 +44,9 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - `--persist-to` yolunu kısa tut: Windows'un 259 karakterlik yol sınırına takılmasın.
 - `tsc`, `.next/types` altında ödeme callback route'u için eskiden kalan hatalar verir; `next.config.ts` build'de
   tip hatalarını yok sayar (`ignoreBuildErrors`).
-- Birim testleri: `node --test scripts/edge-cache.test.mjs scripts/seo.test.mjs scripts/redirects.test.mjs` (Node 23.6+; CI çalıştırmaz).
+- Birim testleri: `node --test scripts/edge-cache.test.mjs scripts/seo.test.mjs scripts/redirects.test.mjs scripts/guides.test.mjs scripts/worker-hsts.test.mjs` (Node 23.6+; CI çalıştırmaz).
   Otomatik işler: `node --test scripts/automation.test.mjs` (D1 yerine `node:sqlite`, saat/AI/R2/Images sahte).
+  Yorumlar/değerlendirme e-postaları ve migration: `node --test scripts/reviews.test.mjs`; Google feed ve barkod: `node --test scripts/feeds.test.mjs`.
 
 ## Gizli değişkenler (sadece adlar)
 - Cloudflare Worker secret'ları: `BIRFATURA_TOKEN`, `CRON_SECRET`, `JWT_SECRET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `RESEND_API_KEY`;
@@ -71,11 +74,19 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   `product_variations`, `two_factor_codes` tabloları ve sonradan eklenen sütunlar (ör. `products.slug`,
   `free_shipping`, `price_usd`) `app/api/migrations/*` (admin korumalı) ya da `ALTER TABLE ... ADD COLUMN` ile
   eklenmiş. Boş bir DB'yi tek başına kuramaz; gerçek şema için canlı DB'ye bak.
+- **Elle çalıştırılan migration'lar** `migrations/<tarih>-<ad>.sql` (deploy çalıştırmaz; yedekten sonra bir kez
+  `wrangler d1 execute onopo-db --remote --file=...`). Kod, migration çalışmadan da çökmez.
+  `2026-10-22-guest-reviews.sql` (reviews tablosu yeniden kurulur: `user_id` boş olabilir, `order_id`,
+  `reviewer_name`, `verified`, `UNIQUE(order_id, product_id)`; `review_requests` tablosu; ikinci çalıştırma
+  korumada durur) ve `2026-10-22-product-gtin.sql` (`products.gtin`).
 
 ## Worker (`worker.ts`, kurallar `lib/edge-cache.ts`)
 - **Kanonik host:** `http://` ve `www.` sayfa GET/HEAD istekleri `https://onopostore.com`'a 301 olur. `/api/*` hiç
   yönlenmez (checkout POST'ları, PayTR, BirFatura, Merchant feed). `/sitemap.xml` ve `/robots.txt` istendiği
   host'ta kalır (Akakçe www'den okur; yalnızca http → https).
+- **HSTS:** Worker'ın döndürdüğü her HTTPS yanıtına (sayfa, API, cache HIT, 301'ler, 404) `withHsts` ile
+  `Strict-Transport-Security: max-age=31536000` eklenir; statik dosyalar `public/_headers`'tan alır. **includeSubDomains
+  ve preload yok** (printfast.onopostore.com ayrı bir servis). http yanıtlarına eklenmez.
 - **Takip parametreleri** (`utm_*`, `gclid`, `srsltid`, `fbclid`, `msclkid` …) Next'in gördüğü URL'den silinir;
   tarayıcı adresi değişmez. Sunucu kodu bunları okuyamaz.
 - **Edge cache** (Workers Cache API): yalnızca anonim (`auth_token` yok) ve allowlist'teki GET'ler (ana sayfa,
@@ -100,6 +111,12 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   zaman açılan bir sayfa ya da images.onopostore.com (açık yönlendirme yok, `/api` ve `/admin` hiç yönlenmez).
   Bulunamayanlar `not_found_log`'a (yalnızca yol, sayılar, referrer host; IP/UA yok; Googlebot dışı botlar sayılmaz).
   Ürün/kategori indeksi isolate başına 10 dk tutulur. Testler: `node --test scripts/redirects.test.mjs`.
+
+## Alışveriş rehberleri (`/rehber/`)
+- Metinler kodda: `lib/guides/content/*.ts` (6 rehber), slug listesi `lib/guides/slugs.ts`. İlgili ürünler D1'den canlı
+  (`lib/guides/server.ts`, en çok 8, stoktakiler önce); metinde fiyat/stok yazılmaz. Metin değişince `dateModified`'i güncelle.
+- Ürün sayfasında tek "İlgili rehber" bağlantısı (`guideForProduct`), footer'da "Rehberler", `/kategoriler/`'de blok.
+  Sitemap'te var; edge cache allowlist'inde; yönlendirme çözücü `/rehber/` altında tahmin yapmaz. Ayrıntı: `docs/SEO.md` §12.
 
 ## Admin girişi ve 2FA
 - Admin hesabı `admin@onopo.com` (`lib/login-alias.ts`). Sahip kişisel bir takma adresle (alias) de giriş
@@ -167,9 +184,24 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   2. `/api/cron/update-prices/`: USD fiyatlı ürünleri ve `site_settings.last_exchange_rate/last_exchange_update`
      günceller; başarıda `cache_version` artırılır. Hata sistem kaydına yazılır, aşağıdakiler yine çalışır, çağrı en
      sonda hata fırlatır (Cloudflare panelinde "failed" görünsün).
-  3. `/api/cron/automation/?job=images` (en çok 4 dk): eksik görsel varyantları.
-  4. `/api/cron/automation/?job=facts` (kalan süre, en çok 9 dk): asistanın eksik/eski ürün bilgisi satırları,
+  3. `/api/cron/automation/?job=reviews` (en çok 2 dk): değerlendirme e-postaları (aşağıda).
+  4. `/api/cron/automation/?job=images` (en çok 4 dk): eksik görsel varyantları.
+  5. `/api/cron/automation/?job=facts` (kalan süre, en çok 9 dk): asistanın eksik/eski ürün bilgisi satırları,
      4 sn'de bir DeepSeek çağrısı (hesap sınırı 20/dk, canlı sohbetlere yer kalsın), en çok 120 ürün/gün.
+
+## Değerlendirme e-postaları ve misafir yorumları
+- `lib/order-reviews.ts`, `lib/review-link.ts`, `lib/review-requests-server.ts`. Günlük iş: durumu `completed` (ya da
+  7 günden eski `shipped`), 5–45 gün önce verilmiş, e-postası olan, `review_requests` satırı olmayan siparişler; en
+  çok 20/gün, sipariş başına **bir kez** (satır önce alınır; Resend kesintisinde ya da gönderen/anahtar hatasında geri
+  bırakılır; yalnızca alıcı adresi reddedilirse `failed` (`isPermanentMailError`); art arda 3 red işi durdurur).
+  Gönderim sırasında süreç ölürse satır `sending` kalır ve o sipariş bir daha sorulmaz (iki kez göndermemek için). `review_requests`'te e-posta adresi tutulmaz. Admin › Yorumlar'da aç/kapa (`site_settings.review_requests_enabled`,
+  yoksa açık) ve son 30 günün sayıları.
+- Bağlantı `https://onopostore.com/degerlendir/?t=<order>.<exp>.<HMAC>`: anahtar `JWT_SECRET + ":review-link"`,
+  amaç etiketi verinin içinde, 60 gün. Secret yoksa (ya da açık kaynaktaki yedek değerse) hiç imzalanmaz/kabul edilmez.
+- `/degerlendir/` noindex, robots'ta kapalı, edge cache'te DENY. `POST /api/reviews/order/` (rate limit `REVIEW_RL`):
+  token, sipariş durumu (approved/shipped/completed), ürün siparişte mi, aynı sipariş+ürün tekrarı (409), puan 1–5,
+  yorum ≤ 1000. Kayıt `verified = 1`, `reviewer_name` = teslimat adından "Ayşe K." (tam ad saklanmaz); başarıda
+  `cache_version` artar. Ürün sayfası "Doğrulanmış alıcı" rozeti gösterir.
 
 ## Asistan ürün bilgileri (otomatik)
 - `lib/assistant/facts-auto.ts` + `lib/automation/pacing.ts`. Ürün eklenince/kaydedilince (`POST /api/products`,

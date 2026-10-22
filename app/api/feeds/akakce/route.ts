@@ -3,6 +3,7 @@ import { getDB } from '@/lib/db'
 import { stripHtml } from '@/lib/stripHtml'
 import { parseShippingSettings, shippingCost as computeShippingCost } from '@/lib/pricing'
 import { absoluteImageUrl, canonicalOrigin, escapeXml, feedPrices, parseImages, productPageUrl } from '@/lib/feeds'
+import { hasGtinColumn, isValidGtin, normalizeGtin } from '@/lib/gtin'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,7 @@ interface Product {
     is_active: number
     free_shipping: number | null
     product_code: string | null
+    gtin?: string | null
 }
 
 interface Settings {
@@ -67,9 +69,10 @@ export async function GET() {
             }
         }
 
-        // Fetch all active products
+        // Fetch all active products (products.gtin once migrations/2026-10-22-product-gtin.sql has run)
+        const gtinColumn = (await hasGtinColumn(db)) ? ', gtin' : ''
         const { results: products } = await db.prepare(
-            `SELECT id, name, slug, description, price, original_price, stock, images, category, is_active, free_shipping, product_code 
+            `SELECT id, name, slug, description, price, original_price, stock, images, category, is_active, free_shipping, product_code${gtinColumn}
              FROM products WHERE is_active = 1 AND stock > 0`
         ).all() as { results: Product[] }
 
@@ -101,8 +104,9 @@ export async function GET() {
             }
             if (!brand) brand = 'Onopo'
 
-            // Determine Barcode/GTIN
-            let barcode = extracted.barcode || '' // Leave empty if not found
+            // Determine Barcode/GTIN: the admin's barcode field (valid GS1 only), else the description's spec table
+            const ownGtin = normalizeGtin(product.gtin)
+            let barcode = isValidGtin(ownGtin) ? ownGtin : extracted.barcode || '' // Leave empty if not found
             // Clean concatenated text from barcode if any remains (e.g. HT250715A001HLDesi0 -> HT250715A001HL)
             if (barcode && barcode.includes('Desi')) {
                 barcode = barcode.split('Desi')[0]

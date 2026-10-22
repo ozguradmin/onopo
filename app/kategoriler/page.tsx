@@ -2,6 +2,9 @@ import type { Metadata } from 'next'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { CategoriesGrid } from '@/components/home/ShortcutTiles'
 import { QuickSearchChips } from '@/components/home/HomeHero'
+import { GuideLinkList } from '@/components/guides/GuideCards'
+import { SectionHeader } from '@/components/ui/SectionHeader'
+import { GUIDES, GUIDES_PATH } from '@/lib/guides'
 import { getHomeData } from '@/lib/home-data'
 import { formatAmount } from '@/lib/format'
 import { buildMetadata } from '@/lib/seo'
@@ -10,7 +13,8 @@ import { getSiteSeo } from '@/lib/seo-server'
 /**
  * /kategoriler/: every way into the catalogue on one page (the bottom nav's "Kategoriler" tab, the drawer's
  * "Tüm kategorileri gör" and the home page's "Tüm kategoriler" link). Product types (listing filters), the
- * real categories with products, and the device searches, all with live counts from lib/home-data.
+ * real categories with products, and the device searches, all with live counts from lib/home-data; then the
+ * shopping guides (/rehber/).
  * Indexable hub page; the old /categories/ URL still redirects to /products/ (lib/seo-routing).
  */
 export async function generateMetadata(): Promise<Metadata> {
@@ -49,6 +53,11 @@ export default async function CategoriesHubPage() {
                 className="container-store mt-8 lg:mt-10"
                 listClassName="flex-wrap"
             />
+
+            <section aria-labelledby="kategoriler-rehberler" className="container-store mt-10 lg:mt-12">
+                <SectionHeader id="kategoriler-rehberler" title="Alışveriş rehberleri" href={GUIDES_PATH} linkLabel="Tüm rehberler" />
+                <GuideLinkList guides={GUIDES} />
+            </section>
         </div>
     )
 }

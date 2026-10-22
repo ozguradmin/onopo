@@ -35,6 +35,7 @@ const SOURCES: { value: string; label: string }[] = [
     { value: 'images', label: 'Görseller' },
     { value: 'cron', label: 'Günlük otomatik işler' },
     { value: 'assistant', label: 'AI Asistan' },
+    { value: 'reviews', label: 'Değerlendirme e-postaları' },
     { value: 'redirects', label: 'Yönlendirmeler' },
     { value: 'other', label: 'Diğer' },
 ]

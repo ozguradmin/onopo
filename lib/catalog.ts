@@ -75,6 +75,8 @@ export interface ProductDetail extends Product {
     whatsapp_number: string | null
     is_active: boolean
     updated_at: string | null
+    /** Barcode (products.gtin, Admin › Ürünler); null when empty or before the column exists. */
+    gtin: string | null
 }
 
 export interface HeaderLink {
@@ -508,6 +510,7 @@ function toProductDetail(r: Record<string, any>): ProductDetail {
         whatsapp_number: str(r.whatsapp_number).trim() || null,
         is_active: bool(r.is_active),
         updated_at: r.updated_at ? str(r.updated_at) : null,
+        gtin: str(r.gtin).trim() || null,
     }
 }
 

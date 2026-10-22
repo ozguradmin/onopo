@@ -14,6 +14,7 @@ interface CloudflareEnv {
     CHAT_RL_BURST?: RateLimitBinding;
     CHAT_RL_MIN?: RateLimitBinding;
     CHAT_RL_MODEL?: RateLimitBinding;
+    REVIEW_RL?: RateLimitBinding;
     AI_CHAT_MODEL?: string;
     AI_ROUTER_MODEL?: string;
     AI_FALLBACK_MODEL?: string;

@@ -151,8 +151,8 @@ export function topEntries<K extends string | number>(counts: Map<K, number>, li
 /** Top-level paths that are never product pages (static routes, see RESERVED_SLUGS in lib/seo-routing). */
 const NOT_PRODUCT = new Set([
     'admin', 'api', 'categories', 'help', 'kategori', 'login', 'maintenance', 'odeme', 'orders', 'page', 'policy',
-    'product', 'products', 'profile', 'register', 'shipping', 'siparis-basarili', 'siparis-hata', 'terms',
-    'cart', 'checkout', 'sepet', 'export', 'favorites', 'favoriler', 'search', 'arama',
+    'product', 'products', 'profile', 'register', 'rehber', 'shipping', 'siparis-basarili', 'siparis-hata', 'terms',
+    'cart', 'checkout', 'sepet', 'export', 'favorites', 'favoriler', 'search', 'arama', 'degerlendir',
 ])
 
 /** Stored path: no query or hash, at most 300 characters, always starting and ending with "/". */
