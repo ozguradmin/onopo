@@ -4,7 +4,8 @@
  * The buying part of the product page (spec §11 items 4–11): price block, installment line with the
  * PayTR table, free-shipping / stock / delivery lines, variations, quantity, "Sepete Ekle" (opens the
  * cart drawer), "Hemen Al" (adds, then goes to /odeme/), favourite, WhatsApp order, and the mobile
- * sticky buy bar that appears while the main buttons are off screen.
+ * sticky buy bar that appears while the main buttons are off screen (its data-hide-bottom-nav
+ * attribute hides the mobile bottom nav on this page, see app/globals.css).
  *
  * Cart payload is the one every add-to-cart has always sent ({ id, name, price (RAW), image,
  * category, slug, free_shipping }), with id "<productId>-<variationIds…>" when variations are chosen,
@@ -335,9 +336,11 @@ export function BuyBox({ product, variations, freeShippingThreshold, maxInstallm
 
             <InstallmentModal isOpen={showInstallments} onClose={() => setShowInstallments(false)} productPrice={shownPrice} />
 
-            {/* Mobile sticky buy bar (above the bottom nav: z 45 > 40), only while the main buttons are off screen */}
+            {/* Mobile sticky buy bar, only while the main buttons are off screen. It replaces the bottom nav on
+                this page (spec §11): data-hide-bottom-nav makes app/globals.css hide [data-bottom-nav]. */}
             {!soldOut && (
             <div
+                data-hide-bottom-nav=""
                 className={cn(
                     'fixed inset-x-0 bottom-0 z-[45] border-t border-line bg-white shadow-overlay transition-transform duration-200 ease-sheet md:hidden',
                     ctaVisible ? 'pointer-events-none translate-y-full' : 'translate-y-0',
