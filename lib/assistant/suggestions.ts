@@ -8,7 +8,7 @@ import type { ChipAction, GroupKey, Suggestion } from './contract'
 
 /** Labels of the FAQ chips (sent back as `input` with `chip`). */
 export const FAQ_CHIPS: readonly Suggestion[] = [
-    { label: 'Kargo ne zaman gelir?', chip: 'faq_cutoff' },
+    { label: 'Ne zaman kargoya verilir?', chip: 'faq_cutoff' },
     { label: 'Kargo ücreti ne kadar?', chip: 'faq_shipping' },
     { label: 'İade nasıl yapılır?', chip: 'faq_returns' },
     { label: 'Taksit var mı?', chip: 'faq_installments' },
@@ -36,13 +36,13 @@ export function buildSuggestions(end: TurnEnd, opts: { remaining: number | null;
             } else if (end.group === 'kablo') {
                 chips = [{ label: 'Uygun şarj aletini göster' }, { label: 'Daha uzun olanı var mı?' }]
             } else if (end.group === 'ekran-koruyucu-seramik' || end.group === 'ekran-koruyucu-9d' || end.group === 'ekran-koruyucu') {
-                chips = [{ label: 'Seramik ile 9D farkı ne?' }, { label: 'Kargo ne zaman gelir?', chip: 'faq_cutoff' }]
+                chips = [{ label: 'Seramik ile 9D farkı ne?' }, { label: 'Ne zaman kargoya verilir?', chip: 'faq_cutoff' }]
             } else {
                 chips = [{ label: 'Daha uygun fiyatlısı var mı?' }, { label: 'Benzerlerini göster' }]
             }
             break
         case 'compare':
-            chips = [{ label: 'Hangisini önerirsin?' }, { label: 'Kargo ne zaman gelir?', chip: 'faq_cutoff' }]
+            chips = [{ label: 'Hangisini önerirsin?' }, { label: 'Ne zaman kargoya verilir?', chip: 'faq_cutoff' }]
             break
         case 'faq':
             chips = FAQ_CHIPS.filter(c => c.chip !== end.chip).slice(0, 2)

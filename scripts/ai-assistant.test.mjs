@@ -38,6 +38,7 @@ const canned = await import('../lib/assistant/canned.ts')
 const suggestions = await import('../lib/assistant/suggestions.ts')
 const limits = await import('../lib/assistant/limits.ts')
 const pf = await import('../lib/assistant/product-facts.ts')
+const { foldTr: foldTrTest } = await import('../lib/search.ts')
 
 // ---------------------------------------------------------------------------------------------
 // Fixtures (synthetic: no real product codes, phone numbers or customer data)
@@ -562,7 +563,8 @@ test('prompt: turn context has same-day shipping, the server cart total and cand
     assert.match(ctx, /aday_urunler: #401 20W PD Type-C Hızlı Şarj Aleti Adaptör - A1 249,99 TL/)
     assert.match(ctx, /yonlendirici: niyet=product_search, grup=sarj-aleti, satin_alma=2\/3/)
     const late = prompt.buildTurnContext({ now: new Date('2026-10-23T16:00:00Z'), facts: FACTS, page: null, device: null, cart: null, candidates: [], router: null, notes: [] })
-    assert.match(late, /ayni_gun_kargo: hayır \(sonraki kargo günü: Pazartesi\)/)
+    assert.match(late, /ayni_gun_kargo: hayır \(ne zaman kargoya verileceğini söyleme/)
+    assert.ok(!/Pazartesi|sonraki kargo günü/.test(late))
     assert.ok(!late.includes('sepet:'))
     const free = prompt.computeCart([{ id: 412, qty: 1 }], K.byId, FACTS)
     assert.equal(free.remaining, 0)
@@ -665,7 +667,9 @@ test('runTurn: text only → one DeepSeek call and meta, step, text, suggestions
     assert.ok(types.includes('text'))
     assert.deepEqual(types.slice(-2), ['suggestions', 'done'])
     assert.equal(events.filter(e => e.t === 'text').map(e => e.v).join(''), 'iPhone 15 USB-C girişli. Sana 20W adaptör yeter.')
-    assert.deepEqual(events.at(-1), { t: 'done', finish: 'stop', productIds: [], wa: false })
+    assert.deepEqual(events.at(-1), { t: 'done', finish: 'stop', productIds: [], wa: true })
+    // Owner decision (w7): a compact WhatsApp row under every answer
+    assert.equal(events.find(e => e.t === 'whatsapp').variant, 'compact')
     assert.ok(types.includes('device'))
     assert.equal(log.outcome, 'ok')
     assert.equal(log.mode, 'llm')
@@ -734,11 +738,49 @@ test('runTurn: text + show_products → products card in the same call, no secon
     assert.deepEqual(chips.map(c => c.label), ['Uygun kabloyu da göster', 'Daha uygun fiyatlısı var mı?'])
 })
 
-test('runTurn: no compact card after products when a recent answer already had WhatsApp', async () => {
+test('runTurn: the compact WhatsApp row comes under every answer, also when a recent one had it', async () => {
     const ai = mockAi({ chat: [[{ choices: [{ delta: { content: 'Bu uygun.' } }] }, toolChunk('show_products', { ids: [401] })]] })
     const { events } = await runIt(ai, { history: [{ role: 'user', text: 'selam' }, { role: 'assistant', text: 'Merhaba.', wa: true }] })
-    assert.equal(events.find(e => e.t === 'whatsapp'), undefined)
-    assert.ok(events.find(e => e.t === 'suggestions').chips.some(c => c.chip === 'whatsapp'))
+    assert.equal(events.find(e => e.t === 'whatsapp').variant, 'compact')
+    // The row is there, so no "WhatsApp'tan sor" chip on top of it
+    assert.ok(!events.find(e => e.t === 'suggestions').chips.some(c => c.chip === 'whatsapp'))
+    const hi = await runIt(mockAi({ answers: A({ intent: 'smalltalk', conf: 0.97 }) }), { input: 'Merhaba' })
+    assert.equal(hi.events.find(e => e.t === 'whatsapp').variant, 'compact')
+})
+
+test('runTurn: store questions the owner cannot answer get a full WhatsApp card and no model call', async () => {
+    const cases = [
+        ['Cumartesi kargoya veriyor musunuz?', 'other', /Hafta sonu kargo konusunda en doğru bilgiyi ekibimiz verir/],
+        ['Kaç günde elime ulaşır?', 'other', /kesin günü ekibimiz söyleyebilir/],
+        ['İade kargosu ücretsiz mi?', 'return', /İade ve değişim işlemlerini ekibimiz WhatsApp'tan yürütüyor/],
+        ['Kapıda ödeme var mı?', 'payment', /Başka ödeme seçenekleri için ekibimize sorman en doğrusu/],
+        ['Fatura kesiyor musunuz?', 'payment', /Fatura konusunda ekibimiz yardımcı olur/],
+        ['Aldığım şarj aleti bozuldu, garantiden değişir mi?', 'return', /Arıza ve garanti başvurularıyla ekibimiz ilgileniyor/],
+        ['Bu ürün ne zaman stoğa girer?', 'product_request', /Stok ve yeniden gelecek ürünler/],
+        ['Siparişim nerede?', 'order_status', /Siparişinin durumuna ekibimiz WhatsApp'tan hemen bakar/],
+    ]
+    for (const [input, reason, text] of cases) {
+        const ai = mockAi()
+        const { events, log } = await runIt(ai, { input })
+        assert.equal(ai.calls.length, 0, input)
+        assert.equal(events[0].t, 'meta')
+        assert.match(events.find(e => e.t === 'text').v, text, input)
+        const wa = events.find(e => e.t === 'whatsapp')
+        assert.equal(wa.variant, 'full', input)
+        assert.equal(wa.reason, reason, input)
+        assert.equal(log.outcome, 'canned')
+        assert.match(log.intent, /^policy_/)
+        // Never a promise about weekends, delivery days, free returns or other payment methods
+        assert.ok(!/ücretsiz iade|iade kargo ücreti mağazaya|cumartesi kargoya verilir|kapıda ödeme var/i.test(events.find(e => e.t === 'text').v))
+    }
+    // Product questions are not store questions
+    for (const input of ['Bu kablonun garantisi var mı?', 'Kutusunda kablo var mı?', 'iPhone 15 için şarj aleti', 'Taksit var mı?']) {
+        assert.equal(canned.policyTopic(input, foldTrTest), null, input)
+    }
+    // No usable WhatsApp number: the model answers as usual
+    const noWa = mockAi()
+    await runIt(noWa, { input: 'Cumartesi kargo var mı?' }, { loadKnowledge: async () => knowledge({ storeWhatsapp: null }) })
+    assert.equal(noWa.chatCalls().length, 1)
 })
 
 test('runTurn: search_products then show_products → two calls, tool result passed back', async () => {
@@ -856,13 +898,15 @@ test('runTurn: FAQ chip → canned answer, zero AI calls', async () => {
     const { events, log } = await runIt(ai, { input: 'Kargo ücreti ne kadar?', chip: 'faq_shipping' })
     assert.equal(ai.calls.length, 0)
     assert.deepEqual(events[0], { t: 'meta', turnId: events[0].turnId, mode: 'canned', waBase: 'https://wa.me/905000000000' })
-    assert.match(events.find(e => e.t === 'text').v, /^500 TL ve üzeri siparişlerde kargo ücretsiz; altında kargo ücreti 100 TL\. Şimdi sipariş verirsen bugün kargoya verilir/)
+    assert.equal(events.find(e => e.t === 'text').v, "500 TL ve üzeri siparişlerde kargo ücretsiz; altında kargo ücreti 100 TL. Saat 18:00'e kadar verilen siparişler aynı gün kargoya verilir. Kargoyla ilgili başka bir sorun varsa ekibimize WhatsApp'tan sorabilirsin.")
+    assert.equal(events.find(e => e.t === 'whatsapp').variant, 'compact')
     assert.equal(log.mode, 'canned')
     const returns = await runIt(mockAi(), { input: 'İade nasıl?', chip: 'faq_returns' })
     const wa = returns.events.find(e => e.t === 'whatsapp')
-    assert.equal(wa.variant, 'compact')
+    assert.equal(wa.variant, 'full')
     assert.equal(wa.reason, 'return')
-    assert.equal(returns.events.find(e => e.t === 'suggestions').chips.length, 2)
+    // A full card ends the answer: no follow-up chips under it
+    assert.equal(returns.events.find(e => e.t === 'suggestions'), undefined)
 })
 
 test('runTurn: budget exceeded → zero AI calls, busy text and a full WhatsApp card', async () => {
@@ -884,7 +928,7 @@ test('runTurn: budget check failing (D1 down) fails closed → no AI calls, busy
 
 test('runTurn: early handoff → WhatsApp card before any text and tool_choice none', async () => {
     const ai = mockAi({ answers: A({ intent: 'order_status', handoff: 0.93 }), chat: [textChunks('Ekibimiz yardımcı olur.')] })
-    const { events, types, log } = await runIt(ai, { input: 'Siparişim nerede?' })
+    const { events, types, log } = await runIt(ai, { input: 'Paketim hâlâ yok, bakar mısınız?' })
     const waAt = types.indexOf('whatsapp')
     assert.ok(waAt > 0 && waAt < types.indexOf('text'))
     assert.equal(events[waAt].reason, 'order_status')
@@ -1060,22 +1104,33 @@ test('detectDevice', () => {
 
 test('canned FAQ texts follow the facts and never promise free returns or interest-free installments', () => {
     const before = canned.faqAnswer('faq_cutoff', FACTS, new Date('2026-10-22T11:00:00Z')).text
-    assert.equal(before, "Şimdi sipariş verirsen bugün kargoya verilir; hafta içi saat 18:00'e kadar verilen siparişler aynı gün kargoda.")
+    assert.equal(before, "Şimdi sipariş verirsen bugün kargoya verilir; saat 18:00'e kadar verilen siparişler aynı gün kargoda.")
     const after = canned.faqAnswer('faq_cutoff', FACTS, new Date('2026-10-23T16:00:00Z')).text
-    assert.equal(after, "Saat 18:00'den sonra ya da kargo günü dışında verilen siparişler sonraki kargo gününde (Pazartesi) kargoya verilir.")
+    assert.equal(after, "Saat 18:00'e kadar verilen siparişler aynı gün kargoya verilir. Bu saatten sonra ya da hafta sonu verilen siparişlerin ne zaman yola çıkacağını ekibimiz WhatsApp'tan netleştirir.")
+    // The owner does not know about Saturday shipping or free return shipping: never stated
+    for (const c of ['faq_shipping', 'faq_cutoff', 'faq_returns', 'faq_installments', 'faq_payment']) {
+        const a = canned.faqAnswer(c, { ...FACTS, shipDays: 'hafta-ici-cumartesi', freeReturn: true }, new Date('2026-10-24T08:00:00Z'))
+        assert.ok(!/hafta içi|cumartesi|Pazartesi|iade kargo/i.test(a.text), c)
+        assert.ok(a.handoff.variant === 'full' || a.handoff.variant === 'compact')
+    }
     assert.match(canned.faqAnswer('faq_installments', FACTS, new Date()).text, /^Kredi kartına 12 aya varan taksit/)
     assert.equal(canned.faqAnswer('faq_installments', { ...FACTS, maxInstallments: null }, new Date()).text, 'Taksit seçenekleri ödeme adımında kartına göre gösterilir.')
     const all = ['faq_shipping', 'faq_cutoff', 'faq_returns', 'faq_installments', 'faq_payment'].map(c => canned.faqAnswer(c, FACTS, new Date()).text).join(' ')
     assert.ok(!/faizsiz|vade farksız|ücretsiz iade/i.test(all))
     assert.ok(!facts.buildFactsBlock(FACTS).includes('İade kargo ücreti mağazaya aittir'))
-    assert.ok(facts.buildFactsBlock({ ...FACTS, freeReturn: true }).includes('İade kargo ücreti mağazaya aittir'))
+    const block = facts.buildFactsBlock({ ...FACTS, freeReturn: true, shipDays: 'hafta-ici-cumartesi' })
+    assert.ok(!block.includes('İade kargo ücreti mağazaya aittir'))
+    assert.ok(!/Hafta içi|ve cumartesi/.test(block))
+    assert.match(block, /Hafta sonu ya da cumartesi kargo, teslim günü ve süresi, kargo firması hakkında bilgi verme; WhatsApp kartı göster/)
+    assert.match(block, /Kart dışında ödeme yöntemi .* fatura soruları için bilgi verme/)
+    assert.ok(!facts.infoRows(FACTS, ['cutoff'])[0].text.includes('Hafta içi'))
 })
 
 test('suggestions follow the SPEC 4.4 table', () => {
     const labels = (end, o = {}) => suggestions.buildSuggestions(end, { remaining: null, waShown: false, ...o }).map(c => c.label)
     assert.deepEqual(labels({ kind: 'products', group: 'kablo' }), ['Uygun şarj aletini göster', 'Daha uzun olanı var mı?', "WhatsApp'tan sor"])
-    assert.deepEqual(labels({ kind: 'products', group: 'ekran-koruyucu-9d' }, { waShown: true }), ['Seramik ile 9D farkı ne?', 'Kargo ne zaman gelir?'])
-    assert.deepEqual(labels({ kind: 'compare' }, { remaining: 50, waShown: true }), ['Hangisini önerirsin?', 'Kargo ne zaman gelir?', 'Kargo bedava için ne eklesem?'])
+    assert.deepEqual(labels({ kind: 'products', group: 'ekran-koruyucu-9d' }, { waShown: true }), ['Seramik ile 9D farkı ne?', 'Ne zaman kargoya verilir?'])
+    assert.deepEqual(labels({ kind: 'compare' }, { remaining: 50, waShown: true }), ['Hangisini önerirsin?', 'Ne zaman kargoya verilir?', 'Kargo bedava için ne eklesem?'])
     assert.deepEqual(labels({ kind: 'whatsapp_full' }), [])
     assert.deepEqual(labels({ kind: 'other' }), ['Telefonuma uygun şarj aleti', 'Ekran koruyucu öner', "WhatsApp'tan sor"])
     assert.equal(suggestions.buildSuggestions({ kind: 'other' }, { remaining: null, waShown: false })[2].chip, 'whatsapp')

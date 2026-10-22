@@ -61,19 +61,26 @@ export function shipDaysText(f: Pick<StoreFacts, 'shipDays'>): string {
     return f.shipDays === 'hafta-ici-cumartesi' ? 'Hafta içi ve cumartesi' : 'Hafta içi'
 }
 
-/** <magaza_bilgileri> + <kampanyalar> (section 3.4). */
+/**
+ * <magaza_bilgileri> + <kampanyalar> (section 3.4, w7 revision). Owner decision: the store states only what
+ * it knows for sure (free-shipping threshold, shipping cost, same-day cut-off, card payment, the legal
+ * return window). Weekend or Saturday shipping, delivery days, free return shipping, the return process,
+ * payment methods other than card, invoices and warranty claims are not stated at all: the block tells the
+ * model to send those to WhatsApp. So `shipDays` and `freeReturn` no longer appear in any text.
+ */
 export function buildFactsBlock(f: StoreFacts): string {
     const lines = [
         '<magaza_bilgileri>',
         '- Fiyatlar Türk lirasıdır ve KDV dahildir.',
         `- Kargo: ${amountText(f.freeThreshold)} TL ve üzeri siparişlerde kargo ücretsiz; altında kargo ücreti ${amountText(f.shippingCost)} TL. "ücretsiz kargo" etiketli ürünlerde kargo her zaman ücretsizdir.`,
-        `- Kargoya veriliş: ${shipDaysText(f)} saat ${f.cutoff}'e kadar verilen siparişler aynı gün kargoya verilir. Teslim süresi kargo firmasına ve adrese göre değişir; kesin teslim tarihi verilmez.`,
+        `- Kargoya veriliş: saat ${f.cutoff}'e kadar verilen siparişler aynı gün kargoya verilir (bugün için <tur_baglami> içindeki ayni_gun_kargo satırına bak). Hafta sonu ya da cumartesi kargo, teslim günü ve süresi, kargo firması hakkında bilgi verme; WhatsApp kartı göster.`,
         f.maxInstallments
-            ? `- Ödeme: kredi kartı ve banka kartı, PayTR güvenli ödeme (256-bit SSL). Kredi kartına ${f.maxInstallments} aya varan taksit; taksit seçenekleri ödeme adımında kartın bankasına göre gösterilir. "Vade farksız" ya da "faizsiz" deme.`
-            : '- Ödeme: kredi kartı ve banka kartı, PayTR güvenli ödeme (256-bit SSL). Taksit seçenekleri ödeme adımında kartın bankasına göre gösterilir. "Vade farksız" ya da "faizsiz" deme.',
-        `- Cayma ve iade: teslimden itibaren ${f.returnDays} gün cayma hakkı.${f.freeReturn ? ' İade kargo ücreti mağazaya aittir.' : ''} Ambalajı açılmış ve hijyen açısından iadesi uygun olmayan ürünlerde istisna olabilir; iade ve değişim talepleri WhatsApp üzerinden ekiple yürütülür.`,
-        '- Garanti: ürün sayfasındaki garanti bilgisi geçerlidir.',
-        `- Destek: WhatsApp${f.supportHours ? ` (${f.supportHours})` : ''}. Sipariş takibi: üye girişi yaptıysan "Siparişlerim" sayfası, değilse WhatsApp.`,
+            ? `- Ödeme: kredi kartı ve banka kartı, PayTR güvenli ödeme (256-bit SSL). Kredi kartına ${f.maxInstallments} aya varan taksit; taksit seçenekleri ödeme adımında kartın bankasına göre gösterilir. "Vade farksız" ya da "faizsiz" deme. Kart dışında ödeme yöntemi (kapıda ödeme, havale/EFT vb.) ve fatura soruları için bilgi verme; WhatsApp kartı göster.`
+            : '- Ödeme: kredi kartı ve banka kartı, PayTR güvenli ödeme (256-bit SSL). Taksit seçenekleri ödeme adımında kartın bankasına göre gösterilir. "Vade farksız" ya da "faizsiz" deme. Kart dışında ödeme yöntemi (kapıda ödeme, havale/EFT vb.) ve fatura soruları için bilgi verme; WhatsApp kartı göster.',
+        `- Cayma ve iade: teslimden itibaren ${f.returnDays} gün cayma hakkı. İade kargo ücreti, iade ve değişim süreci ve istisnalar hakkında bilgi verme; iade ve değişim talepleri WhatsApp üzerinden ekiple yürütülür, WhatsApp kartı göster.`,
+        '- Garanti: ürün sayfasındaki ve <urun_bilgileri> içindeki garanti bilgisi geçerlidir. Arıza ve garanti başvuruları WhatsApp üzerinden ekiple yürütülür.',
+        '- Stok: katalogda "tükendi" yazmıyorsa ürün satıştadır. Stok adedi ve tükenen ürünün ne zaman geleceği için WhatsApp kartı göster.',
+        `- Destek: WhatsApp${f.supportHours ? ` (${f.supportHours})` : ''}. Sipariş takibi: üye girişi yaptıysan "Siparişlerim" sayfası, değilse WhatsApp. Burada yazmayan her mağaza sorusu için WhatsApp kartı göster.`,
         '</magaza_bilgileri>',
         '<kampanyalar>',
         f.campaigns.trim() || 'Yok',
@@ -191,7 +198,7 @@ function infoRow(f: StoreFacts, topic: InfoTopic): InfoRow {
         case 'shipping':
             return { icon: 'truck', text: `${amountText(f.freeThreshold)} TL ve üzeri siparişlerde kargo bedava (altında ${amountText(f.shippingCost)} TL).` }
         case 'cutoff':
-            return { icon: 'clock', text: `${shipDaysText(f)} saat ${f.cutoff}'e kadar verilen siparişler aynı gün kargoda.` }
+            return { icon: 'clock', text: `Saat ${f.cutoff}'e kadar verilen siparişler aynı gün kargoda.` }
         case 'payment':
             return { icon: 'card', text: 'Kredi kartı ya da banka kartıyla PayTR güvenli ödeme (256-bit SSL).' }
         case 'installments':
@@ -200,9 +207,9 @@ function infoRow(f: StoreFacts, topic: InfoTopic): InfoRow {
                 text: f.maxInstallments ? `Kredi kartına ${f.maxInstallments} aya kadar taksit.` : 'Taksit seçenekleri ödeme adımında kartına göre gösterilir.',
             }
         case 'returns':
-            return { icon: 'return', text: `${f.returnDays} gün içinde cayma hakkı.` }
+            return { icon: 'return', text: `${f.returnDays} gün içinde cayma hakkı; iade ve değişim WhatsApp'tan.` }
         case 'warranty':
-            return { icon: 'shield', text: 'Ürün sayfasındaki garanti bilgisi geçerlidir.' }
+            return { icon: 'shield', text: 'Ürün sayfasındaki garanti bilgisi geçerlidir; başvuru WhatsApp\'tan.' }
         case 'contact':
             return { icon: 'chat', text: `WhatsApp desteği${f.supportHours ? ` (${f.supportHours})` : ''}.` }
     }

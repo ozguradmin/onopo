@@ -23,7 +23,7 @@ import { buildRouterState, decide, routeTurn, type RouteDecision } from './route
 import { parseWorkersAiSse, type Usage } from './sse-parser'
 import { DATA_TOOLS, TOOL_STEP, TOOLS, catalogLinesFor, isKnownTool, newToolState, runTool, waBaseOf, whatsappEvents, type ProductDetailRow, type ToolContext, type ToolResult } from './tools'
 import { addToolText, collectAllowed, createTextGuard } from './validator'
-import { CANNED, DEFAULT_TEXT, faqAnswer } from './canned'
+import { CANNED, DEFAULT_TEXT, faqAnswer, POLICY_REASON, policyText, policyTopic } from './canned'
 import { buildSuggestions, type TurnEnd } from './suggestions'
 import { detectDevice } from './device'
 import { costMicroUsd } from './limits'
@@ -370,11 +370,41 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
             const faq = faqAnswer(req.chip, k.facts, deps.now())
             out({ t: 'text', v: faq.text })
             faq.events.forEach(out)
-            if (faq.handoff) whatsappEvents({ k, state }, { reason: faq.handoff, summary: masked, productIds: [], variant: 'compact' })?.forEach(out)
-            const chips = buildSuggestions({ kind: 'faq', chip: req.chip }, { remaining: cartSummary()?.remaining ?? null, waShown: state.waVariant != null })
+            whatsappEvents({ k, state }, { reason: faq.handoff.reason, summary: masked, productIds: [], variant: faq.handoff.variant })?.forEach(out)
+            const chips = buildSuggestions(
+                state.waVariant === 'full' ? { kind: 'whatsapp_full' } : { kind: 'faq', chip: req.chip },
+                { remaining: cartSummary()?.remaining ?? null, waShown: state.waVariant != null },
+            )
             if (chips.length) out({ t: 'suggestions', chips })
             finish('canned')
             return log
+        }
+
+        // ---- Store questions the owner cannot answer for sure: a full WhatsApp card, no model call ----
+        const topic = policyTopic(masked, foldTr)
+        if (topic) {
+            k = await knowledgeP
+            const page = pageRow(req.context.page, k)
+            state = newToolState({ pageProduct: page, maskedInput: masked, loggedIn: deps.loggedIn })
+            const evs = whatsappEvents({ k, state }, {
+                reason: POLICY_REASON[topic],
+                summary: masked,
+                productIds: page && (topic === 'stock' || topic === 'warranty_claim' || topic === 'returns') ? [page.id] : [],
+                variant: 'full',
+            })
+            // Without a usable WhatsApp number there is no card to point at: the model answers as usual
+            if (evs && evs.length) {
+                log.mode = 'canned'
+                log.outcome = 'canned'
+                log.intent = `policy_${topic}`
+                flags.add('policy')
+                out({ t: 'meta', turnId, mode: 'canned', waBase: k.waBase })
+                out({ t: 'text', v: policyText(topic, k.facts) })
+                evs.forEach(out)
+                finish('canned')
+                return log
+            }
+            state = newToolState({ pageProduct: null, maskedInput: masked, loggedIn: deps.loggedIn })
         }
 
         // ---- Daily budget: WhatsApp mode. Fails CLOSED: when the spend cannot be read (D1 down),
@@ -425,7 +455,9 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
             log.mode = 'canned'
             log.outcome = decision.canned === 'refusal' ? 'blocked' : 'canned'
             out({ t: 'text', v: CANNED[decision.canned] })
-            const chips = buildSuggestions({ kind: 'other' }, { remaining: cartSummary()?.remaining ?? null, waShown: false })
+            // Owner decision (w7): a WhatsApp row under every answer
+            whatsappEvents({ k, state }, { reason: 'other', summary: masked, productIds: [], variant: 'compact' })?.forEach(out)
+            const chips = buildSuggestions({ kind: 'other' }, { remaining: cartSummary()?.remaining ?? null, waShown: state.waVariant != null })
             out({ t: 'suggestions', chips })
             finish('canned')
             return log
@@ -733,13 +765,13 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
                 flags.add('tool_error')
             }
         }
-        let forceCompact = false
+        let unsure = false
         if (!textSent) {
             const first = state.shown[0]
             if (first) out({ t: 'text', v: DEFAULT_TEXT[first] })
             else {
                 out({ t: 'text', v: CANNED.unsure })
-                forceCompact = true
+                unsure = true
             }
         }
 
@@ -747,11 +779,13 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
         if (decision.serverHandoff && state.waVariant !== 'full') {
             whatsappEvents(ctx, { reason: decision.serverHandoff, summary: masked, productIds: [], variant: 'full' })?.forEach(out)
         }
+        // Nothing usable from the model: an uncertain answer gets the full card (owner decision, w7)
+        if (unsure && state.waVariant !== 'full') {
+            whatsappEvents(ctx, { reason: 'other', summary: masked, productIds: [], variant: 'full' })?.forEach(out)
+        }
+        // Owner decision (w7): the compact WhatsApp row goes under every answer, not only the first one
         if (state.waVariant == null) {
-            const recentWa = req.history.filter(h => h.role === 'assistant').slice(-2).some(h => h.wa)
-            if (forceCompact || decision.compactHandoff || (state.productIds.length > 0 && !recentWa)) {
-                whatsappEvents(ctx, { reason: decision.compactHandoff ?? 'other', summary: masked, productIds: [], variant: 'compact' })?.forEach(out)
-            }
+            whatsappEvents(ctx, { reason: decision.compactHandoff ?? 'other', summary: masked, productIds: [], variant: 'compact' })?.forEach(out)
         }
 
         const end: TurnEnd = state.waVariant === 'full'
@@ -769,7 +803,8 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
             log.outcome = 'fallback'
         }
         finishLog()
-        finish(state.shown.length ? 'cards' : 'stop')
+        // The compact WhatsApp row alone (every answer has it) does not make a "cards" answer
+        finish(state.shown.some(c => c !== 'whatsapp') || state.waVariant === 'full' ? 'cards' : 'stop')
         return log
     } catch (err) {
         if (timedOut) {
