@@ -16,9 +16,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             return NextResponse.json({ error: 'Category name is required' }, { status: 400 })
         }
 
-        await db.prepare('UPDATE categories SET name = ?, icon = ? WHERE id = ?')
-            .bind(name, icon || 'package', id)
-            .run()
+        // Products point at their category by NAME (products.category): a rename moves them along in the same
+        // transaction, otherwise the category would lose all its products. The slug (public URL) stays.
+        await db.batch([
+            db.prepare('UPDATE products SET category = ? WHERE category = (SELECT name FROM categories WHERE id = ?) AND category <> ?')
+                .bind(name, id, name),
+            db.prepare('UPDATE categories SET name = ?, icon = ? WHERE id = ?')
+                .bind(name, icon || 'package', id),
+        ])
 
         return NextResponse.json({ success: true })
     } catch (error: any) {

@@ -12,6 +12,15 @@ function generate2FACode(): string {
     return (100000 + (n % 900000)).toString()
 }
 
+// A configured 2FA address, unless it is empty, malformed or the admin account's own e-mail
+function usableCodeRecipient(value: unknown): string | null {
+    if (typeof value !== 'string') return null
+    const address = value.trim()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) return null
+    if (normalizeEmail(address) === ADMIN_ACCOUNT_EMAIL) return null
+    return address
+}
+
 export async function POST(req: NextRequest) {
     try {
         const db = await getDB()
@@ -48,19 +57,27 @@ export async function POST(req: NextRequest) {
             const expiresAt = new Date(Date.now() + TWO_FACTOR_TTL_MS).toISOString()
 
             // Login alias: the code goes to the alias address that was typed. Otherwise it goes to admin_email
-            // from site settings (Site Ayarları), or to the account's own e-mail when that setting is empty.
-            let targetEmail = user.email as string
+            // from site settings (Site Ayarları), else to the ADMIN_RESET_EMAIL secret. Never to the admin
+            // account's own e-mail (admin@onopo.com: that domain's mail is not the store's); with no usable
+            // address the login stops here (the alias login still works).
+            let targetEmail: string | null = null
             if (loginAlias) {
                 targetEmail = normalizeEmail(email)
             } else {
                 try {
                     const settingRow = await db.prepare("SELECT value FROM site_settings WHERE key = 'admin_email'").first() as any
-                    if (typeof settingRow?.value === 'string' && settingRow.value.trim()) {
-                        targetEmail = settingRow.value.trim()
-                    }
+                    targetEmail = usableCodeRecipient(settingRow?.value)
                 } catch (e) {
-                    console.error('[Login] admin_email setting could not be read, using the account e-mail')
+                    console.error('[Login] admin_email setting could not be read')
                 }
+                if (!targetEmail) targetEmail = usableCodeRecipient(process.env.ADMIN_RESET_EMAIL)
+            }
+            if (!targetEmail) {
+                console.warn('[Login] no 2FA recipient configured (admin_email / ADMIN_RESET_EMAIL), code not sent')
+                return NextResponse.json(
+                    { error: 'Doğrulama kodu için yönetici e-posta adresi ayarlı değil. Kayıtlı kişisel adresinle giriş yap.' },
+                    { status: 503 }
+                )
             }
 
             // One transaction: this user's old codes and challenges (and anyone's expired challenges) go, the new

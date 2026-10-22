@@ -183,6 +183,12 @@ export function OrderCard({ order, products }: { order: AccountOrder; products: 
                             </a>
                         </p>
                     )}
+                    {order.detailsHidden && (
+                        <p className="text-muted">
+                            Bu sipariş üye olmadan, bu e-posta adresiyle verilmiş. Teslimat, kargo ve fatura bilgileri
+                            sipariş onay e-postanda yer alıyor.
+                        </p>
+                    )}
                     {order.note && (
                         <p className="flex items-start gap-2">
                             <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-muted" aria-hidden="true" />

@@ -429,7 +429,8 @@ export async function getMenuTree(): Promise<MenuItem[]> {
     const flat = (await getMenus()).map(m => ({ ...m, children: [] as MenuItem[] }))
     const byId = new Map(flat.map(m => [m.id, m]))
     for (const m of flat) if (m.parent_id != null) byId.get(m.parent_id)?.children.push(m)
-    return flat.filter(m => m.parent_id == null || !byId.has(m.parent_id))
+    // Children of a hidden (inactive) parent stay hidden instead of becoming top-level items
+    return flat.filter(m => m.parent_id == null)
 }
 
 // ---------------------------------------------------------------------------------------------

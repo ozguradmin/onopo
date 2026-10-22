@@ -9,7 +9,7 @@ export function CheckoutSkeleton() {
     return (
         <div className="min-h-[70vh] bg-surface pb-16 pt-5 lg:pt-8" role="status" aria-label="Ödeme sayfası yükleniyor">
             <div className="container-store">
-                <div className="mx-auto max-w-[1120px]">
+                <div>
                     <Skeleton className="h-4 w-28" />
                     <Skeleton className="mt-4 h-7 w-40 lg:h-9" />
                     <div className="mt-5 lg:mt-7 lg:grid lg:grid-cols-12 lg:gap-8">

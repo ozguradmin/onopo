@@ -44,7 +44,7 @@ export interface FieldProps {
 }
 
 export function Field({ id, label, required, optional, hint, error, children, className, labelAside }: FieldProps) {
-    const hintId = hint ? `${id}-hint` : undefined
+    const hintId = hint && !error ? `${id}-hint` : undefined // the hint is not rendered while an error replaces it
     const errorId = error ? `${id}-error` : undefined
     const describedBy = [children.props['aria-describedby'], hintId, errorId].filter(Boolean).join(' ') || undefined
     const control = React.cloneElement(children, {

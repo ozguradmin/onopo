@@ -469,4 +469,8 @@ body:has([data-hide-bottom-nav]) [data-bottom-nav] {
   body:not(:has([data-hide-bottom-nav])) [data-sonner-toaster][data-y-position="bottom"] {
     bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
   }
+  /* ...and above a page's own bottom bar (the product page buy bar) while it is shown */
+  body:has([data-hide-bottom-nav]:not([aria-hidden="true"])) [data-sonner-toaster][data-y-position="bottom"] {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+  }
 }

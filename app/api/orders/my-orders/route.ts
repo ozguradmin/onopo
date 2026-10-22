@@ -5,6 +5,19 @@ import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
 
+const EMAIL_ONLY_FIELDS = ['id', 'status', 'payment_status', 'payment_method', 'total_amount', 'items', 'created_at', 'updated_at']
+
+function emailOnlyOrder(order: any) {
+    const summary: Record<string, unknown> = { details_hidden: true }
+    for (const key of EMAIL_ONLY_FIELDS) if (key in order) summary[key] = order[key]
+    let shippingCost: unknown
+    try {
+        shippingCost = JSON.parse(order.shipping_address || '{}')?.shipping_cost
+    } catch {}
+    summary.shipping_address = JSON.stringify(shippingCost === undefined ? {} : { shipping_cost: shippingCost })
+    return summary
+}
+
 // GET: Get current user's orders
 export async function GET(req: NextRequest) {
     try {
@@ -51,6 +64,10 @@ export async function GET(req: NextRequest) {
             `).bind(userId).all()
             orders = result.results || []
         }
+
+        // Orders matched only by the (unverified) e-mail keep their summary; personal and document data
+        // is dropped, as on the /orders page (lib/account.ts getAccountOrders).
+        orders = orders.map(o => (Number(o.user_id) === Number(userId) ? o : emailOnlyOrder(o)))
 
         return NextResponse.json({ orders })
     } catch (error: any) {

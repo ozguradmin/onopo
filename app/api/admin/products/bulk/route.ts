@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
+import { slugifyTr } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,14 +35,8 @@ export async function POST(req: NextRequest) {
 
         for (const categoryName of uniqueCategories) {
             try {
-                const slug = String(categoryName)
-                    .toLowerCase()
-                    .replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u')
-                    .replace(/ö/g, 'o').replace(/ç/g, 'c').replace(/ı/g, 'i')
-                    .replace(/[^a-z0-9\s-]/g, '')
-                    .replace(/\s+/g, '-')
-                    .replace(/-+/g, '-')
-                    .trim()
+                // Same slug rule as categories created in the admin (public URL /kategori/<slug>/)
+                const slug = slugifyTr(String(categoryName))
 
                 await db.prepare('INSERT OR IGNORE INTO categories (name, slug, icon) VALUES (?, ?, ?)')
                     .bind(categoryName, slug, 'package')
