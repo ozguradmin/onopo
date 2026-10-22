@@ -7,9 +7,8 @@
  *
  * Resized WebP variants follow ONE convention:
  *     https://images.onopostore.com/v/<width>/<key>.webp      width ∈ IMAGE_WIDTHS (200, 400, 800, 1200)
- * They are NOT uploaded yet, so `IMAGE_VARIANTS_ENABLED` is false and every helper returns the original
- * URL. Turn variants on with the build-time env var NEXT_PUBLIC_IMAGE_VARIANTS_ENABLED=true once the
- * files exist. Client <img>s must still fall back to the original once on error (FallbackImage does).
+ * They are in R2 since 2026-10-22 and the production build sets NEXT_PUBLIC_IMAGE_VARIANTS_ENABLED=true
+ * (.github/workflows/deploy.yml); without it (local builds) every helper returns the original URL. Client <img>s must still fall back to the original once on error (FallbackImage does).
  *
  * Feeds and JSON-LD keep using ORIGINAL urls (merchants want full-size images). The product og:image uses
  * /api/og-image/<key> while variants are on: it redirects to the 1200w variant only when that exists in R2,
