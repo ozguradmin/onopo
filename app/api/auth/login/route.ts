@@ -4,9 +4,7 @@ import { comparePassword, signJWT } from '@/lib/auth'
 import { send2FACode } from '@/lib/email'
 import { readJsonBody } from '@/lib/api-request'
 import { ADMIN_ACCOUNT_EMAIL, isLoginAlias, normalizeEmail } from '@/lib/login-alias'
-
-// How long an admin 2FA code stays valid (the e-mail can take a while to arrive)
-const TWO_FACTOR_TTL_MS = 5 * 60 * 1000
+import { TWO_FACTOR_TTL_MS, ensureChallengeTable, newChallengeId, setChallengeCookie, setSessionCookies } from '../two-factor'
 
 // Generate 6-digit code (crypto RNG)
 function generate2FACode(): string {
@@ -46,7 +44,7 @@ export async function POST(req: NextRequest) {
             // Generate 6-digit code
             const code = generate2FACode()
 
-            // Calculate expiry (5 minutes from now)
+            // Calculate expiry (TWO_FACTOR_TTL_MS from now)
             const expiresAt = new Date(Date.now() + TWO_FACTOR_TTL_MS).toISOString()
 
             // Login alias: the code goes to the alias address that was typed. Otherwise it goes to admin_email
@@ -65,29 +63,43 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            // Clean up old codes for this user
-            await db.prepare('DELETE FROM two_factor_codes WHERE user_id = ?').bind(user.id).run()
-
-            // Store the code
-            await db.prepare(
-                'INSERT INTO two_factor_codes (user_id, code, email_sent_to, expires_at) VALUES (?, ?, ?, ?)'
-            ).bind(user.id, code, targetEmail, expiresAt).run()
+            // One transaction: this user's old codes and challenges (and anyone's expired challenges) go, the new
+            // code and the challenge bound to this login are stored (two-factor.ts). The challenge id goes into
+            // an HttpOnly cookie below; verify-2fa accepts the code only together with that cookie.
+            const challengeId = newChallengeId()
+            await ensureChallengeTable(db)
+            await db.batch([
+                db.prepare('DELETE FROM two_factor_codes WHERE user_id = ?').bind(user.id),
+                db.prepare('DELETE FROM two_factor_challenges WHERE user_id = ? OR expires_at < ?').bind(user.id, new Date().toISOString()),
+                db.prepare(
+                    'INSERT INTO two_factor_codes (user_id, code, email_sent_to, expires_at) VALUES (?, ?, ?, ?)'
+                ).bind(user.id, code, targetEmail, expiresAt),
+                db.prepare(
+                    'INSERT INTO two_factor_challenges (id, user_id, code_id, expires_at) ' +
+                    'VALUES (?, ?, (SELECT id FROM two_factor_codes WHERE user_id = ? ORDER BY id DESC LIMIT 1), ?)'
+                ).bind(challengeId, user.id, user.id, expiresAt),
+            ])
 
             // Send the code via email. If it can't be sent, say so instead of waiting for a code that never comes
+            // (the challenge cookie is set anyway: the code is stored, and a new login replaces both)
             const sent = await send2FACode(code, targetEmail)
             if (!sent.success) {
-                return NextResponse.json(
+                const failed = NextResponse.json(
                     { error: 'Doğrulama kodu e-postası gönderilemedi. Lütfen biraz sonra tekrar deneyin.' },
                     { status: 502 }
                 )
+                setChallengeCookie(failed, challengeId)
+                return failed
             }
 
-            return NextResponse.json({
+            const challenge = NextResponse.json({
                 requires2FA: true,
                 userId: user.id,
                 message: 'Doğrulama kodu gönderildi',
                 emailHint: targetEmail.replace(/(.{2}).*(@.*)/, '$1***$2') // Show hint like "oz***@gmail.com"
             })
+            setChallengeCookie(challenge, challengeId)
+            return challenge
         }
 
         // Non-admin users - direct login (no 2FA)
@@ -108,13 +120,7 @@ export async function POST(req: NextRequest) {
             }
         })
 
-        response.cookies.set('auth_token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            path: '/',
-            maxAge: 60 * 60 * 24 * 7 // 7 days
-        })
+        setSessionCookies(response, token)
 
         return response
 
