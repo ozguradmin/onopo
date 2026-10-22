@@ -71,7 +71,10 @@ RootLayout (server)            getStorefrontData(): settings, shipping, maxInsta
   render 0 on the server and update after mount. `/siparis-basarili` empties the saved cart while the
   page is parsed (`components/checkout/ClearCartOnSuccess.tsx`, which repeats the persist key and shape).
 - **Analytics.** The shell sends `POST /api/analytics/track {page}` once per store page view,
-  including client-side navigations. It moved here from Footer.
+  including client-side navigations (the first one of a page load adds `landing: true` and `ref`:
+  document.referrer, for traffic sources). The route writes the old `analytics` row and a cookieless
+  `page_views` row (monthly-salted visitor hash, no IP stored; lib/analytics.ts). Admin › İstatistikler
+  reads `GET /api/analytics/stats/`.
 - **Sticky header.** The TopBar (`<aside aria-label="Duyurular">`) is static and the `<header>` is
   `position: sticky; top: 0` in normal flow. `<main>` has no top padding hack. On scroll-down the
   header's second row (mobile search field, desktop nav) slides under the first; on scroll-up it comes
@@ -174,7 +177,7 @@ interface HomeSection { id, type, title, display_order, config, products?, viewA
 | `categoryHref(category)` | Single place for category URLs: `/kategori/<slug>/` (`/products/?category=<name>` only when no slug is known). |
 | `getMenus()` / `getMenuTree()` | Flat active menu items / top-level items with children. Children of an inactive parent are dropped, not promoted. |
 | `getHeroSlides()` | Active slides, display order, max 5 (same as `/api/hero`). |
-| `getHomepageSections()` | Active sections in admin order with data resolved on the server. For `products`/`new_products`: **exactly the old HomePageClient logic** over the same pool (in-stock, newest first, max 200): `category` → case-insensitive match, `manual` → `product_ids`, `newest`/`all` → whole pool; `products` is shuffled per request; `limit || 8`. `hero` gets `slides` and `categories` gets `categories`. |
+| `getHomepageSections()` | Active sections in admin order with data resolved on the server. For `products`/`new_products` over one pool (in-stock, newest first, max 200): `category` → case-insensitive match (pool order), `manual` → `product_ids` in the admin's order, `most_viewed` → most product-page views of the last 30 days (lib/analytics-db.ts, filled up with the newest), `newest`/`all` → whole pool; the order is stable unless `config.order === 'random'`; `limit || 8`. `hero` gets `slides` and `categories` gets `categories`. |
 | `listProducts(params)` | See below. |
 | `getActiveProducts()` | All active products, id DESC, one query per request. Throws if D1 is down. |
 | `getInStockProducts()`, `getNewestProducts(limit, { includeSoldOut })` | Convenience. |

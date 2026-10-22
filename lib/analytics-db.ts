@@ -339,8 +339,8 @@ export async function loadStats(db: D1Lite, opts: { now?: Date; days?: 7 | 30 } 
         'SELECT day, COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors FROM page_views WHERE day >= ? AND is_bot = 0 GROUP BY day', earliest)
     const merged = mergeDaily(earliest, today, legacyDaily, currentDaily, newFrom)
 
-    const rangeStats: RangeStats[] = []
-    for (const r of ranges) {
+    // The ranges are independent: one round trip each, in parallel
+    const rangeStats: RangeStats[] = await Promise.all(ranges.map(async (r): Promise<RangeStats> => {
         const monthly = await rowsOrEmpty<{ month: string; visitors: number }>(db,
             'SELECT substr(day, 1, 7) AS month, COUNT(DISTINCT visitor) AS visitors FROM page_views WHERE day >= ? AND day <= ? AND is_bot = 0 GROUP BY month',
             r.from, r.to)
@@ -349,7 +349,7 @@ export async function loadStats(db: D1Lite, opts: { now?: Date; days?: 7 | 30 } 
         const orders = (await rowsOrEmpty<{ n: number; total: number | null }>(db,
             `SELECT COUNT(*) AS n, SUM(total_amount) AS total FROM orders WHERE created_at >= ? AND created_at < ? AND ${ORDER_FILTER}`,
             istanbulDayStartUtc(r.from), istanbulDayStartUtc(addDays(r.to, 1))))[0]
-        rangeStats.push({
+        return {
             key: r.key,
             label: r.label,
             from: r.from,
@@ -360,8 +360,8 @@ export async function loadStats(db: D1Lite, opts: { now?: Date; days?: 7 | 30 } 
             partial: counted && firstDay! > r.from,
             orders: Number(orders?.n) || 0,
             revenue: Math.round((Number(orders?.total) || 0) * 100) / 100,
-        })
-    }
+        }
+    }))
 
     const listFrom = addDays(today, -(days - 1))
     const [products, paths] = await Promise.all([
