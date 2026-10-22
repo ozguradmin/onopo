@@ -4,9 +4,9 @@
  * Onopo Asistan entry (SPEC §10.2), mounted by LayoutProvider on store pages only while the public setting
  * ai_assistant_enabled is on. Shell code: it must stay tiny and must not change the page.
  *
- * - Renders nothing on the server and during hydration, then waits for an idle moment (requestIdleCallback,
- *   at most 2 s; 1.2 s timer where it is missing) before showing the launcher. No request is made, so the
- *   server HTML, h1, JSON-LD, LCP and CLS stay exactly as they are.
+ * - Client only: LayoutProvider loads this module (next/dynamic, ssr: false) in the first idle period after the
+ *   page has loaded, so the launcher shows as soon as it has mounted. No request is made, so the server HTML,
+ *   h1, JSON-LD, LCP and CLS stay exactly as they are.
  * - Not on checkout, payment results, admin, maintenance, login or register.
  * - The chat panel is a separate chunk (preload.ts loadPanel), mounted the first time the chat opens and
  *   kept mounted afterwards, so a reply keeps streaming while the panel is minimised. Until the chunk has
@@ -33,26 +33,13 @@ export function AssistantRoot() {
     const path = usePathname() || '/'
     const open = useAssistantStore(s => s.open)
     const minimized = useAssistantStore(s => s.minimized)
-    const [idle, setIdle] = React.useState(false)
+    // LayoutProvider already waited for an idle period before loading this module
+    const idle = hydrated
     const [panel, setPanel] = React.useState(false)
     const excluded = ASSISTANT_EXCLUDED_PATH.test(path)
 
     // First open mounts the panel; it then stays mounted (a running reply keeps streaming)
     if (open && !panel) setPanel(true)
-
-    React.useEffect(() => {
-        if (!hydrated) return
-        const w = window as Window & {
-            requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
-            cancelIdleCallback?: (id: number) => void
-        }
-        if (w.requestIdleCallback) {
-            const id = w.requestIdleCallback(() => setIdle(true), { timeout: 2000 })
-            return () => w.cancelIdleCallback?.(id)
-        }
-        const t = setTimeout(() => setIdle(true), 1200)
-        return () => clearTimeout(t)
-    }, [hydrated])
 
     React.useEffect(() => {
         if (!idle) return

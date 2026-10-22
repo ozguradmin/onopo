@@ -3,7 +3,9 @@
 /**
  * What the assistant is doing right now (SPEC §10.6): one row per real server step (tool call), never a
  * scripted animation and never reasoning text. Active rows shimmer next to a small spinner, done rows get a
- * ✓ and their count. Before the first server event the row "Sorunu anlıyorum…" is shown optimistically.
+ * ✓ and their count. Before the first server event the row "Sorunu anlıyorum…" is shown optimistically, and
+ * while no step is active and no answer text has arrived yet (the model is writing) "Yanıtı hazırlıyorum…"
+ * stands in, so the bubble is never empty while the visitor waits.
  * Once the turn is done the rows fold into one quiet button ("✓ 12 ürün bulundu · Fiyatlar güncel").
  */
 import * as React from 'react'
@@ -11,10 +13,9 @@ import { Check } from 'lucide-react'
 import { stepLabel } from '@/lib/assistant/contract'
 import type { UiStep } from '../chat-reducer'
 
-function Row({ step }: { step: UiStep }) {
-    const active = step.state === 'active'
-    const label = stepLabel(step.id, step.state, step.n)
-    if (!label) return null
+const WRITING_LABEL = 'Yanıtı hazırlıyorum…'
+
+function RowView({ label, active }: { label: string; active: boolean }) {
     return (
         <li className="flex items-center gap-2 text-[13px] leading-5">
             {active ? (
@@ -27,17 +28,25 @@ function Row({ step }: { step: UiStep }) {
     )
 }
 
-export function Steps({ steps, streaming }: { steps: UiStep[]; streaming: boolean }) {
+function Row({ step }: { step: UiStep }) {
+    const label = stepLabel(step.id, step.state, step.n)
+    if (!label) return null
+    return <RowView label={label} active={step.state === 'active'} />
+}
+
+export function Steps({ steps, streaming, hasText = false }: { steps: UiStep[]; streaming: boolean; hasText?: boolean }) {
     const [expanded, setExpanded] = React.useState(false)
 
     if (streaming) {
         const shown = steps.length === 0
             ? [{ id: 'understand', state: 'active' } as UiStep]
             : steps.filter(s => s.state === 'active' || stepLabel(s.id, 'done', s.n) != null).slice(-4)
-        if (shown.length === 0) return null
+        const writing = !hasText && !shown.some(s => s.state === 'active' && stepLabel(s.id, 'active', s.n) != null)
+        if (shown.length === 0 && !writing) return null
         return (
-            <ul className="mb-2 space-y-1.5">
+            <ul className="mb-2 space-y-1.5" aria-live="polite">
                 {shown.map(s => <Row key={s.id} step={s} />)}
+                {writing && <RowView label={WRITING_LABEL} active />}
             </ul>
         )
     }

@@ -119,7 +119,7 @@ function AssistantTurn({ m, isLast, restored, onChip }: { m: UiMessage; isLast: 
 
     return (
         <div aria-busy={streaming} className="min-w-0">
-            {!m.local && <Steps steps={m.steps} streaming={streaming} />}
+            {!m.local && <Steps steps={m.steps} streaming={streaming} hasText={m.text.length > 0} />}
             {text && <MiniMarkdown text={text} caret={streaming} onLink={onNavigate} />}
             {wait >= 1 && <p className="mt-1 text-[13px] leading-5 text-muted">Biraz uzun sürüyor, hâlâ bakıyorum…</p>}
             {wait === 2 && (

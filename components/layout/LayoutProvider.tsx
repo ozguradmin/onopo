@@ -49,7 +49,7 @@ const AssistantRoot = dynamic(() => import('@/components/assistant/AssistantRoot
 
 /**
  * 0 until the page has loaded, then 1, 2, 3 in three separate idle periods (each at most ~3 s apart), so the
- * cart drawer, the menu and the assistant mount one at a time. The state changes are transitions: React
+ * assistant (its launcher is visible, so first), the cart drawer and the menu mount one at a time. The state changes are transitions: React
  * renders them in small slices instead of one long task.
  */
 function useIdleStage(): number {
@@ -199,8 +199,8 @@ export function LayoutProvider({
                         </a>
                     )}
                     {chrome && <Header fromShell variant={variant} />}
-                    {chrome && (idleStage >= 1 || cartOpen) && <CartDrawer />}
-                    {chrome && !isCheckout && (idleStage >= 2 || menuOpen) && <MobileMenu />}
+                    {chrome && (idleStage >= 2 || cartOpen) && <CartDrawer />}
+                    {chrome && !isCheckout && (idleStage >= 3 || menuOpen) && <MobileMenu />}
                     {/* The chrome-less result pages fill the frame in their own surface colour */}
                     <Main id="main-content" className={isPaymentResult ? 'min-h-dvh bg-surface' : showChrome ? 'min-h-[60vh]' : undefined}>
                         {showMaintenance ? (
@@ -213,7 +213,7 @@ export function LayoutProvider({
                     </Main>
                     {chrome && <Footer fromShell variant={variant} />}
                     {chrome && !isCheckout && <MobileNav fromShell />}
-                    {chrome && !isCheckout && assistantOn && idleStage >= 3 && <AssistantRoot />}
+                    {chrome && !isCheckout && assistantOn && idleStage >= 1 && <AssistantRoot />}
                 </ShellChromeContext.Provider>
             </ShellFactsContext.Provider>
         </StoreDataProvider>
