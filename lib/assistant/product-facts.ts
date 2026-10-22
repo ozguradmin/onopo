@@ -307,23 +307,40 @@ export function readAiResult(res: unknown): { text: string; inTokens: number; ou
     return { text, inTokens: Number(o.usage?.prompt_tokens) || 0, outTokens: Number(o.usage?.completion_tokens) || 0 }
 }
 
-/** One model call for one product. null when the call fails or returns nothing usable. Never throws. */
-export async function generateFacts(ai: FactsAi, model: string, item: FactsProduct): Promise<{ facts: string; costMicroUsd: number } | null> {
+/** One model call for one product: the line, or why there is none (the error is kept for the retry logic). */
+export type FactsAttempt =
+    | { ok: true; facts: string; costMicroUsd: number }
+    | { ok: false; error: 'empty'; costMicroUsd: number }
+    | { ok: false; error: 'call'; cause: unknown }
+
+/** Like generateFacts, but keeps the failure (lib/assistant/facts-auto.ts retries rate limits). Never throws. */
+export async function generateFactsDetailed(ai: FactsAi, model: string, item: FactsProduct): Promise<FactsAttempt> {
+    let res: unknown
     try {
-        const res = await ai.run(model, {
+        res = await ai.run(model, {
             messages: buildFactsMessages(item.name, item.description),
             max_completion_tokens: 200,
             temperature: 0,
             reasoning_effort: 'none',
         })
+    } catch (cause) {
+        return { ok: false, error: 'call', cause }
+    }
+    try {
         const r = readAiResult(res)
         const facts = cleanFactsLine(r.text)
         const cost = costMicroUsd(model, { inTokens: r.inTokens || 600, cachedTokens: 0, outTokens: r.outTokens || Math.ceil(r.text.length / 3) })
-        if (facts.length < 8) return null
-        return { facts, costMicroUsd: cost }
+        if (facts.length < 8) return { ok: false, error: 'empty', costMicroUsd: cost }
+        return { ok: true, facts, costMicroUsd: cost }
     } catch {
-        return null
+        return { ok: false, error: 'empty', costMicroUsd: 0 }
     }
+}
+
+/** One model call for one product. null when the call fails or returns nothing usable. Never throws. */
+export async function generateFacts(ai: FactsAi, model: string, item: FactsProduct): Promise<{ facts: string; costMicroUsd: number } | null> {
+    const r = await generateFactsDetailed(ai, model, item)
+    return r.ok ? { facts: r.facts, costMicroUsd: r.costMicroUsd } : null
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -365,6 +382,15 @@ export async function loadStoredFacts(db: D1Lite): Promise<Map<number, StoredFac
     return new Map((results ?? []).map(r => [Number(r.product_id), { hash: String(r.desc_hash ?? ''), facts: String(r.facts ?? '') }]))
 }
 
+/** Upserts one product's line (the hash it was written for marks it fresh). Throws on a database error. */
+export async function storeFacts(db: D1Lite, item: StaleItem, facts: string, model: string, now: Date = new Date()): Promise<void> {
+    await db
+        .prepare(`INSERT INTO ai_product_facts (product_id, desc_hash, facts, model, created_at) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(product_id) DO UPDATE SET desc_hash = excluded.desc_hash, facts = excluded.facts, model = excluded.model, created_at = excluded.created_at`)
+        .bind(item.id, item.hash, facts, model, now.toISOString())
+        .run()
+}
+
 export interface RefreshResult {
     done: number
     failed: number
@@ -390,11 +416,7 @@ export async function refreshFacts(db: D1Lite, ai: FactsAi, model: string, items
             }
             result.costMicroUsd += g.costMicroUsd
             try {
-                await db
-                    .prepare(`INSERT INTO ai_product_facts (product_id, desc_hash, facts, model, created_at) VALUES (?, ?, ?, ?, ?)
-ON CONFLICT(product_id) DO UPDATE SET desc_hash = excluded.desc_hash, facts = excluded.facts, model = excluded.model, created_at = excluded.created_at`)
-                    .bind(item.id, item.hash, g.facts, model, (opts.now ?? new Date()).toISOString())
-                    .run()
+                await storeFacts(db, item, g.facts, model, opts.now ?? new Date())
                 result.done++
             } catch {
                 result.failed++
