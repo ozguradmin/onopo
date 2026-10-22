@@ -3,7 +3,7 @@
 // Run: node --test scripts/ai-assistant-ui.test.mjs   (Node 23.6+ strips the TypeScript types itself)
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { registerHooks } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
@@ -310,4 +310,46 @@ test('mini-markdown: HTML stays literal text', () => {
 test('mini-markdown: an unclosed ** at the end renders as bold until the end', () => {
     assert.deepEqual(md.parseInline('Fiyatı **129,99 T'), [{ t: 'text', v: 'Fiyatı ' }, { t: 'bold', v: '129,99 T' }])
     assert.deepEqual(md.parseInline('**'), [])
+})
+
+// ---------------------------------------------------------------------------------------------
+// Panel copy and launcher (source guards: React components are not loaded here)
+// ---------------------------------------------------------------------------------------------
+
+const src = path => readFileSync(new URL(path, ROOT), 'utf8')
+
+test('panel: no notice box or composer footer; the notice opens from the empty chat line and the ⋯ menu', () => {
+    const panel = src('components/assistant/AssistantPanel.tsx')
+    const composer = src('components/assistant/parts/Composer.tsx')
+    const empty = src('components/assistant/parts/EmptyState.tsx')
+    assert.ok(!/Sohbet saklanmaz|sohbet içeriği saklanmaz/.test(panel + composer + empty))
+    assert.ok(!composer.includes('Aydınlatma Metni'))
+    assert.ok(!panel.includes('onopo:assistant:notice'))
+    assert.match(empty, /Yapay zekâ asistanı ·\{' '\}[\s\S]*Aydınlatma Metni için tıkla/)
+    // ⋯ menu: Yeni sohbet, Telefon modelini değiştir, Aydınlatma Metni
+    const menu = panel.slice(panel.indexOf('function HeaderMenu'), panel.indexOf('function NoticeSheet'))
+    assert.deepEqual([...menu.matchAll(/role="menuitem"[^>]*>\s*([^<{]+?)\s*</g)].map(m => m[1]).slice(-2), ['Telefon modelini değiştir', 'Aydınlatma Metni'])
+    assert.ok(menu.includes('Yeni sohbet'))
+    // The notice: a labelled dialog that says transcripts are kept masked for up to 12 months
+    const sheet = panel.slice(panel.indexOf('function NoticeSheet'))
+    assert.match(sheet, /role="dialog"[\s\S]*aria-modal="true"[\s\S]*aria-labelledby="assistant-notice-title"/)
+    assert.match(sheet, /kişisel bilgiler gizlenerek en çok 12 ay saklanır/)
+    assert.match(sheet, /silinmesini istersen WhatsApp/)
+    // The placeholder hint stays
+    assert.match(composer, /placeholder="Ne arıyorsun\? Örn\. iPhone 15 için hızlı şarj"/)
+})
+
+test('launcher: 52 px circle on phones, pill on desktop, one entrance that reduced motion turns off', () => {
+    const launcher = src('components/assistant/AssistantLauncher.tsx')
+    const css = src('app/globals.css')
+    assert.ok(launcher.includes('data-assistant-launcher=""'))
+    assert.match(launcher, /h-\[52px\]/)
+    assert.match(launcher, /md:inline">\{label\}/)
+    assert.match(launcher, /animate-ai-launcher-in/)
+    assert.ok(!/animate-(?:pulse|bounce|ping)/.test(launcher))
+    assert.match(css, /@keyframes ai-launcher-in/)
+    assert.match(css, /prefers-reduced-motion: reduce\)[\s\S]*\.animate-ai-launcher-in[\s\S]*animation: none/)
+    // The hide rules (toast, bottom nav, PDP buy bar) are still there
+    assert.match(css, /body:has\(\[data-sonner-toast\]\) \[data-assistant-launcher\]/)
+    assert.match(css, /body:has\(\[data-hide-bottom-nav\]\[aria-hidden="true"\]\) \[data-assistant-launcher\]/)
 })
