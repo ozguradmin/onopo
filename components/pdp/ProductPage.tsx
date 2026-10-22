@@ -11,7 +11,7 @@ import { ProductMachineData } from '@/components/seo/ProductMachineData'
 import { ProductCard } from '@/components/product/ProductCard'
 import { breadcrumbJsonLd, categoryPath, productBrand, type SiteSeo } from '@/lib/seo'
 import { brandOf, specChips } from '@/lib/search'
-import { discountPercent, formatDateTR, formatTL, MIN_DISCOUNT_BADGE_PERCENT } from '@/lib/format'
+import { formatDateTR, formatTL } from '@/lib/format'
 import { productImageSrcSet, productImageUrl } from '@/lib/images'
 import type { ProductPageData } from '@/lib/product-data'
 import { getReviewStatsMapSafe } from '@/lib/reviews'
@@ -51,7 +51,6 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
     const specBrand = parsed.specs.find(r => r.label === 'Marka')?.value
     const brand = brandOf(product.name) || specBrand || productBrand(product) || null
     const chips = specChips(product.name, 3)
-    const pct = discountPercent(product.display_price, product.display_original_price)
 
     const handling = site.handlingTime ? `Siparişler ödeme onayından sonra ${site.handlingTime.minDays}-${site.handlingTime.maxDays} iş günü içinde kargoya verilir.` : null
     const deliveryText = infoText(product.delivery_info) || data.featuresDelivery || handling
@@ -130,14 +129,8 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                                 images={product.images}
                                 name={product.name}
                                 soldOut={soldOut}
-                                badges={
-                                    soldOut || pct >= MIN_DISCOUNT_BADGE_PERCENT ? (
-                                        <>
-                                            {soldOut && <Badge variant="soldout">Tükendi</Badge>}
-                                            {pct >= MIN_DISCOUNT_BADGE_PERCENT && <Badge variant="sale">%{pct} indirim</Badge>}
-                                        </>
-                                    ) : null
-                                }
+                                // The discount is shown once, next to the price (BuyBox)
+                                badges={soldOut ? <Badge variant="soldout">Tükendi</Badge> : null}
                             />
                         </div>
 

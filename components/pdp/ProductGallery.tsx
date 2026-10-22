@@ -19,7 +19,7 @@ const GalleryLightbox = React.lazy(() => import('./GalleryLightbox'))
 export interface ProductGalleryProps {
     images: string[]
     name: string
-    /** Badges over the image (discount %, Tükendi), rendered on the server. */
+    /** Badges over the image ("Tükendi"; the discount is shown next to the price), rendered on the server. */
     badges?: React.ReactNode
     soldOut?: boolean
 }
