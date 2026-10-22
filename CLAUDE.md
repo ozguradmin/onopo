@@ -44,7 +44,7 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - `--persist-to` yolunu kısa tut: Windows'un 259 karakterlik yol sınırına takılmasın.
 - `tsc`, `.next/types` altında ödeme callback route'u için eskiden kalan hatalar verir; `next.config.ts` build'de
   tip hatalarını yok sayar (`ignoreBuildErrors`).
-- Birim testleri: `node --test scripts/edge-cache.test.mjs scripts/seo.test.mjs scripts/redirects.test.mjs scripts/guides.test.mjs scripts/worker-hsts.test.mjs` (Node 23.6+; CI çalıştırmaz).
+- Birim testleri: `node --test scripts/edge-cache.test.mjs scripts/seo.test.mjs scripts/redirects.test.mjs scripts/guides.test.mjs scripts/devices.test.mjs scripts/worker-hsts.test.mjs` (Node 23.6+; CI çalıştırmaz).
   Otomatik işler: `node --test scripts/automation.test.mjs` (D1 yerine `node:sqlite`, saat/AI/R2/Images sahte).
   Yorumlar/değerlendirme e-postaları ve migration: `node --test scripts/reviews.test.mjs`; Google feed ve barkod: `node --test scripts/feeds.test.mjs`.
 
@@ -117,6 +117,17 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   (`lib/guides/server.ts`, en çok 8, stoktakiler önce); metinde fiyat/stok yazılmaz. Metin değişince `dateModified`'i güncelle.
 - Ürün sayfasında tek "İlgili rehber" bağlantısı (`guideForProduct`), footer'da "Rehberler", `/kategoriler/`'de blok.
   Sitemap'te var; edge cache allowlist'inde; yönlendirme çözücü `/rehber/` altında tahmin yapmaz. Ayrıntı: `docs/SEO.md` §12.
+
+## Cihaz sayfaları (`/cihaz/`)
+- `/cihaz/` (marka ve modeller, sayılarıyla) ve `/cihaz/<slug>/`: marka (`iphone`, `samsung`, `xiaomi-redmi`, `samsung-tablet`, `huawei` …)
+  ya da model (`iphone-15-pro-max`, `samsung-galaxy-s24` …). Liste koddan değil aktif ürün **adlarından** çıkar
+  (`lib/devices/match.ts`; `lib/redirects.ts` de aynı kuralları kullanır). En az 3 aktif ürünü olmayan marka/model sayfası
+  yok (model yalnızca marka sayfasında listelenir); stokta ürünü olmayan sayfa 200 + noindex ve sitemap dışı.
+- Model eşleşmesi adla: "iPhone 15" ≠ "iPhone 15 Pro", "13 / 13 Pro" ikisine de girer. Bağlantı kuralı yalnızca kesin olan yerde:
+  iPhone 14'e kadar Lightning, iPhone 15+ ve Galaxy S8+ USB-C (şarj aleti, kablo, araç şarjı). Android markalarına kural yok.
+- Ürün türü grupları `lib/product-type.ts` (Google feed ile ortak). Ürün sayfasında "Bu cihaz için diğer ürünler" bağlantısı (tek model
+  sayfası, yoksa tek marka sayfası), `/kategoriler/`'de "Cihaza göre" bloğu. Sitemap'te var; edge cache allowlist'inde; çözücü
+  `/cihaz/` altında tahmin yapmaz. Sayfa adresleri: `devicePagePaths()` / `getDevicePageUrls()`. Ayrıntı: `docs/SEO.md` §13.
 
 ## Admin girişi ve 2FA
 - Admin hesabı `admin@onopo.com` (`lib/login-alias.ts`). Sahip kişisel bir takma adresle (alias) de giriş

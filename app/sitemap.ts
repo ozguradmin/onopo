@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next'
 import { getDB } from '@/lib/db'
+import { deviceSitemapEntries } from '@/lib/devices'
 import { guideSitemapEntries } from '@/lib/guides'
 import {
     canonicalUrl,
@@ -22,7 +23,7 @@ export const dynamic = 'force-dynamic'
  */
 const INCLUDE_IMAGES = false
 
-type ProductRow = { slug: string; images: string | null; updated_at: string | null; created_at: string | null }
+type ProductRow = { id: number; name: string | null; stock: number | null; slug: string; images: string | null; updated_at: string | null; created_at: string | null }
 type CategoryRow = { slug: string; lastmod: string | null }
 type PageRow = { slug: string; updated_at: string | null }
 
@@ -39,6 +40,8 @@ function latest(dates: Array<string | null>): string | undefined {
  * - every active product, in stock or not, at its canonical /<slug>/ (lastmod = updated_at, else created_at)
  * - CMS pages at /page/<slug>/ (lastmod = updated_at)
  * - the shopping guides: /rehber/ and /rehber/<slug>/ (lastmod = the guide's dateModified, from lib/guides)
+ * - the device pages: /cihaz/ and every /cihaz/<slug>/ with an in-stock product (lib/devices; lastmod = newest
+ *   change of a product on the page)
  * No utility pages, no query-string URLs, no lastmod = "now".
  * On a database error this throws (HTTP 500) so crawlers retry later instead of reading a truncated list.
  */
@@ -47,7 +50,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     const [products, categories, pages] = await Promise.all([
         db.prepare(
-            "SELECT slug, images, updated_at, created_at FROM products WHERE is_active = 1 AND slug IS NOT NULL AND slug != '' ORDER BY id"
+            "SELECT id, name, stock, slug, images, updated_at, created_at FROM products WHERE is_active = 1 AND slug IS NOT NULL AND slug != '' ORDER BY id"
         ).all<ProductRow>(),
         db.prepare(
             `SELECT c.slug AS slug, MAX(COALESCE(p.updated_at, p.created_at)) AS lastmod
@@ -71,6 +74,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     for (const g of guideSitemapEntries()) {
         entries.push({ url: canonicalUrl(g.path), lastModified: g.lastModified, changeFrequency: 'monthly', priority: 0.5 })
+    }
+
+    // Device pages come from the product names (lib/devices), the same rules the pages use
+    const deviceProducts = productRows.map((p) => ({ id: Number(p.id), name: String(p.name ?? ''), stock: Number(p.stock ?? 0), updated_at: p.updated_at, created_at: p.created_at }))
+    for (const d of deviceSitemapEntries(deviceProducts)) {
+        entries.push({ url: canonicalUrl(d.path), ...(d.lastModified ? { lastModified: d.lastModified } : {}), changeFrequency: 'weekly', priority: 0.6 })
     }
 
     for (const c of categories.results || []) {
