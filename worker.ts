@@ -48,6 +48,7 @@ import {
     loadIndex,
     lookupAdminRedirect,
     notFoundCandidate,
+    notFoundLogKey,
     notFoundVisitorKind,
     parsePath,
     recordNotFound,
@@ -355,7 +356,7 @@ async function withOldUrlRedirect(request: Request, url: URL, response: Response
     if (response.status >= 400) {
         const kind = notFoundVisitorKind(request.headers.get('user-agent'))
         if (kind) {
-            ctx.waitUntil(recordNotFound(db, parsed.key, {
+            ctx.waitUntil(recordNotFound(db, notFoundLogKey(parsed), {
                 googlebot: kind === 'googlebot',
                 referrerHost: referrerHost(request.headers.get('referer')),
             }).catch(error => console.error('[redirects] not_found_log write failed', error)))

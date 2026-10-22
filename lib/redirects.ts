@@ -819,6 +819,22 @@ export function notFoundVisitorKind(userAgent: string | null | undefined): 'goog
     return BOT_USER_AGENT.test(ua) ? null : 'visitor'
 }
 
+// Query parameters that may carry personal data (an old password-reset or order link clicked from an e-mail)
+const PERSONAL_PARAM = /^(?:e-?mail|mail|eposta|token|access_token|auth|key|api_?key|secret|pass(?:word)?|pwd|sifre|session|sid|code|otp|phone|tel|telefon|gsm|name|ad|soyad|adsoyad|address|adres|tc|tckn)$/
+
+/**
+ * The not_found_log key: the normalized key without query values that may identify a person (personal
+ * parameter names, values with '@', long digit runs like phone numbers, long token-like strings). The table
+ * must stay content-free; lookups still work because the admin's redirect is tried on the bare path too.
+ */
+export function notFoundLogKey(parsed: ParsedPath): string {
+    const kept = parsed.params.filter(([k, v]) =>
+        !PERSONAL_PARAM.test(k) && !v.includes('@') && !/\d{10,}/.test(v.replace(/[\s()+-]/g, ''))
+        && !/^(?=.*\d)[A-Za-z0-9_\-.=]{32,}$/.test(v))
+    if (kept.length === parsed.params.length) return parsed.key
+    return parsed.path + (kept.length ? `?${new URLSearchParams(kept).toString()}` : '')
+}
+
 /** Only the host of the Referer (no path, no query: it may carry personal data). */
 export function referrerHost(referer: string | null | undefined): string | null {
     if (!referer) return null

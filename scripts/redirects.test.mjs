@@ -402,6 +402,16 @@ test('recordNotFound: one upsert, no IP or user agent; the table is trimmed now 
     assert.equal(db.calls.some(c => /^DELETE/.test(c.sql)), false)
 })
 
+test('notFoundLogKey: query values that may identify a person are not stored', () => {
+    const key = s => R.notFoundLogKey(parsePath(s))
+    assert.equal(key('/index.php?route=product/product&product_id=12'), '/index.php?product_id=12&route=product%2Fproduct')
+    assert.equal(key('/sifre-sifirla?email=ali@example.com&token=abc'), '/sifre-sifirla/')
+    assert.equal(key('/siparis?no=12&x=ali%40example.com'), '/siparis/?no=12')
+    assert.equal(key('/takip?q=0555%20123%2045%2067'), '/takip/')
+    assert.equal(key('/onay?k=9f8e7d6c5b4a39281706f5e4d3c2b1a0ffeeddcc'), '/onay/')
+    assert.equal(key('/urun/kilif/?utm_source=x'), '/urun/kilif/')
+})
+
 test('schema.sql has the same tables as the lazy ensure', () => {
     const schema = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8').replace(/--[^\n]*/g, '').replace(/\s+/g, ' ')
     for (const sql of R.REDIRECT_TABLES) {
