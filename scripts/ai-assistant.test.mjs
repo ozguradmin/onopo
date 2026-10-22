@@ -368,6 +368,17 @@ test('validator: discounts, urgency, contact, links and coupons are dropped', ()
     assert.ok(g.stats.flags.includes('validator_drop'))
 })
 
+test('validator: internal notes and product ids never reach the customer; the ids are kept for cards', () => {
+    const g = guardFor()
+    assert.equal(run(g, 'Örgülü olanı daha dayanıklı. [gösterilen ürünler: #1159, #1152]'), 'Örgülü olanı daha dayanıklı. ')
+    assert.deepEqual(g.stats.markerIds, [1159, 1152])
+    assert.ok(g.stats.flags.includes('internal'))
+    const h = guardFor()
+    assert.equal(run(h, 'En uygunu #1104 numaralı ürün. Başka?'), 'Başka?')
+    assert.deepEqual(h.stats.markerIds, [1104])
+    assert.equal(run(guardFor(), 'Bu set 1. tercihimiz olur.'), 'Bu set 1. tercihimiz olur.')
+})
+
 test('validator: commitments and clocks need a known number', () => {
     assert.equal(run(guardFor(), 'Teslimden itibaren 14 gün cayma hakkın var.'), 'Teslimden itibaren 14 gün cayma hakkın var.')
     assert.equal(run(guardFor(), 'Bu üründe 30 gün iade var.'), '')
@@ -556,15 +567,19 @@ test('prompt: turn context has same-day shipping, the server cart total and cand
     assert.equal(free.remaining, 0)
 })
 
-test('prompt: history conversion masks user text and notes shown products and WhatsApp', () => {
+test('prompt: history conversion masks user text; shown cards go to the turn context, not the history', () => {
     const msgs = prompt.buildMessages('SYS', [
         { role: 'user', text: 'numaram 0500 123 45 67' },
         { role: 'assistant', text: 'Şunlar uygun.', productIds: [401, 413], wa: true },
     ], '<tur_baglami>\n</tur_baglami>', 'yeni soru')
     assert.equal(msgs[0].content, 'SYS')
     assert.equal(msgs[1].content, 'numaram [telefon]')
-    assert.equal(msgs[2].content, 'Şunlar uygun.\n[gösterilen ürünler: #401, #413]\n[WhatsApp kartı gösterildi]')
+    // A "[gösterilen ürünler: #…]" note here was copied by the model into its answers (live test, 2026-10-22)
+    assert.equal(msgs[2].content, 'Şunlar uygun.')
     assert.ok(msgs[3].content.endsWith('<musteri_mesaji>\nyeni soru\n</musteri_mesaji>'))
+    const ctx = prompt.buildTurnContext({ now: new Date('2026-10-22T09:00:00Z'), facts: FACTS, page: null, device: null, cart: null, candidates: [], router: null, notes: [], shownBefore: [401, 413], waBefore: true })
+    assert.ok(ctx.includes('onceki_kartlar: 401, 413'))
+    assert.ok(ctx.includes('onceki_whatsapp: evet'))
 })
 
 test('prompt: the system message holds the verbatim rules and the data blocks, no time or user data', () => {
@@ -691,6 +706,15 @@ test('runTurn: the system message is byte-identical across turns with different 
     assert.match(lastB, /sayfa: ürün #562/)
     assert.match(lastB, /aday_urunler: #562 /)
     assert.match(lastB, /sunucu_sepet_toplami: 249,99 TL/)
+})
+
+test('runTurn: ids written as text instead of show_products → dropped from the text, shown as real cards', async () => {
+    const ai = mockAi({ chat: [textChunks('Örgülü olanı daha dayanıklı. [gösterilen ürünler: #401, #413]')] })
+    const { events, log } = await runIt(ai)
+    const text = events.filter(e => e.t === 'text').map(e => e.v).join('')
+    assert.ok(!text.includes('#') && !text.includes('[gösterilen'))
+    assert.deepEqual(events.find(e => e.t === 'products').products.map(p => p.id), [401, 413])
+    assert.ok(log.flags.includes('marker_rescue'))
 })
 
 test('runTurn: text + show_products → products card in the same call, no second call', async () => {

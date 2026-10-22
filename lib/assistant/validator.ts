@@ -151,7 +151,13 @@ export interface GuardStats {
     replaced: number
     flags: string[]
     emittedChars: number
+    /** Product ids the model wrote as text ("#1159"); runTurn shows them as cards instead. */
+    markerIds: number[]
 }
+
+/** Internal notes, tags and product ids never reach the customer ("[gösterilen ürünler: #1159]", "#1104"). */
+const RE_INTERNAL = /\[\s*(?:g[öo]sterilen|whatsapp kart)|<\/?[a-z_]+>|(?:^|[\s(,:])#\d{3,6}\b/i
+const RE_ID_REF = /#(\d{3,6})\b/g
 
 export interface TextGuard {
     /** Feed a model text delta; returns the validated text pieces ready to emit (often none). */
@@ -192,7 +198,7 @@ export function createTextGuard(allowed: AllowedFacts): TextGuard {
     let pendingSep = false
     let lastEmitted = ''
     const flags = new Set<string>()
-    const stats: GuardStats = { dropped: 0, replaced: 0, flags: [], emittedChars: 0 }
+    const stats: GuardStats = { dropped: 0, replaced: 0, flags: [], emittedChars: 0, markerIds: [] }
     const flag = (f: string) => {
         if (!flags.has(f)) {
             flags.add(f)
@@ -221,6 +227,15 @@ export function createTextGuard(allowed: AllowedFacts): TextGuard {
         const tail = sentence.slice(body.length)
         if (!body.trim()) {
             if (stats.emittedChars > 0) emitPiece(sentence, out)
+            return
+        }
+        if (RE_INTERNAL.test(body)) {
+            for (const m of body.matchAll(RE_ID_REF)) {
+                const id = Number(m[1])
+                if (!stats.markerIds.includes(id)) stats.markerIds.push(id)
+            }
+            flag('internal')
+            stats.dropped++
             return
         }
         const v = checkSentence(body, allowed)

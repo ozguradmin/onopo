@@ -454,6 +454,10 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
             candidates,
             router: route.answers ? { intent: decision.intent, group: decision.group, buyingStage: decision.buyingStage } : null,
             notes,
+            shownBefore: [...new Set(req.history.flatMap(h => (h.role === 'assistant' ? h.productIds ?? [] : [])))]
+                .filter(n => Number.isInteger(n) && n > 0)
+                .slice(-8),
+            waBefore: req.history.some(h => h.role === 'assistant' && h.wa),
         })
         const messages: ChatMessage[] = buildMessages(k.systemMessage, req.history, turnContext, masked)
         const historyUserTexts = req.history.filter(h => h.role === 'user').map(h => maskPII(sanitize(h.text)))
@@ -703,6 +707,17 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
         }
 
         for (const piece of guard.flush()) out({ t: 'text', v: piece })
+        // The model wrote product ids into its text instead of calling show_products: the validator
+        // dropped that text; show those products as real cards (server-built, from D1) instead
+        if (!state.shown.includes('products') && guard.stats.markerIds.length) {
+            flags.add('marker_rescue')
+            try {
+                const r = await runTool('show_products', JSON.stringify({ ids: guard.stats.markerIds.slice(0, 4) }), ctx)
+                r.events.forEach(out)
+            } catch {
+                flags.add('tool_error')
+            }
+        }
         let forceCompact = false
         if (!textSent) {
             const first = state.shown[0]

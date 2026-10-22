@@ -203,6 +203,9 @@ export interface TurnContextInput {
     candidates: readonly CatalogRow[]
     router: { intent: string | null; group: string | null; buyingStage: number | null } | null
     notes: readonly string[]
+    /** Product ids shown on cards earlier in this conversation (newest last), and whether WhatsApp was. */
+    shownBefore?: readonly number[]
+    waBefore?: boolean
 }
 
 export function buildTurnContext(c: TurnContextInput): string {
@@ -227,6 +230,8 @@ export function buildTurnContext(c: TurnContextInput): string {
         if (c.router.buyingStage != null) parts.push(`satin_alma=${Math.round(c.router.buyingStage)}/3`)
         lines.push(`yonlendirici: ${parts.join(', ')}`)
     }
+    if (c.shownBefore?.length) lines.push(`onceki_kartlar: ${c.shownBefore.join(', ')} (müşteri bunları gördü; tekrar göstermek için show_products, metne id yazma)`)
+    if (c.waBefore) lines.push('onceki_whatsapp: evet')
     if (c.notes.length) lines.push(`notlar: ${c.notes.join(' ')}`)
     lines.push('</tur_baglami>')
     return lines.join('\n')
@@ -248,13 +253,9 @@ export interface ChatMessage {
 export function historyMessages(history: readonly HistoryMessage[]): ChatMessage[] {
     return history.slice(-10).map((h): ChatMessage => {
         if (h.role === 'user') return { role: 'user', content: maskPII(sanitize(h.text)).slice(0, 800) }
-        const ids = (h.productIds ?? []).filter(n => Number.isInteger(n) && n > 0)
-        return {
-            role: 'assistant',
-            content: h.text.slice(0, 1200)
-                + (ids.length ? `\n[gösterilen ürünler: #${ids.join(', #')}]` : '')
-                + (h.wa ? '\n[WhatsApp kartı gösterildi]' : ''),
-        }
+        // Text only: a "[gösterilen ürünler: #…]" note here was copied by the model into its answers
+        // instead of calling show_products. Which cards were shown goes into the turn context.
+        return { role: 'assistant', content: h.text.slice(0, 1200) }
     })
 }
 
