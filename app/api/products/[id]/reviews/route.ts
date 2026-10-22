@@ -3,8 +3,10 @@ import { readJsonBody } from '@/lib/api-request'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
+import { maskReviewerName } from '@/lib/product-data'
 
-// GET: Get reviews for a product
+// GET: Get reviews for a product. Public: the reviewer's name is masked like on the product page
+// ("Ayşe K.") and user_id is not sent.
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -14,14 +16,23 @@ export async function GET(
         const db = await getDB()
 
         const { results } = await db.prepare(`
-            SELECT r.*, u.full_name as user_name 
+            SELECT r.id, r.product_id, r.rating, r.comment, r.created_at, u.full_name
             FROM reviews r 
             LEFT JOIN users u ON r.user_id = u.id 
             WHERE r.product_id = ? 
             ORDER BY r.created_at DESC
         `).bind(id).all()
 
-        return NextResponse.json(results || [], {
+        const reviews = ((results || []) as any[]).map(r => ({
+            id: r.id,
+            product_id: r.product_id,
+            rating: r.rating,
+            comment: r.comment,
+            created_at: r.created_at,
+            user_name: maskReviewerName(r.full_name),
+        }))
+
+        return NextResponse.json(reviews, {
             headers: {
                 'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300'
             }

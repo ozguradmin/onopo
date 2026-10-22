@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
+import { maskReviewerName } from '@/lib/product-data'
 
 // Combined endpoint: product + reviews + variations in ONE worker invocation.
 // The product page is server-rendered now (components/pdp); this public endpoint keeps its response
 // shape for any other caller. Inactive products answer 404, like the product page itself.
+// Public data only: reviewer names are masked like on the product page and user_id is not sent;
+// the product row has no price_usd (the admin-only USD source price, see /api/products/<id>).
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params
@@ -13,7 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         const [productResult, reviewsResult, variationsResult] = await Promise.all([
             db.prepare('SELECT * FROM products WHERE id = ? AND is_active = 1').bind(id).first(),
             db.prepare(`
-                SELECT r.*, u.full_name as user_name 
+                SELECT r.id, r.product_id, r.rating, r.comment, r.created_at, u.full_name
                 FROM reviews r 
                 LEFT JOIN users u ON r.user_id = u.id 
                 WHERE r.product_id = ? 
@@ -28,14 +31,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             return NextResponse.json({ error: 'Product not found' }, { status: 404 })
         }
 
+        const publicProduct: Record<string, unknown> = { ...productResult }
+        delete publicProduct.price_usd
         const product = {
-            ...productResult,
+            ...publicProduct,
             images: productResult.images ? JSON.parse(productResult.images as string) : []
         }
+        const reviews = ((reviewsResult.results || []) as any[]).map(r => ({
+            id: r.id,
+            product_id: r.product_id,
+            rating: r.rating,
+            comment: r.comment,
+            created_at: r.created_at,
+            user_name: maskReviewerName(r.full_name),
+        }))
 
         return NextResponse.json({
             product,
-            reviews: reviewsResult.results || [],
+            reviews,
             variations: variationsResult.results || []
         }, {
             headers: {
