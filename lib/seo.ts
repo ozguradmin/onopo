@@ -765,6 +765,7 @@ export function productDescriptionLead(p: Pick<ProductSeoInput, 'name' | 'descri
     const text = cleanDescriptionText(bodyAt >= 0 ? raw.slice(bodyAt + 'Detaylı Bilgi'.length) : raw)
         .replace(/(^|\s)[İIi][Pp]hone(?=\s|$|[,.'’])/g, '$1iPhone')
         .replace(/(^|\s)[İIi][Pp]ad(?=\s|$|[,.'’])/g, '$1iPad')
+        .replace(/(^|\s)İnfinix(?=\s|$|[,.'’])/g, '$1Infinix')
     if (!text) return ''
     const folded = foldTr(text)
     const nameCore = stripBrandPrefix(p.name).split(/\s+[|–—]\s+|\s+-\s+/)[0]

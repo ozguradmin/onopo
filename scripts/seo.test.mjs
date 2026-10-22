@@ -81,6 +81,19 @@ test("productDescriptionLead: a lead starting with 'iPhone' is not taken for a c
     }
 })
 
+test("productDescriptionLead: the misspelled brand 'İnfinix' leads as 'Infinix' (ids 1111, 1120)", () => {
+    const body = 'İnfinix Note 30 Anti Static 9D Tam Ekran Cam Ekran Koruyucu İnfinix Note 30 modeliyle tam uyum sağlayan ekran koruyucu, cihazınızın ekranını &ccedil;izilmelere ve darbelere karşı korur.Anti statik &ouml;zelliği sayesinde, ekranınızda toz birikimini &ouml;nler.'
+    const p = product({ id: 1111, name: 'Onopo İnfinix Note 30 Anti Static 9D Tam Ekran Cam Ekran Koruyucu', description: html('CAM EKRAN KORUYUCU', body) })
+    assert.match(seo.productDescriptionLead(p), /^Infinix Note 30 modeliyle tam uyum sağlayan ekran koruyucu, cihazınızın ekranını çizilmelere/)
+    const d = seo.productMetaDescription(p, SITE)
+    assert.match(d, /^Infinix Note 30 modeliyle tam uyum/)
+    assert.doesNotMatch(d, /İnfinix/)
+    assert.ok(d.length <= 160, d)
+    // only the brand word itself: other words starting with "İn…" stay as they are
+    const other = product({ name: 'onopo Kablo', description: html('Kablo', 'İnce yapısı ile İnfinixli değil, İnfinix: uyumlu bir kablo. Kolay taşınır.') })
+    assert.match(seo.productDescriptionLead(other), /^İnce yapısı ile İnfinixli değil, İnfinix: uyumlu/)
+})
+
 test("productDescriptionLead: no 'Model - F1' label or echoed title fragment in front", () => {
     const f1 = product({ name: 'onopo Audio 3.5MM Aux Kablosu 1,5 Metre - F1', description: html('Aux Kablosu', 'Audio 3.5mm Aux Kablosu - F1 Model - F1 Yüksek kaliteli 3.5mm jack bağlantı noktası, geniş uyumluluk sunar.Kablo uzunluğu 1 metre olup, ses aktarımını mümkün kılar.') })
     assert.match(seo.productDescriptionLead(f1), /^Yüksek kaliteli 3\.5mm jack/)
