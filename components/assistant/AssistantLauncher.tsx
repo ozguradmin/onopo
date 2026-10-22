@@ -10,8 +10,7 @@
  *
  * It gets out of the way (fades, pointer-events none, inert) while a toast is up (CSS, app/globals.css),
  * the cart, menu or search is open, the panel is open, a text field outside the panel has focus (the phone
- * keyboard is up) and while the visitor scrolls down; it comes back on scroll up or 600 ms after scrolling
- * stops. Its bottom offset (above the bottom nav or the PDP buy bar) also lives in app/globals.css.
+ * keyboard is up). It does NOT hide while the page scrolls (that flicker looked broken). Its bottom offset (above the bottom nav or the PDP buy bar) also lives in app/globals.css.
  *
  * The one nudge of v1: on a product page after 25 s without an add to cart, a small bubble offers help with
  * compatibility. At most once per session and 3 times per 7 days, never after 2 closes in 30 days and never
@@ -91,34 +90,10 @@ export function AssistantLauncher() {
     const cartOpen = useCartStore(s => s.isOpen)
     const menuOpen = useShellUI(s => s.menuOpen)
     const searchOpen = useShellUI(s => s.searchOpen)
-    const [scrolling, setScrolling] = React.useState(false)
     const [typing, setTyping] = React.useState(false)
     const [intro, setIntro] = React.useState(false)
 
-    // Scrolling down hides it (it would cover the cards' round quick-add buttons); up or a pause brings it back
-    React.useEffect(() => {
-        let last = window.scrollY
-        let raf = 0
-        let timer: ReturnType<typeof setTimeout> | undefined
-        const onScroll = () => {
-            if (raf) return
-            raf = requestAnimationFrame(() => {
-                raf = 0
-                const y = window.scrollY
-                if (y > last + 4) setScrolling(true)
-                else if (y < last - 4) setScrolling(false)
-                last = y
-                clearTimeout(timer)
-                timer = setTimeout(() => setScrolling(false), 600)
-            })
-        }
-        window.addEventListener('scroll', onScroll, { passive: true })
-        return () => {
-            window.removeEventListener('scroll', onScroll)
-            cancelAnimationFrame(raf)
-            clearTimeout(timer)
-        }
-    }, [])
+    // It stays put while the page scrolls (owner: hiding on scroll and popping back looked broken)
 
     // A text field outside the panel has focus: the phone keyboard is up
     React.useEffect(() => {
@@ -148,7 +123,7 @@ export function AssistantLauncher() {
         return () => clearTimeout(t)
     }, [])
 
-    const hidden = visible || cartOpen || menuOpen || searchOpen || scrolling || typing
+    const hidden = visible || cartOpen || menuOpen || searchOpen || typing
     const nudge = useNudge(path, used)
     const label = hasConversation ? 'Sohbete devam et' : 'Asistana sor'
 
