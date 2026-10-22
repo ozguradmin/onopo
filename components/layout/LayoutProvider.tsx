@@ -7,6 +7,8 @@
  *   the footer, and the element around the page never changes type, so pages mount exactly once.
  * - Chrome by path: /admin/* and /maintenance get no store header/footer (admin has its own layout).
  *   /odeme gets the reduced checkout header and footer and no bottom nav (spec §13).
+ *   /siparis-basarili and /siparis-hata (PayTR's result pages, shown inside the payment iframe on
+ *   /odeme) get no store chrome at all, so nothing in the frame opens the store inside the iframe.
  * - Maintenance mode comes from site_settings (server data, passed in `data`). When it is on, every
  *   path except /admin/*, /maintenance, /login and /register renders the maintenance message in the
  *   server HTML (API routes never pass through layouts, so they are unaffected). That HTML carries the
@@ -59,6 +61,9 @@ export function LayoutProvider({
     const isCheckout = path === '/odeme'
     const showMaintenance = data.settings.maintenance_mode && !isAdmin && !MAINTENANCE_EXEMPT.includes(path)
     const showChrome = !isAdmin && !isMaintenancePage && !showMaintenance
+    // Store pages that render without header, drawers, footer and bottom nav (analytics still counts them)
+    const isPaymentResult = path === '/siparis-basarili' || path === '/siparis-hata'
+    const chrome = showChrome && !isPaymentResult
     // An empty category list means the layout data could not be loaded (the store always has
     // categories with products): never let the edge cache keep that render.
     const degraded = showChrome && data.categories.length === 0
@@ -105,7 +110,7 @@ export function LayoutProvider({
             <ShellFactsContext.Provider value={facts}>
                 <ShellChromeContext.Provider value={showChrome}>
                     {degraded && <NoEdgeCache />}
-                    {showChrome && (
+                    {chrome && (
                         <a
                             href="#main-content"
                             className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-card focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink focus:shadow-overlay"
@@ -113,10 +118,11 @@ export function LayoutProvider({
                             İçeriğe geç
                         </a>
                     )}
-                    {showChrome && <Header fromShell variant={variant} />}
-                    {showChrome && <CartDrawer />}
-                    {showChrome && !isCheckout && <MobileMenu />}
-                    <Main id="main-content" className={showChrome ? 'min-h-[60vh]' : undefined}>
+                    {chrome && <Header fromShell variant={variant} />}
+                    {chrome && <CartDrawer />}
+                    {chrome && !isCheckout && <MobileMenu />}
+                    {/* The chrome-less result pages fill the frame in their own surface colour */}
+                    <Main id="main-content" className={isPaymentResult ? 'min-h-dvh bg-surface' : showChrome ? 'min-h-[60vh]' : undefined}>
                         {showMaintenance ? (
                             <MaintenanceView settings={data.settings} />
                         ) : (
@@ -125,8 +131,8 @@ export function LayoutProvider({
                             </GlobalErrorBoundary>
                         )}
                     </Main>
-                    {showChrome && <Footer fromShell variant={variant} />}
-                    {showChrome && !isCheckout && <MobileNav fromShell />}
+                    {chrome && <Footer fromShell variant={variant} />}
+                    {chrome && !isCheckout && <MobileNav fromShell />}
                 </ShellChromeContext.Provider>
             </ShellFactsContext.Provider>
         </StoreDataProvider>
