@@ -131,6 +131,18 @@ CREATE TABLE IF NOT EXISTS favorites (
     UNIQUE(user_id, product_id)
 );
 
+-- Admin 2FA challenges (app/api/auth/two-factor.ts): one row per admin login that sent a code. The random
+-- id is also the value of the HttpOnly challenge cookie; wrong codes are counted per challenge (max 5).
+-- The code itself stays in two_factor_codes. Additive only: older code simply never reads this table.
+CREATE TABLE IF NOT EXISTS two_factor_challenges (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    code_id INTEGER NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 -- No INSERT statements here: deploy.yml runs this file against the live database on every push,
 -- so seed rows would come back after being deleted in the admin panel. Default rows for a fresh,
 -- empty database are in scripts/seed-defaults.sql (run it once by hand).
@@ -148,3 +160,4 @@ CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites(user_id);
 CREATE INDEX IF NOT EXISTS idx_favorites_product_id ON favorites(product_id);
 CREATE INDEX IF NOT EXISTS idx_homepage_sections_is_active ON homepage_sections(is_active);
+CREATE INDEX IF NOT EXISTS idx_two_factor_challenges_user_id ON two_factor_challenges(user_id);

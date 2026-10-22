@@ -6,6 +6,10 @@
  *   favorites → /api/favorites            (favorites of the user; only ACTIVE products are shown)
  *   orders    → /api/orders/my-orders     (orders with user_id = me OR guest_email = my e-mail)
  * The APIs themselves are unchanged and still used by other clients.
+ *
+ * Orders matched only by the e-mail (guest checkouts with my address, user_id not mine) are listed with
+ * number, date, status, lines and totals only: registration does not verify the e-mail, so whoever signs
+ * up with someone else's address must not see that person's name, address, note, tracking or e-invoice.
  */
 import 'server-only'
 import { cache } from 'react'
@@ -94,6 +98,11 @@ export interface AccountOrder {
     shippingCompany: string
     invoiceUrl: string | null
     invoiceNo: string
+    /**
+     * True when the order is listed only because its checkout e-mail is the account's e-mail (not placed
+     * while logged in): delivery name/place, note, tracking and invoice are then left empty.
+     */
+    detailsHidden: boolean
 }
 
 function parseJson(value: unknown): unknown {
@@ -117,7 +126,7 @@ export async function getAccountOrders(user: Pick<AccountUser, 'id' | 'email'>):
     const [ordersRes, linesRes] = await db.batch([
         db
             .prepare(
-                `SELECT id, status, payment_status, total_amount, shipping_address, items, note, tracking_number, tracking_code,
+                `SELECT id, user_id, status, payment_status, total_amount, shipping_address, items, note, tracking_number, tracking_code,
                         shipping_company, invoice_url, invoice_no, created_at
                  FROM orders WHERE user_id = ? OR guest_email = ? ORDER BY created_at DESC, id DESC LIMIT 200`,
             )
@@ -161,7 +170,7 @@ export async function getAccountOrders(user: Pick<AccountUser, 'id' | 'email'>):
             }
         }
         const shipping = Number(address.shipping_cost)
-        return {
+        const order: AccountOrder = {
             id,
             status: str(r.status) || 'pending',
             paymentStatus: str(r.payment_status),
@@ -178,7 +187,25 @@ export async function getAccountOrders(user: Pick<AccountUser, 'id' | 'email'>):
             shippingCompany: str(r.shipping_company).trim(),
             invoiceUrl: httpUrl(r.invoice_url),
             invoiceNo: str(r.invoice_no),
+            detailsHidden: false,
         }
+        // Matched only by the (unverified) e-mail: keep the order summary, drop personal and document data
+        if (Number(r.user_id) !== user.id) {
+            return {
+                ...order,
+                note: '',
+                city: '',
+                district: '',
+                fullName: '',
+                trackingNumber: '',
+                trackingUrl: null,
+                shippingCompany: '',
+                invoiceUrl: null,
+                invoiceNo: '',
+                detailsHidden: true,
+            }
+        }
+        return order
     })
 }
 

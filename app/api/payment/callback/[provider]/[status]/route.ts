@@ -80,9 +80,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
                     orderId = merchant_oid.split('T')[0].substring(2)
                 }
                 // Set BOTH status and payment_status to prevent showing in admin
-                // (a re-sent notification for an order that is already cancelled/failed writes nothing)
+                // (a re-sent notification for an order that is already cancelled/failed writes nothing,
+                // and a failure notification never touches an order that is already paid)
                 await db.prepare(
-                    "UPDATE orders SET status = 'cancelled', payment_status = 'failed' WHERE id = ? AND NOT (status IS 'cancelled' AND payment_status IS 'failed')"
+                    "UPDATE orders SET status = 'cancelled', payment_status = 'failed' WHERE id = ? AND NOT (status IS 'cancelled' AND payment_status IS 'failed') AND payment_status IS NOT 'paid'"
                 ).bind(orderId).run()
                 return new NextResponse('OK')
             }

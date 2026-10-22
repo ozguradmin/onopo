@@ -3,27 +3,21 @@
  * lib/seo.ts stays pure and can be imported anywhere.
  */
 import 'server-only'
+import { cache } from 'react'
 import { getDB } from './db'
 import { DEFAULT_SITE_SEO, loadSiteSeo, type D1Like, type SiteSeo } from './seo'
 
-let siteSeoCache: { at: number; ttl: number; value: Promise<SiteSeo> } | null = null
-
 /**
- * Site data for metadata/JSON-LD, cached per Worker isolate for 5 minutes (30 s after a failure).
+ * Site data for metadata/JSON-LD, read once per request (React cache: the layout, generateMetadata and the
+ * page share one read). No cross-request memo: an admin change to shipping, the CMS shipping page, logo or
+ * contact data shows on the next render, and the edge cache (lib/edge-cache.ts) already absorbs the load.
+ * Never throws: falls back to the defaults.
  */
-export async function getSiteSeo(): Promise<SiteSeo> {
-    const now = Date.now()
-    if (siteSeoCache && now - siteSeoCache.at < siteSeoCache.ttl) return siteSeoCache.value
-    const entry: { at: number; ttl: number; value: Promise<SiteSeo> } = { at: now, ttl: 5 * 60 * 1000, value: Promise.resolve(DEFAULT_SITE_SEO) }
-    entry.value = (async () => {
-        try {
-            return await loadSiteSeo((await getDB()) as unknown as D1Like)
-        } catch (err) {
-            console.error('getSiteSeo failed, using defaults:', err)
-            entry.ttl = 30 * 1000
-            return { ...DEFAULT_SITE_SEO }
-        }
-    })()
-    siteSeoCache = entry
-    return entry.value
-}
+export const getSiteSeo = cache(async (): Promise<SiteSeo> => {
+    try {
+        return await loadSiteSeo((await getDB()) as unknown as D1Like)
+    } catch (err) {
+        console.error('getSiteSeo failed, using defaults:', err)
+        return { ...DEFAULT_SITE_SEO }
+    }
+})

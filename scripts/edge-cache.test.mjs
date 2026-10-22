@@ -3,15 +3,23 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+    ANONYMOUS_HTML_CACHE_CONTROL,
     cacheKeyUrl,
     canonicalRedirect,
     isCacheablePath,
     isCacheableRequest,
+    isCookieRemoval,
+    isMaintenanceBody,
     isProductSlugPath,
     isStorableBody,
     isStorableResponse,
+    isTrackingParam,
+    maintenanceHeaders,
+    mayRenderMaintenance,
     needsBodyCheck,
+    sessionHintSetCookie,
     shouldBumpCacheVersion,
+    stripTrackingParams,
 } from '../lib/edge-cache.ts'
 import { isBotUserAgent } from '../lib/bot-user-agent.ts'
 
@@ -123,6 +131,42 @@ test('cacheKeyUrl: tracking parameters dropped, the rest sorted, build and versi
     assert.equal(key, 'https://onopostore.com/__edge-cache/B1/v9/products/?f=a&page=2')
 })
 
+const TRACKING = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id', 'utm_source_platform',
+    'fbclid', 'gclid', 'gclsrc', 'gbraid', 'wbraid', 'dclid', 'srsltid', '_gl', '_ga', 'msclkid', 'yclid', 'ttclid', 'twclid',
+    'igshid', 'igsh', 'mc_cid', 'mc_eid', 'li_fat_id', 'UTM_SOURCE', 'GCLID']
+
+test('isTrackingParam: ad/analytics click ids yes, store parameters no', () => {
+    for (const p of TRACKING) assert.equal(isTrackingParam(p), true, p)
+    for (const p of ['q', 'f', 'sort', 'page', 'minPrice', 'maxPrice', 'discounted', 'inStock', 'category', 'index', 'includeAll',
+        '_rsc', 'id', 'token', 'utm', 'gl', 'ga', 'srsltid2', 'xgclid']) {
+        assert.equal(isTrackingParam(p), false, p)
+    }
+})
+
+test('cacheKeyUrl: every tracking parameter is ignored (one key for all ad/organic landings)', () => {
+    const clean = cacheKeyUrl(new URL('https://onopostore.com/onopo-t67/'), 'B', 'v')
+    for (const p of TRACKING) {
+        assert.equal(cacheKeyUrl(new URL(`https://onopostore.com/onopo-t67/?${p}=AfmBOoq1`), 'B', 'v'), clean, p)
+    }
+    assert.equal(cacheKeyUrl(new URL('https://onopostore.com/products/?srsltid=a&_gl=1*x*_ga*y&page=2&ttclid=3'), 'B', 'v'),
+        'https://onopostore.com/__edge-cache/B/v/products/?page=2')
+})
+
+test('stripTrackingParams: the URL Next renders has no tracking parameters; other parameters keep their order', () => {
+    assert.equal(stripTrackingParams(new URL('https://onopostore.com/products/?page=2&sort=price_asc')), null)
+    assert.equal(stripTrackingParams(new URL('https://onopostore.com/')), null)
+    assert.equal(stripTrackingParams(new URL('https://onopostore.com/?utm_source=google&gclid=x'))?.href, 'https://onopostore.com/')
+    assert.equal(
+        stripTrackingParams(new URL('https://onopostore.com/products/?sort=price_asc&srsltid=AfmB&page=2&_gl=1*abc&q=şarj aleti'))?.href,
+        'https://onopostore.com/products/?sort=price_asc&page=2&q=%C5%9Farj+aleti',
+    )
+    const stripped = stripTrackingParams(new URL('https://onopostore.com/onopo-t67/?fbclid=1&utm_campaign=x'))
+    assert.equal(stripped?.pathname, '/onopo-t67/')
+    assert.equal(stripped?.search, '')
+    // the stripped request stays cacheable exactly like the clean one
+    assert.equal(isCacheableRequest(req(stripped.href)), true)
+})
+
 test('shouldBumpCacheVersion: successful content writes with a session', () => {
     assert.equal(shouldBumpCacheVersion('/api/products/12/', 'PUT', true), true)
     assert.equal(shouldBumpCacheVersion('/api/seed-pages/', 'POST', true), true)
@@ -133,6 +177,83 @@ test('shouldBumpCacheVersion: successful content writes with a session', () => {
     assert.equal(shouldBumpCacheVersion('/api/products/12/', 'PUT', false), false)
     assert.equal(shouldBumpCacheVersion('/api/admin/forgot-password/', 'POST', true), false)
     assert.equal(shouldBumpCacheVersion('/api/orders/', 'POST', true), false)
+})
+
+test('shouldBumpCacheVersion: writes that never change the storefront do not flush the cache', () => {
+    for (const p of ['/api/admin/optimize-images/', '/api/admin/optimize-images', '/api/admin/email/send/', '/api/admin/users/',
+        '/api/admin/profile/', '/api/admin/log/', '/api/admin/reset-password/', '/api/auth/login/', '/api/auth/logout/',
+        '/api/auth/verify-2fa/', '/api/favorites/', '/api/favorites/12/', '/api/analytics/track/', '/api/orders/', '/api/orders/90/',
+        '/api/user/profile/', '/api/coupons/verify/', '/api/payment/callback/paytr/result', '/api/birfatura/api/orderCargoUpdate']) {
+        for (const m of ['POST', 'PUT', 'DELETE']) assert.equal(shouldBumpCacheVersion(p, m, true), false, `${m} ${p}`)
+    }
+    // still bumping: everything that can change what the store shows
+    for (const p of ['/api/products/', '/api/products/12/', '/api/products/12/reviews/', '/api/products/12/variations/',
+        '/api/admin/products/bulk/', '/api/admin/reviews/3/', '/api/admin/menus/', '/api/admin/coupons/', '/api/admin/payment-settings/',
+        '/api/admin/upload/', '/api/upload/', '/api/categories/4/', '/api/site-settings/', '/api/shipping-settings/', '/api/pages/help/',
+        '/api/homepage-sections/2/', '/api/hero-slides/', '/api/admin/db-fix/']) {
+        assert.equal(shouldBumpCacheVersion(p, 'POST', true), true, p)
+    }
+})
+
+test('maintenance: the rendered marker is detected in HTML only, and only page paths are inspected', () => {
+    const page = '<html><body><main><div hidden="" data-onopo-nocache=""></div><div hidden="" data-onopo-maintenance=""></div><h1>Onopo kısa bir bakımda</h1></main></body></html>'
+    assert.equal(isMaintenanceBody(HTML, page), true)
+    assert.equal(isMaintenanceBody(HTML, '<html><body><h1>Onopo</h1></body></html>'), false)
+    // an RSC/JSON payload that only names the attribute is not the render
+    assert.equal(isMaintenanceBody(HTML, '<script>self.__next_f.push([1,"{\\"data-onopo-maintenance\\":\\"\\"}"])</script>'), false)
+    assert.equal(isMaintenanceBody('application/json', page), false)
+    assert.equal(isMaintenanceBody('text/x-component', page), false)
+    // the maintenance page is never stored either
+    assert.equal(isStorableBody('/', HTML, page), false)
+    for (const p of ['/', '/products/', '/onopo-t67/', '/kategori/x/', '/odeme/', '/maintenance/', '/login/', '/siparis-basarili/']) {
+        assert.equal(mayRenderMaintenance(p), true, p)
+    }
+    for (const p of ['/api/feeds/google', '/api/products/', '/api/birfatura/api/orders/', '/api/payment/callback/paytr/result',
+        '/admin/', '/admin', '/admin/login/', '/sitemap.xml', '/robots.txt', '/_next/static/chunks/a.js', '/api']) {
+        assert.equal(mayRenderMaintenance(p), false, p)
+    }
+    assert.deepEqual(maintenanceHeaders(), { 'Retry-After': '3600', 'X-Robots-Tag': 'noindex', 'Cache-Control': 'no-store' })
+})
+
+test('ANONYMOUS_HTML_CACHE_CONTROL: revalidated by the browser but bfcache-eligible (no no-store)', () => {
+    assert.match(ANONYMOUS_HTML_CACHE_CONTROL, /\bno-cache\b/)
+    assert.match(ANONYMOUS_HTML_CACHE_CONTROL, /\bprivate\b/)
+    assert.doesNotMatch(ANONYMOUS_HTML_CACHE_CONTROL, /no-store|public|max-age=[1-9]/)
+})
+
+test('isCookieRemoval: empty value, Max-Age 0 or a past Expires', () => {
+    assert.equal(isCookieRemoval('auth_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT'), true)
+    assert.equal(isCookieRemoval('auth_token=abc; Path=/; Max-Age=0'), true)
+    assert.equal(isCookieRemoval('auth_token=abc; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT'), true)
+    assert.equal(isCookieRemoval('auth_token=abc; Path=/; Expires=Thu, 29 Oct 2099 04:11:22 GMT; Max-Age=604800; Secure; HttpOnly; SameSite=lax'), false)
+    assert.equal(isCookieRemoval('auth_token=abc'), false)
+})
+
+test('sessionHintSetCookie: keeps onopo_oturum in line with auth_token', () => {
+    const H = 'onopo_oturum'
+    const SET = 'onopo_oturum=1; Path=/; Max-Age=604800; Secure; SameSite=Lax'
+    const CLEAR = 'onopo_oturum=; Path=/; Max-Age=0; Secure; SameSite=Lax'
+    // request state
+    assert.equal(sessionHintSetCookie(H, 'auth_token=x', []), SET)
+    assert.equal(sessionHintSetCookie(H, 'a=1; auth_token=x; b=2', []), SET)
+    assert.equal(sessionHintSetCookie(H, 'auth_token=x; onopo_oturum=1', []), null)
+    assert.equal(sessionHintSetCookie(H, 'onopo_oturum=1', []), CLEAR)
+    assert.equal(sessionHintSetCookie(H, 'theme=dark; onopo_oturum=1', []), CLEAR)
+    assert.equal(sessionHintSetCookie(H, null, []), null)
+    assert.equal(sessionHintSetCookie(H, 'theme=dark', []), null)
+    assert.equal(sessionHintSetCookie(H, 'xonopo_oturum=1', []), null)
+    // a response that logs in or out decides the state after it
+    const login = 'auth_token=eyJ; Path=/; Expires=Thu, 29 Oct 2099 04:11:22 GMT; Max-Age=604800; Secure; HttpOnly; SameSite=lax'
+    const logout = 'auth_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
+    assert.equal(sessionHintSetCookie(H, null, [login]), SET)
+    assert.equal(sessionHintSetCookie(H, 'onopo_oturum=1', [login]), null)
+    assert.equal(sessionHintSetCookie(H, 'auth_token=old; onopo_oturum=1', [logout]), CLEAR)
+    assert.equal(sessionHintSetCookie(H, 'auth_token=old', [logout]), null)
+    // the route set the hint itself: never a second, conflicting line
+    assert.equal(sessionHintSetCookie(H, 'onopo_oturum=1', [login, 'onopo_oturum=1; Path=/; Max-Age=604800; Secure; SameSite=lax']), null)
+    assert.equal(sessionHintSetCookie(H, 'auth_token=x', [logout, 'onopo_oturum=; Path=/; Max-Age=0']), null)
+    // the hint never makes a request uncacheable (only auth_token does)
+    assert.equal(isCacheableRequest(req('https://onopostore.com/', { headers: { cookie: 'onopo_oturum=1' } })), true)
 })
 
 test('isBotUserAgent: crawlers yes, CUBOT phones no', () => {

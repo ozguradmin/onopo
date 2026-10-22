@@ -9,7 +9,8 @@ import { NoCacheMarker } from '@/components/status/status-islands'
 
 // /maintenance/: shown without the store header/footer (LayoutProvider). The maintenance switch is
 // site_settings.maintenance_mode, read on the server: when it is off this URL sends visitors home.
-// The data-onopo-nocache marker keeps this response out of the edge cache.
+// The data-onopo-nocache marker keeps this response out of the edge cache; the data-onopo-maintenance
+// marker makes worker.ts send it as 503 + Retry-After (like the maintenance render of every store page).
 export const metadata: Metadata = {
     title: 'Bakımdayız',
     ...privatePageMetadata,
@@ -32,6 +33,7 @@ export default async function MaintenancePage() {
     return (
         <div className="relative flex min-h-screen flex-col bg-surface">
             <NoCacheMarker />
+            <div hidden data-onopo-maintenance="" />
             <header className="flex justify-center px-4 pt-8 lg:pt-12">
                 {logo ? (
                     // eslint-disable-next-line @next/next/no-img-element
