@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
+import { slugifyTr } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,11 +52,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Category name is required' }, { status: 400 })
         }
 
-        const slug = name.toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, '')
-            .replace(/\s+/g, '-')
-            .replace(/-+/g, '-')
-            .trim()
+        // The slug is the public URL /kategori/<slug>/: Turkish letters are transliterated first
+        // ("Çok Satanlar" -> "cok-satanlar"; the old a-z filter dropped them: "ok-satanlar")
+        const slug = slugifyTr(String(name))
+        if (!slug) {
+            return NextResponse.json({ error: 'Category name must contain a letter or digit' }, { status: 400 })
+        }
 
         await db.prepare('INSERT INTO categories (name, slug, icon) VALUES (?, ?, ?)')
             .bind(name, slug, icon || 'package')
