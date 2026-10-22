@@ -237,6 +237,11 @@ test('open-redirect safety: foreign hosts are never a target', async () => {
     ]) {
         assert.equal(await target(`/_next/image?url=${encodeURIComponent(u)}&w=64`, { r2: ['x.png', 'a.png'], assets: ['/\\evil.example/x.png'] }), null, u)
     }
+    // '/%2Fevil.example/x.png' decodes to a protocol-relative '//evil.example/x.png': never a Location
+    for (const u of ['/%2Fevil.example/x.png', '/%5Cevil.example/x.png']) {
+        const t = await target(`/_next/image?url=${encodeURIComponent(u)}&w=64`, { assets: ['//evil.example/x.png', '/\\evil.example/x.png'] })
+        assert.ok(t === null || (t.startsWith('/') && !t.startsWith('//') && !t.startsWith('/\\')), `${u} → ${t}`)
+    }
     for (const t of ['https://evil.example/', '//evil.example', '/\\evil.example', 'javascript:alert(1)', 'http://images.onopostore.com:8080/a.png', 'https://user@images.onopostore.com/a.png']) {
         assert.equal(safeTarget(t), null, t)
     }

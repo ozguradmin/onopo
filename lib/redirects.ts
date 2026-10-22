@@ -187,6 +187,15 @@ export function safeTarget(raw: string | null | undefined): string | null {
     return parsed.key
 }
 
+/**
+ * Last check before a target becomes a Location: our image host, or a path that cannot be read as another host
+ * ('//x' and '/\x' are protocol-relative in browsers).
+ */
+export function isSafeLocation(target: string): boolean {
+    if (target.startsWith(`${R2_PUBLIC_HOST}/`)) return true
+    return target.startsWith('/') && !/^\/[\/\\]/.test(target) && !/[\u0000-\u001f\u007f]/.test(target)
+}
+
 /** The Location header for a safe target (paths are stored decoded: 'ç' → '%C3%A7'). */
 export function toLocation(target: string): string {
     if (target.startsWith('https://')) return target
@@ -649,7 +658,8 @@ async function resolveRules(parsed: ParsedPath, deps: ResolveDeps): Promise<Reso
         const file = local.path.slice(local.path.lastIndexOf('/') + 1)
         if (!IMAGE_EXT.test(file)) return null
         const rawLocal = decodeSafe(src.local)
-        if (deps.assetExists && /^\/[\w\-./]+$/.test(rawLocal) && !rawLocal.includes('..')) {
+        // A plain same-site file path only: '//host/x.png' (from '/%2Fhost/x.png') would be protocol-relative
+        if (deps.assetExists && /^\/[\w\-.][\w\-./]*$/.test(rawLocal) && !rawLocal.includes('..') && !rawLocal.includes('//')) {
             try {
                 if (await deps.assetExists(rawLocal)) return { target: rawLocal, via: 'pattern', rule: 'next-image', checked: true }
             } catch { /* treated as missing */ }
@@ -716,7 +726,7 @@ export async function resolvePath(input: string, deps: ResolveDeps): Promise<Res
             const to = await deps.adminRedirect(key)
             if (to == null) continue
             const target = safeTarget(to)
-            if (target && target !== parsed.key && target !== parsed.path && isLiveTarget(target, deps.index)) {
+            if (target && isSafeLocation(target) && target !== parsed.key && target !== parsed.path && isLiveTarget(target, deps.index)) {
                 return { target, via: 'admin', rule: 'admin', from: key }
             }
             return { target: null, problem: 'admin-target-gone', from: key, to }
@@ -727,7 +737,7 @@ export async function resolvePath(input: string, deps: ResolveDeps): Promise<Res
     if (!result || !result.target) return null
     // A static file keeps its case (/Logo.png); everything else is a normalized path or an image URL
     const target = result.checked ? result.target : safeTarget(result.target)
-    if (!target || target === parsed.key || target === parsed.path) return null
+    if (!target || !isSafeLocation(target) || target === parsed.key || target === parsed.path) return null
     if (!result.checked && !isLiveTarget(target, deps.index)) return null
     return { ...result, target }
 }
