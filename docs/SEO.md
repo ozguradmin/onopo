@@ -19,52 +19,59 @@ and carry no query string. The only exception is `?page=N` (N ≥ 2) on listings
 |---|---|---|---|
 | Home | `/` | `canonicalUrl('/')` | |
 | All products | `/products/` | | `?page=N` is self-canonical; search/filter/sort variants are noindex (§6) |
-| Category | `/kategori/<category-slug>/` | `categoryPath(slug)` | New route (wave 2). `/products/?category=<name or slug>` → 308 here |
+| Category | `/kategori/<category-slug>/` | `categoryPath(slug)` | `/products/?category=<name or slug>` → 308 here |
 | Product | `/<product-slug>/` | `productPath(slug)` | **Never change this format.** Akakçe, both feeds, the sitemap and JSON-LD use it |
 | CMS page | `/page/<slug>/` | `cmsPagePath(slug)` | help, shipping, policy, terms, and any page added in Admin › Sayfalar |
 | `/product/<id>/` | → 308 `/<slug>/` | `resolveProductId(id)` | 404 for unknown or inactive ids |
-| `/help/ /policy/ /shipping/ /terms/` | → 308 `/page/<slug>/` | `LEGACY_PATH_REDIRECTS` | The static copies contain placeholder contacts (destek@onopo.com, 0850 …) |
-| `/tech/ /beauty/ /new/` | → 308 `/products/` | `LEGACY_CATEGORY_TARGETS` | Legacy hard-coded listings; 0 products. `/new/` = newest first = the default order of `/products/` |
-| `/gaming/` | → 308 `/kategori/oyun-ve-oyuncu-aksesuarlari/` | | Falls back to `/products/` if that category has no active product |
-| `/sepet`, `/uye-giris` | → 308 `/odeme/`, `/login/` | | URLs from the old shop platform |
-| Utility pages | (no canonical, noindex) | `privatePageMetadata` | `/odeme/ /profile/ /orders/ /login/ /register/ /siparis-basarili/ /siparis-hata/ /maintenance/ /admin/*` |
+| `/help/ /policy/ /shipping/ /terms/` | → 308 `/page/<slug>/` | `LEGACY_PATH_REDIRECTS` | `app/help` etc. only call `permanentRedirect` now |
+| `/tech/ /beauty/` | → 308 `/products/` | `LEGACY_CATEGORY_TARGETS` | Legacy hard-coded listings; 0 products |
+| `/new/` ("Yeni Gelenler") | → 308 `/products/?sort=newest` | `LEGACY_CATEGORY_TARGETS` | Menus link to the target directly (`components/layout/nav-data.ts`). The target is a sort variant: noindex and disallowed in robots.txt, like every `?sort=` URL. `/products/?category=new` still goes to `/products/` |
+| `/gaming/` | → 308 `/kategori/oyun-ve-oyuncu-aksesuarlari/` | `LEGACY_CATEGORY_TARGETS` | Falls back to `/products/` if that category has no active product |
+| `/sepet/`, `/uye-giris/` | → 308 `/odeme/`, `/login/` | `LEGACY_PATH_REDIRECTS` | URLs from the old shop platform. `resolveSlug` returns kind `'legacy-path'` (they were 404 before) |
+| `/cart/`, `/checkout/` | 404 | | Only linked from the hidden Akakçe block; disallowed in robots.txt |
+| Utility pages | (no canonical, noindex) | `privatePageMetadata` | `/odeme/ /profile/ /orders/ /login/ /register/ /siparis-basarili/ /siparis-hata/ /maintenance/ /admin/*`. `/admin` and `/admin/*` also send `X-Robots-Tag: noindex, nofollow` (`next.config.ts`), because the admin client app has no page metadata |
 
-**Why `/page/<slug>/` for CMS pages.** The footer already links there, and it is a namespace of its own: a new
-CMS page can never collide with a product slug at the root. Delete the hard-coded `app/help`, `app/policy`,
-`app/shipping` and `app/terms` routes (their contacts are wrong). Then `/help/` reaches `app/[slug]`, and
-`resolveSlug('help')` returns `{ kind: 'page', path: '/page/help/' }`, which becomes a 308. Alternatively,
-add `LEGACY_PATH_REDIRECTS` to `next.config.ts` `redirects()`. With `trailingSlash: true`, confirm with curl
-that both `/help` and `/help/` redirect.
+`LEGACY_CATEGORY_TARGETS` lives in `lib/seo.ts` (client-safe, so the menus can use it) and is re-exported from
+`lib/seo-routing.ts`. `resolveSlug`, `LEGACY_PATH_REDIRECTS` and the menu link normaliser all read this one table.
+
+The forms without a trailing slash (`/help`, `/new`, `/sepet` …) take two hops: Next's own trailing-slash 308
+runs before any route, then the legacy redirect. The slash forms are one hop.
+
+**Why `/page/<slug>/` for CMS pages.** The footer links there, and it is a namespace of its own: a new CMS page
+can never collide with a product slug at the root. The old hard-coded copies of help, policy, shipping and terms
+(with placeholder contacts) are gone: `app/help`, `app/policy`, `app/shipping` and `app/terms` now only redirect
+to `/page/<slug>/`.
 
 **Reserved slugs.** `RESERVED_SLUGS` lists the top-level static routes. A product with one of these slugs would
-be shadowed, so the product slug generator (`app/api/products/route.ts`) should reject them. No product uses one
-today.
+be shadowed, so the product slug generator (`app/api/products/route.ts`) should reject them; it does not check
+them yet. No product uses one today.
 
-**www and http.** The owner adds the redirect in Cloudflare (a Redirect Rule, not Next middleware). Pages
-redirect www → apex with a 301. Exclude `/api/*`, or use a 308 for it: checkout POSTs happen on www, and PayTR and
-BirFatura call the apex. Also exclude `/sitemap.xml` and `/robots.txt`, or check that the Akakçe bot follows the
-redirect, because it reads `https://www.onopostore.com/sitemap.xml`. Canonicals already point at the apex
-whichever host served the page.
+**www and http.** `worker.ts` does this (`canonicalRedirect` in `lib/edge-cache.ts`), not `next.config.ts` and
+not a Cloudflare rule. GET/HEAD requests for pages on `http://` or `www.onopostore.com` get a 301 to
+`https://onopostore.com` with the same path and query. `/api/*` is never redirected: checkout POSTs happen on
+www, PayTR and BirFatura call the apex, and Merchant fetches the feed from www. `/sitemap.xml` and `/robots.txt`
+stay on the host they were requested on (only http → https), because the Akakçe bot reads
+`https://www.onopostore.com/sitemap.xml`. Other hosts (workers.dev, 127.0.0.1) are left alone. Canonicals point
+at the apex whichever host served the page.
+
+**Tracking parameters** (`utm_*`, `gclid`, `srsltid`, `fbclid`, `msclkid` …) are removed by `worker.ts` from the
+URL Next renders and from the edge-cache key. The browser keeps its address; server code never sees them.
 
 ## 2. Metadata (`<head>`)
 
-### Root layout (`app/layout.tsx`, owned by the layout agent)
+### Root layout (`app/layout.tsx`)
 
-- Use `export const metadata = rootMetadata` from `lib/seo.ts`. It sets:
+- `generateMetadata` spreads `rootMetadata` from `lib/seo.ts` and adds the favicon. `rootMetadata` sets:
   - `metadataBase`
   - the title template `%s | Onopo` and the default title and description
   - Open Graph and Twitter defaults with the existing **`/og-image.jpg`** (1024×1024)
   - robots `index,follow` with `max-image-preview:large`
-- **Delete** these from the layout:
-  - the hard-coded `<link rel="canonical" href={baseUrl}>`, which made every page canonical to the home page
-  - the `verification.google` placeholder (Search Console is verified by DNS)
-  - the two feed `<link rel="alternate">` tags (one has the wrong type)
-  - the Google Fonts preconnects (next/font hosts the fonts itself)
+- The layout emits no canonical (each page sets its own), no `verification.google` placeholder (Search
+  Console is verified by DNS), no feed `<link rel="alternate">` tags and no Google Fonts preconnects (next/font
+  hosts the fonts itself).
 - `/og-image.png` does not exist; nothing may reference it. The fallback is `DEFAULT_OG_IMAGE` (`/og-image.jpg`).
-- Organization and WebSite JSON-LD: render `organizationJsonLd(site)` and `websiteJsonLd(site)` with
-  `<JsonLd>`, where `site = await getSiteSeo()`, either in the root layout or on the home page, but not in both.
-  - They replace the old placeholder blocks: phone `+90-XXX-XXX-XXXX`, wrong `sameAs`, and `?search=` in the
-    SearchAction.
+- Organization and WebSite JSON-LD: the root layout renders `organizationJsonLd(site)` and `websiteJsonLd(site)`
+  with `<JsonLd>` (`site = await getSiteSeo()`). Do not render them again on a page.
   - `sameAs` contains only real brand profiles from `site_settings`.
   - `contactPoint` is added only when `footer_phone` is set.
 
@@ -82,6 +89,7 @@ export async function generateMetadata(): Promise<Metadata> {
         path: '/kategori/x/',   // canonical path; trailing slash is added if missing
         query: { page },        // only on listings; page 1 is dropped automatically
         images: [product.images[0]],  // optional; '/api/images/<key>' is resolved to https://images.onopostore.com/<key>
+                                      // (product pages pass the 1200w WebP variant once image variants are enabled)
         noindex: false,         // true -> robots noindex,follow and NO canonical tag
         site,                   // twitter:site from site_settings.twitter_url
     })
@@ -99,7 +107,7 @@ hand-write a partial `openGraph`. Use `buildMetadata`.
 |---|---|
 | Home | `buildMetadata({ absoluteTitle: homeTitle(productNames), … })`, e.g. "Onopo Store \| Ekran Koruyucu, Şarj Kablosu ve Şarj Aleti" |
 | Product | `productTitle(product.name)`: ≤ 52 chars. It drops the leading "onopo", marketing segments and filler words only as far as needed, and keeps the product type, specs (W, A, m, cm, mAh) and model code. Examples: "T120 USB-A to Type-C Şarj Kablosu 120W GaN 1 Metre", "Type-C to USB 3.4A Hızlı Şarj ve Data Kablosu 1M Q7", "iPhone 13 Pro Max Seramik 12D Cam Ekran Koruyucu". Never shorten `product.name` itself: feeds and invoices use it. |
-| Category | `categoryTitle(name, page)` → "Cep Telefonu Aksesuarları Modelleri ve Fiyatları" (page ≥ 2: "… Fiyatları - Sayfa 2") |
+| Category | `categoryTitle(name, page)` → "Cep Telefonu Aksesuarları Modelleri ve Fiyatları" (page ≥ 2: "… Fiyatları - Sayfa 2"). A category that is a selection, not a product type ("Çok Satanlar", "Yeni Gelenler", indirim, kampanya …: `MERCHANDISING_CATEGORY`), keeps its plain name: "Çok Satanlar" |
 | /products/ | "Tüm Ürünler" (page ≥ 2: "Tüm Ürünler - Sayfa N"); search: `«${q}» için arama sonuçları` (noindex) |
 | CMS page | `page.title` from the pages table ("Kargo ve İade") |
 | Utility | a plain title ("Sepetim", "Giriş Yap") + `privatePageMetadata` |
@@ -110,22 +118,27 @@ hand-write a partial `openGraph`. Use `buildMetadata`.
 
 | Page | Helper |
 |---|---|
-| Product | `productMetaDescription(product, site)`. It takes the first real sentence(s) of the description body (the repeated name, category label, emoji and spec table are removed) and adds facts from the settings: "Kargo bedava" or "500 TL üzeri kargo bedava", "14 gün iade", "güvenli ödeme", plus "Şu an stokta yok." when stock ≤ 0. |
+| Product | `productMetaDescription(product, site)`. It takes the first real sentence(s) of the description body (the repeated name, category label, emoji, a leading "Model - CODE" label and the spec table are removed) and adds facts from the settings: "Kargo bedava" or "500 TL üzeri kargo bedava", "14 gün iade", "güvenli ödeme", plus "Şu an stokta yok." when stock ≤ 0. **Model phrase:** many descriptions come from one template per product family. When the fitted text names neither the device nor the model code (`productModelTokens`), `withModelPhrase` puts a short phrase in front ("iPhone 13 Pro Max ekran koruyucu: …", "Onopo Q8 şarj kablosu: …"), so every product page has its own description. |
 | Category | `categoryMetaDescription(name, { count, minPrice, productNames }, site, page)` → "Cep Telefonu Aksesuarları: 109 ürün, 79,99 TL'den başlayan fiyatlarla. Ekran koruyucular, …" |
-| /products/ | `listingMetaDescription({ count, minPrice, productNames }, site, { query, page })` |
+| /products/ | `listingMetaDescription({ count, minPrice, productNames }, site, { query, page })` → "Tüm ürünler: …" |
 | Home | `homeMetaDescription(productNames, site)` |
 | CMS | `cmsPageDescription(title, content)` |
 
+Category and /products/ descriptions share one lead, `"<Name>[ - Sayfa N]: <count> ürün, <min price> TL'den
+başlayan fiyatlarla. <Types> Onopo'da."`. On paginated listings the page marker sits in front, so it is never cut
+and page N never repeats page 1's description. A filler ("Onopo Store'da.") is not added when the text already
+contains it.
+
 The facts are not hard-coded. The free-shipping threshold comes from `shipping_settings`, and the 14-day return
-from the CMS "shipping" page text. If the owner edits either, the descriptions and JSON-LD follow within 5 minutes
-(`getSiteSeo()` cache).
+from the CMS "shipping" page text. If the owner edits either, the descriptions and JSON-LD follow on the next
+render (`getSiteSeo()` is cached per request only; the admin write also bumps the edge-cache version).
 
 ## 3. Headings, breadcrumbs, internal links, images
 
 - **One visible `<h1>` per page.**
-  - Home: a real H1, e.g. "Hızlı Şarj Aletleri, Kablolar ve Ekran Koruyucular". Today the home page has none.
+  - Home: one real H1 in the hero intro (`components/home/HomeHero.tsx`, `id="home-title"`).
   - Category: the category name.
-  - /products/: "Tüm Ürünler", or «"q" için sonuçlar» for a search.
+  - /products/: "Tüm Ürünler" (also on `?sort=newest`, the "Yeni Gelenler" target), or `Arama: “q”` for a search.
   - Product: `product.name`.
   - CMS: the page title.
 - The hidden Akakçe block has its own `<h1 id="product-name">`. Keep it (contract), and **do not give the visible
@@ -161,7 +174,7 @@ Render with `<JsonLd data={…} />` from `components/seo/JsonLd.tsx`, on the ser
 
 | Page | JSON-LD |
 |---|---|
-| Home (or layout) | `organizationJsonLd(site)` (OnlineStore, with the return policy) + `websiteJsonLd(site)` (SearchAction → `/products/?q={search_term_string}`) |
+| Root layout (every page) | `organizationJsonLd(site)` (OnlineStore, with the return policy) + `websiteJsonLd(site)` (SearchAction → `/products/?q={search_term_string}`) |
 | Product | `<ProductMachineData product={row} site={site} reviews={{ count, average }} />` + `breadcrumbJsonLd([...])` |
 | Category | `breadcrumbJsonLd` + `itemListJsonLd(productsOnThisPage.map(p => ({ path: productPath(p.slug), name: p.name })), { startIndex })` |
 | /products/ (page 1, no filters) | `itemListJsonLd(...)` (optional) |
@@ -171,11 +184,10 @@ Render with `<JsonLd data={…} />` from `components/seo/JsonLd.tsx`, on the ser
 
 - name, description, absolute `image[]`
 - `sku` = product_code or `ONOPO-<id>`, and `mpn` = product_code when set
-- brand:
-  - "Onopo" when the name or description starts with onopo, or the spec table says "Marka Onopo"
-  - otherwise the spec-table brand (e.g. "Ally")
-  - otherwise no brand
-- `gtin13` only for a barcode in the spec table with a valid check digit (2 products today)
+- brand: always `"ONOPO"`. Akakçe has matched on that exact value for every product since launch, so it stays
+  until Akakçe confirms a change. `productBrand()` gives the real brand ("Onopo", a spec-table brand such as
+  "Ally", or none) where a page needs it.
+- `gtin8`/`gtin12`/`gtin13`/`gtin14` (by length) only for a barcode in the spec table with a valid check digit
 - offers:
   - `price` = `roundPrice(price).toFixed(2)`, the exact amount checkout charges
   - `priceCurrency` TRY
@@ -194,10 +206,13 @@ Validate with Google's Rich Results Test after deploy.
 
 ## 5. Soft 404s → real 404s and redirects
 
-Today unknown slugs, `/product/999999/`, `/page/yok/`, `/cart/` and missing files (`/og-image.png`,
-`/apple-touch-icon.png`, `/manifest.json`) all answer 200. Use the resolvers. Each one returns what to do, or
-`null` for a real 404. Use the `…Cached` variants (React `cache`) so `generateMetadata` and the page share one
-DB lookup.
+Unknown slugs, `/product/999999/`, `/page/yok/`, `/cart/` and missing files (`/og-image.png`,
+`/apple-touch-icon.png`, `/manifest.json`) used to answer 200. The routes below now use the resolvers. Each one
+returns what to do, or `null` for a real 404. Use the `…Cached` variants (React `cache`) so `generateMetadata`
+and the page share one DB lookup.
+
+Next 16 answers a `notFound()` thrown by a page with status 404 and noindex, but with an empty `__next_error__`
+HTML body; the 404 view renders in the browser (docs/FRONTEND.md §9). The status code is what crawlers use.
 
 ```tsx
 // app/[slug]/page.tsx
@@ -250,7 +265,8 @@ Rules:
 - Verify with curl after the change:
   `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:<port>/yok-boyle-bir-sayfa/` → 404, `/product/999999/`
   → 404, `/og-image.png` → 404, `/product/1206/` → 308, `/cep-telefonu-aksesuarlari/` → 308
-  `/kategori/cep-telefonu-aksesuarlari/`, `/tech/` → 308 `/products/`.
+  `/kategori/cep-telefonu-aksesuarlari/`, `/tech/` → 308 `/products/`, `/new/` → 308 `/products/?sort=newest`,
+  `/sepet/` → 308 `/odeme/`, `/uye-giris/` → 308 `/login/`.
 
 ## 6. Listings: index rules, pagination, filters
 
@@ -268,9 +284,9 @@ return buildMetadata({ title, description, path: '/products/', query: ls.canonic
 | `?page=N` (2 ≤ N ≤ last page) | index, follow | self, with `?page=N`; title and description get "Sayfa N" |
 | `?page=N` beyond the last page | 404 | |
 | `?q=` / `?search=` (search) | noindex, follow | none |
-| `?f=`, `?sort=`, `?minPrice=`, `?maxPrice=`, `?brand=` | noindex, follow | none |
+| `?f=`, `?sort=`, `?minPrice=`, `?maxPrice=`, `?brand=`, `?discounted=`, `?inStock=` | noindex, follow | none |
 | `?category=` that did not redirect (unknown/empty category) | noindex, follow | none |
-| `utm_*`, `gclid`, … | ignored | self without them |
+| `utm_*`, `gclid`, … | ignored (worker.ts strips them before Next renders) | self without them |
 
 - Search, filter and sort URLs are also disallowed in robots.txt (§7), so crawlers do not spend time on
   combinations. Render facet links with `rel="nofollow"`.
@@ -289,9 +305,9 @@ return buildMetadata({ title, description, path: '/products/', query: ls.canonic
   - `/api/images/` (stored image URLs, favicon)
   - the read-only storefront GETs that client components still fetch while rendering: products,
     product-page-data, categories, site-settings, homepage-sections, hero (`/api/hero/`, the home page hero) and hero-slides, shipping-settings, pages, menus
-  The longest matching rule wins, so these Allow lines win over `/api/`. Ask the `next.config.ts` owner to add
-  `X-Robots-Tag: noindex` on `/api/:path*` so JSON responses are never indexed. Change only that header there,
-  and never Cache-Control.
+  The longest matching rule wins, so these Allow lines win over `/api/`. `next.config.ts` also sends
+  `X-Robots-Tag: noindex` on every `/api/*` response except `/api/images/*` and `/api/feeds/*`, so JSON responses
+  are never indexed.
 - Disallowed:
   - `/admin/`, `/odeme/`, `/profile/`, `/orders/`, `/login/`, `/register/`, `/siparis-basarili/`,
     `/siparis-hata/`, `/maintenance/`
@@ -302,7 +318,7 @@ return buildMetadata({ title, description, path: '/products/', query: ls.canonic
   but none of them is indexed or linked from outside today, so blocking the crawl is the stronger guarantee.
 - One group for `*` and `Googlebot` (when a Googlebot group exists, Googlebot ignores `*`).
 - `Sitemap: https://onopostore.com/sitemap.xml` (apex).
-- www serves the same file. Once www pages 301 to the apex, the rules are identical anyway.
+- www serves the same file (worker.ts does not redirect `/robots.txt`); www pages 301 to the apex.
 
 ## 8. Sitemap (`app/sitemap.ts`, https://onopostore.com/sitemap.xml)
 
@@ -315,7 +331,7 @@ return buildMetadata({ title, description, path: '/products/', query: ls.canonic
 - Same XML shape as before (`<url><loc><lastmod><changefreq><priority>`), because Akakçe reads it.
 - Image entries are implemented but switched off (`INCLUDE_IMAGES`).
 - On a DB error it answers 500 (crawlers retry) instead of a one-URL sitemap.
-- Until the `/kategori/[slug]` route exists, the category URLs in the sitemap return 404.
+- Served on both apex and www without a redirect (Akakçe reads the www URL).
 - The regression harness check for new sitemap URLs must allow `/kategori/<slug>/` and `/page/<slug>/`
   (two path segments).
 
@@ -324,10 +340,11 @@ return buildMetadata({ title, description, path: '/products/', query: ls.canonic
 Akakçe has no feed integration. Its bot ("akakce bot") reads `https://www.onopostore.com/sitemap.xml` and fetches
 every `https://onopostore.com/<slug>/` about every 2 hours. It parses the **Product JSON-LD** and the hidden
 **`#product-info`** block from the **server HTML**. Both must be rendered on the server, on the product URL itself
-(no redirect), with exactly these formats. `components/seo/ProductMachineData.tsx` renders them byte-identically
-to today. Unit tests compare its output with the live HTML of products 1058 and 1028.
+(no redirect), with exactly these formats. `components/seo/ProductMachineData.tsx` renders them
+(`productJsonLd` and `productInfoHtml` in `lib/seo.ts`). `scripts/seo.test.mjs` checks the hidden block markup
+and the brand.
 
-Live markup, captured 2026-10-22 from
+Live markup, captured 2026-10-22 (before the redesign) from
 `https://onopostore.com/onopo-t67-usb-a-to-type-c-67w-turbo-sarj-ve-data-kablosu-hizli-guclu-ve-dayanikli/`
 (rendered in `<body>`, before the page content):
 
@@ -391,14 +408,19 @@ Contract details:
   - `#product-sku`: as in the JSON-LD
   - `#product-stock`: `Stokta` / `Tükendi`
   - `#product-category`
-  - `#product-image-1..N`: same URLs as the JSON-LD, `alt` = name
+  - `#product-image-1..N`: same URLs as the JSON-LD, `alt` = name, then ` loading="lazy"` as the last
+    attribute (see below)
   - the two legacy anchors `#add-to-cart` and `#buy-now`. They are kept verbatim; robots.txt blocks their
     targets and the routes return 404.
-- **Changes from today** (all additive, or a case change):
-  - `brand.name` is "Onopo" instead of "ONOPO". A third-party product gets its own brand ("Ally"); a product
-    with no brand information gets no brand (1 product).
-  - New keys after the existing ones: `offers.itemCondition`, `offers.shippingDetails`,
-    `offers.hasMerchantReturnPolicy`, `mpn`, `gtin13`, `aggregateRating`.
+- **Changes since the capture above:**
+  - Hidden block: the **only** allowed change is ` loading="lazy"`, appended as the last attribute of every
+    `<img id="product-image-N">`, so each tag now ends `alt="…" loading="lazy" />`. Ids, `src`, `alt`, order and
+    all other markup stay byte-identical. Why: the block is `display:none`, but browsers still downloaded every
+    full-size original in it on each product view (several MB per page, over 20 MB on the heaviest one). Akakçe
+    reads `src` from the server HTML, so lazy loading does not affect it.
+  - JSON-LD: `brand.name` stays `"ONOPO"`. New keys come after the existing ones: `offers.itemCondition`,
+    `offers.shippingDetails`, `offers.hasMerchantReturnPolicy` (inside `offers`, after `seller`), then `mpn`,
+    `gtin*` and `aggregateRating` (only from real reviews) after `category`.
   - Every existing key keeps its value, order and format.
 - Also part of the contract:
   - product URLs `/<slug>/` with the trailing slash, answering 200 without a redirect
@@ -422,10 +444,16 @@ Contract details:
   put in structured data until they match.
 - Brand assets:
   - `og-image.jpg` should be re-made at 1200×630, under 300 KB, in the real brand colours
-  - `public/apple-touch-icon.png` (180×180) is missing, but the layout links it
-- Category slug "ok-satanlar" (Çok Satanlar) has the broken-slugifier bug. Renaming it to "cok-satanlar" needs a
-  308 from the old slug. The admin category slugifier should use `slugifyTr()` from `lib/seo.ts`.
+  - there is no `public/apple-touch-icon.png` (180×180); the layout uses the admin favicon (`favicon_url`) as
+    the apple icon when one is set
+- **Before launch:** rename the category slug "ok-satanlar" (Çok Satanlar, made by the old broken slugifier) to
+  "cok-satanlar", with a 308 from `/kategori/ok-satanlar/`. New categories already get Turkish-safe slugs
+  (`POST /api/categories` uses `slugifyTr()`); renaming a category in the admin keeps its slug.
+- Product 1107 (Samsung S24 Ultra screen protector): its description names the wrong model ("Samsung S24 Plus").
+  The meta description now starts with the right model, which makes the mismatch visible. Correct the text in
+  Admin › Ürünler.
 - Legal pages (Mesafeli Satış Sözleşmesi, Ön Bilgilendirme Formu, KVKK, Çerez Politikası) do not exist. Create
   them as CMS pages; they then appear in the sitemap automatically.
-- Cloudflare (owner): www→apex Redirect Rule with the exclusions in §1, Always Use HTTPS, and HSTS later without
-  includeSubDomains.
+- Cloudflare (owner): the www/http → apex redirect is done in `worker.ts` (§1), so no Redirect Rule is needed.
+  If one is ever added, it runs before the Worker and needs the same exclusions. Always Use HTTPS (the Worker
+  leaves `/api/*` on http alone), and HSTS later, without includeSubDomains.

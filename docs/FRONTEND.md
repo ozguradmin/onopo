@@ -1,8 +1,8 @@
 # Storefront frontend foundation
 
-What the storefront is built on after the wave-1 foundation work. Read this before touching pages,
-the header/footer, the listing, the product page or the checkout styling. The visual direction is
-the design spec v1 (audit `tasarim-referans.md` → "Extra"); this file is the code contract.
+What the storefront is built on (the wave-1 foundation, updated for the redesign). Read this before
+touching pages, the header/footer, the listing, the product page or the checkout styling. The visual
+direction is the design spec v1 (audit `tasarim-referans.md` → "Extra"); this file is the code contract.
 
 Rules of thumb:
 
@@ -13,7 +13,10 @@ Rules of thumb:
   from the browser. Use the store-data hooks instead (see "Layout and shell").
 - No full-page spinners and no "Yükleniyor..." text. Skeletons only for in-page async parts.
 - Never reload the page from code. No `window.location.reload()` and no `window.location.href = …`
-  for internal navigation. Use `<Link>` or `router.push`.
+  for internal navigation. Use `<Link>` or `router.push`. The one exception is the guarded reload after
+  a JS chunk failed to load (see "Errors" below).
+- Never put per-user output into server HTML: the edge cache (worker.ts) shares anonymous HTML between
+  visitors. Decide per-user UI on the client (see "Session hint").
 - Keep all `/api/*` contracts (see `CLAUDE.md` and the audit `entegrasyonlar.md`).
 
 ---
@@ -24,41 +27,76 @@ Rules of thumb:
 
 ```
 RootLayout (server)            getStorefrontData(): settings, shipping, maxInstallments, categories, menus
- └ GlobalErrorBoundary (root)  last-resort fallback, never reloads by itself
-    └ LayoutProvider (client)  components/layout/LayoutProvider.tsx
-       ├ StoreDataProvider     context with the server data
-       ├ Header (TopBar static + sticky header row)   ┐
-       ├ CartDrawer                                     │ only on store paths
-       ├ <main id="main-content">                      │
-       │   └ GlobalErrorBoundary (page, resets on navigation) → {children}
-       ├ Footer                                         │
-       └ MobileNav                                      ┘
+ │                             getSiteSeo() → Organization + WebSite JSON-LD
+ ├ GlobalErrorBoundary (root)  last-resort fallback
+ │  └ LayoutProvider (client)  components/layout/LayoutProvider.tsx
+ │     ├ StoreDataProvider     context with the server data
+ │     ├ skip link, Header (TopBar + sticky header)     ┐
+ │     ├ CartDrawer, MobileMenu                          │ store chrome (see "Chrome by path")
+ │     ├ <main id="main-content">                       │
+ │     │   └ GlobalErrorBoundary (page, resets on navigation) → {children}
+ │     ├ Footer                                          │
+ │     └ MobileNav (bottom nav)                          ┘
+ └ Toaster (sonner)
 ```
 
 - `export const dynamic = 'force-dynamic'` in the root layout: every page is rendered per request
   with live data. No page is prerendered with build-time defaults.
-- **Chrome by path.** `/admin/*` and `/maintenance` get no store header or footer. Admin keeps its
-  own `app/admin/layout.tsx`.
+- **Chrome by path.**
+  - `/admin/*` and `/maintenance` get no store header or footer. Admin keeps its own
+    `app/admin/layout.tsx`.
+  - `/odeme` gets the reduced checkout header and footer (`variant="checkout"`), no MobileMenu and no
+    bottom nav.
+  - `/siparis-basarili` and `/siparis-hata` (PayTR's result pages, shown inside the payment iframe on
+    `/odeme`) render without any store chrome: no skip link, header, drawers, footer or bottom nav.
+    `<main>` gets `min-h-dvh bg-surface`, and every link on them has `target="_top"` in the server
+    HTML. Page views are still counted.
+- **Bottom nav (MobileNav).** Not rendered on `/odeme`, `/siparis-basarili` and `/siparis-hata`
+  (LayoutProvider skips it, and MobileNav also returns null on those paths). Any page can hide it by
+  rendering an element with `data-hide-bottom-nav` (`app/globals.css`: `display: none`, so its links
+  also leave the tab order). The product page's sticky buy bar does this, so an in-stock product page
+  shows no bottom nav. On phones, store pages with no bottom nav at all drop the body's 64 px bottom
+  padding; pages that only hide it keep it for their own bar. Bottom toasts are lifted above the
+  bottom nav and above a visible buy bar.
 - **Maintenance mode** (`site_settings.maintenance_mode`) is checked from server data. When it is on,
   every path except `/admin/*`, `/maintenance`, `/login` and `/register` renders a maintenance
-  message in the server HTML. API routes are never affected.
+  message in the server HTML. API routes are never affected. The maintenance render carries
+  `data-onopo-nocache=""` and `data-onopo-maintenance=""`; worker.ts answers it with 503,
+  `Retry-After` and `X-Robots-Tag: noindex`. Any other maintenance view must keep both markers.
 - **The element around the page never changes type**, so pages mount exactly once. There is no mount
   gate and no remount.
 - **Cart.** The shell calls `useCartStore.persist.rehydrate()` once on mount (the store uses
   `skipHydration`). Cart counts render 0 on the server and update after mount.
 - **Analytics.** The shell sends `POST /api/analytics/track {page}` once per store page view,
   including client-side navigations. It moved here from Footer.
-- **Sticky header.** The TopBar is static and the header row is `position: sticky; top: 0` in normal
-  flow. `<main>` has no top padding hack any more. Many existing pages still carry their own
-  `pt-24`/`pt-32`/`lg:mt-16` offsets for the old fixed header; remove them when you redesign the page.
-- **Legacy pages that render `<Header/>`, `<Footer/>` or `<MobileNav/>` themselves** (`/help`,
-  `/policy`, `/shipping`, `/terms`) get `null` from those components inside the shell, so nothing
-  is rendered twice. Remove those imports when you touch those pages.
+- **Sticky header.** The TopBar (`<aside aria-label="Duyurular">`) is static and the `<header>` is
+  `position: sticky; top: 0` in normal flow. `<main>` has no top padding hack. On scroll-down the
+  header's second row (mobile search field, desktop nav) slides under the first; on scroll-up it comes
+  back (transforms only, from a passive rAF scroll listener).
+- **`--header-offset`.** `components/layout/Header.tsx` publishes the header's visible height (open or
+  collapsed) as the CSS variable `--header-offset` on `<html>` and removes it on unmount. Sticky parts
+  under the header use it as their `top`, with the header's 200 ms transition: the mobile listing
+  toolbar (`top-[var(--header-offset,109px)]`) and the desktop filter sidebar
+  (`top-[calc(var(--header-offset,122px)+16px)]`). The fallbacks are the open header heights for the
+  first paint; update them if the header height changes.
+- **Session hint.** `lib/session-hint.ts` `hasSessionHint()` reads the readable cookie `onopo_oturum=1`,
+  which worker.ts keeps in sync with the HttpOnly `auth_token` (login, verify-2fa and logout also set
+  or clear it). It only means "this visitor may be logged in". Use it to skip pointless calls or pick a
+  label on the client, never for access decisions. Today: the desktop account link (server HTML says
+  "Giriş yap" → `/login/`, an effect switches to "Hesabım" → `/profile/`; the label box keeps the wider
+  label's width, so nothing shifts) and `useFavorites()` (no `GET /api/favorites` for guests).
+- **Header, Footer and MobileNav** return `null` when a page renders them itself inside the shell
+  (only the shell passes `fromShell`), so nothing is rendered twice. No page does this today:
+  `/help`, `/policy`, `/shipping` and `/terms` are 308 redirects to `/page/<slug>/`.
+- **Signed-in visitors** who open `/login/` or `/register/` are redirected on the server to a safe
+  `?redirect=` path, else `/profile/` (admins: `/`).
 - **Favicon.** It is set in `generateMetadata` from `site_settings.favicon_url`, with
   `/favicon.ico` and `/favicon.svg` as the fallback. `app/favicon.ico` moved to
   `public/favicon.ico`, so Next no longer injects a second icon. The URL `/favicon.ico` is unchanged.
   Never add or remove `<link>` tags in `<head>` from client code. That is what caused the
   removeChild crash and reload loop.
+- **Canonical.** The root layout emits none. Every page sets its own through `buildMetadata`
+  (docs/SEO.md).
 
 ### Client access to layout data: `components/layout/store-data.tsx`
 
@@ -72,12 +110,20 @@ RootLayout (server)            getStorefrontData(): settings, shipping, maxInsta
 | `useOptionalStoreData()` | same as `useStoreData()`, or null outside the store layout |
 | `useShellChrome()` | true while the shell renders header/footer |
 
-### Errors: `components/GlobalErrorBoundary.tsx`
+### Errors: `app/error.tsx` and `components/GlobalErrorBoundary.tsx`
 
-The boundary shows "Bir sorun oluştu" with three actions: "Tekrar dene" (re-renders and calls
-`router.refresh()`), "Sayfayı yenile" (the user reloads) and "Ana sayfa". It reloads by itself only
-for a `ChunkLoadError` after a deploy, at most once per path every 60 s (sessionStorage guard).
-`redirect()` and `notFound()` are re-thrown to Next. The inline `window.onerror` reload script is gone.
+- `app/error.tsx` (route errors; it sits inside the shell's boundary and catches first) shows "Bir
+  sorun oluştu" with "Tekrar dene" (`router.refresh()` + `reset()` in one transition) and "Ana sayfa".
+- `GlobalErrorBoundary` shows "Bir sorun oluştu" with "Tekrar dene" (re-renders and calls
+  `router.refresh()`), "Sayfayı yenile" (the user reloads) and "Ana sayfa".
+- **Chunk-load errors** (a tab opened before a deploy asking for chunks that are gone, or a failed
+  chunk download): both boundaries reload the page by themselves, once, through
+  `reloadOnceForChunkError()`. The sessionStorage key `onopo:chunk-reload` allows one reload per path
+  per 60 s, so it never loops. `app/error.tsx` shows "Sayfa yenileniyor…" instead of the error card
+  while it reloads. For a chunk error "Tekrar dene" does a full reload in both boundaries (a re-render
+  would ask for the same missing chunk).
+- `redirect()` and `notFound()` are re-thrown to Next. The inline `window.onerror` reload script is gone.
+- `app/error.tsx` renders `data-onopo-nocache=""`, so the edge cache never stores that response.
 
 ---
 
@@ -86,7 +132,8 @@ for a `ChunkLoadError` after a deploy, at most once per path every 60 s (session
 `import 'server-only'`. Use it from Server Components, `generateMetadata` and route handlers. Every
 getter is wrapped in React `cache()`, so the layout, the page and the metadata share one D1 round
 trip per data set within a request. There is no cross-request cache, so admin edits show up on the
-next request. Layout data is one D1 `batch()` (settings, shipping, categories, menus, payment
+next request (the edge cache in worker.ts drops its copies when an admin write bumps
+`site_settings.cache_version`). Layout data is one D1 `batch()` (settings, shipping, categories, menus, payment
 flags) plus one products query.
 
 ### Types
@@ -122,8 +169,8 @@ interface HomeSection { id, type, title, display_order, config, products?, viewA
 | `getMaxInstallments()` | `site_settings.max_installments` when set (2–18). Otherwise 12 when PayTR is the active, configured provider (lib/payment/paytr.ts sends no limit, so the PayTR maximum of 12 applies). Otherwise `null`. Rates carry commission, so never write "vade farksız". |
 | `getCategories({ withCounts = true, hideEmpty })` | Sorted by Turkish-folded name. The count rule is the same as the listings: `product.category` equals the category name OR slug, Turkish case-folded, over **all active products (in stock + sold out)**. `hideEmpty` drops categories whose listing would be empty. |
 | `findCategory(slugOrName)` | Lookup by slug or name. |
-| `categoryHref(category)` | Single place for category URLs. Currently `/products/?category=<name>`. Change it here when a `/kategori/<slug>/` route ships. |
-| `getMenus()` / `getMenuTree()` | Flat active menu items / top-level items with children. |
+| `categoryHref(category)` | Single place for category URLs: `/kategori/<slug>/` (`/products/?category=<name>` only when no slug is known). |
+| `getMenus()` / `getMenuTree()` | Flat active menu items / top-level items with children. Children of an inactive parent are dropped, not promoted. |
 | `getHeroSlides()` | Active slides, display order, max 5 (same as `/api/hero`). |
 | `getHomepageSections()` | Active sections in admin order with data resolved on the server. For `products`/`new_products`: **exactly the old HomePageClient logic** over the same pool (in-stock, newest first, max 200): `category` → case-insensitive match, `manual` → `product_ids`, `newest`/`all` → whole pool; `products` is shuffled per request; `limit || 8`. `hero` gets `slides` and `categories` gets `categories`. |
 | `listProducts(params)` | See below. |
@@ -152,9 +199,11 @@ listProducts({
   are listed **after** all in-stock products, with `in_stock: false`. Cards show "Tükendi", and
   add-to-cart is disabled. Totals and category counts include them, so a count always equals what
   the listing shows. Home sections and related products keep showing in-stock products only, as
-  before. Note: the order API does not check stock yet (audit GAP-05). The owner of
-  `app/api/orders` should add that check.
-- `recommended` means search relevance when `q` is given, otherwise newest (id DESC).
+  before. The order API rejects a product with `stock <= 0` (400). Stock is a manual flag: sales do
+  not decrement it.
+- `recommended` means search relevance when `q` is given, otherwise newest (id DESC). Equal scores are
+  ordered by `compareSearchTies` (shorter name first, then id DESC), the same rule as the
+  instant-search dropdown, so pressing Enter keeps the dropdown's order.
 - A query with no usable token (for example `%%`) returns 0 items. It never returns the whole
   catalogue.
 - Facet counts show how many results you would get with that facet added. `priceRange` is computed
@@ -172,11 +221,13 @@ and in the browser.
 | `foldTr(s)` | Turkish fold: İ/I/ı→i, ş→s, ğ→g, ç→c, ö→o, ü→u, accents stripped. Deterministic (no ICU). |
 | `normalizeText(s)` | fold + punctuation → space (`"Type-C"` → `"type c"`). |
 | `prepareQuery(q)` | `{ raw, norm, tokens }`. Stop words (ve, ile, için…) are dropped from multi-word queries. Max 8 tokens. |
-| `searchItems(items, q, { limit, soldOutLast = true })` | Filter and rank any array with `name` (+ optional `slug`, `category`, `product_code`, `stock`, `id`). |
+| `searchItems(items, q, { limit, soldOutLast = true, tieBreak })` | Filter and rank any array with `name` (+ optional `slug`, `category`, `product_code`, `stock`, `id`). Order: sold-out last, score, then `tieBreak` (default `compareSearchTies`). |
+| `compareSearchTies(a, b)` | The one tie rule for every search surface: shorter name first, then higher id. |
 | `scoreSearch(item, prepared)` / `matchesSearch(item, q)` | Low-level helpers. |
 | `FACETS`, `matchesFacet(name, key)`, `sanitizeFacetKeys(keys)` | Quick-filter chips: `iphone`, `type-c`, `micro-usb`, `arac`, `powerbank`, `kulaklik`, `ekran-koruyucu`, `kablo`, `sarj-aleti`, `20w`, `orgulu`. |
 | `specChips(name, max = 2)` | Card chips parsed from the name: wattage, connector, capacity, length. |
 | `displayName(name)` / `brandOf(name)` | Name without the leading "onopo" / `'ONOPO'` or null. |
+| `splitDisplayName(name)` | `{ title, compat }` for cards and the search dropdown: a short generic leading phrase ending in "Uyumlu"/"İçin" (no number in it, at least 2 words after it) becomes `compat`, and `title` starts with the product type. A phrase that names a model stays in the title. Display only. |
 
 Matching rules:
 
@@ -189,12 +240,14 @@ Matching rules:
 - Numbers respect number boundaries: `15` matches "iphone 15" and "15w" but not "150".
 - Glued forms match too: `typec` finds "Type-C".
 
-**Instant-search dropdown (wave 2):** on first focus, load the index once with
-`GET /api/products?index=1`. It returns all active products, in-stock first, as
+**Instant-search dropdown:** on first focus, `components/search/search-index.ts` loads the index once
+with `GET /api/products?index=1`. It returns all active products, in-stock first, as
 `{id,name,slug,category,product_code,price,original_price,stock,image,free_shipping}` and is cached
-for 300 s. Keep it in memory or sessionStorage and call
-`searchItems(index, input, { limit: 6 })` on every keystroke. Never navigate while the user types.
-Submit goes to `/products/?q=` with `router.push`.
+for 300 s. The index is kept in memory and in sessionStorage for 10 minutes. On every keystroke
+`components/search/SearchCombobox.tsx` ranks it with `searchItems` and shows the first 6 products,
+plus up to 4 matching category / product-type links. Never navigate while the user types.
+Submit goes to `/products/?q=` with `router.push`. The dropdown shows titles with `splitDisplayName`,
+like the cards.
 
 ---
 
@@ -204,10 +257,20 @@ Submit goes to `/products/?q=` with `router.push`.
 |---|---|
 | `?slug=…&exact=true`, `?search_slug=…` | unchanged |
 | `?index=1` | **new**: compact search index (above) |
-| `?page=N[&limit][&category][&q][&sort][&minPrice][&maxPrice][&f=…][&discounted=true][&inStock=true]` | unchanged shape `{products,totalCount,page,pageSize,totalPages}`, rows `{id,name,slug,price,original_price,stock,images(JSON string),category,free_shipping(0/1)}`. **Now delegates to `listProducts`**: sold-out products are included after in-stock ones, the category matches by name OR slug, `q` uses lib/search, and the new optional params work. |
-| no `page` (legacy array: home, related products, admin pickers) | unchanged: in-stock only, id DESC, `limit` (default 24, max 200). `q` now uses lib/search, ranked, then limited. |
-| `?includeAll=true` (admin) | unchanged. `q` now uses lib/search. |
+| `?page=N[&limit][&category][&q][&sort][&minPrice][&maxPrice][&f=…][&discounted=true][&inStock=true]` | unchanged shape `{products,totalCount,page,pageSize,totalPages}`, rows `{id,name,slug,price,original_price,stock,images(JSON string),category,free_shipping(0/1)}`. **Delegates to `listProducts`**: sold-out products are included after in-stock ones, the category matches by name OR slug, `q` uses lib/search, and the new optional params work. With `q` and the default sort the order is (in-stock first): score, then shorter name, then id DESC (`compareSearchTies`, the same as the dropdown and the `/products/?q=` page). |
+| no `page` (legacy array: home, related products, admin pickers) | unchanged: in-stock only, id DESC, `limit` (default 24, max 200). `q` uses lib/search, ranked (same tie rule), then limited. |
+| `?includeAll=true` (admin) | unchanged: active products, in stock or not. `q` uses lib/search. |
+| `?includeAll=true&includeInactive=true` (Admin › Ürünler) | With a valid admin `auth_token` only: hidden (`is_active = 0`) rows too, an `is_active` field on every row, `Cache-Control: private, no-store`. Without an admin session the parameter is ignored. |
 | any form with a `q` that has no usable token | `[]` or `{products:[],totalCount:0,…}`, never everything |
+
+Related routes:
+
+- `GET /api/products/<id>` (`app/api/products/[id]/route.ts`): for non-admins, 404 for inactive
+  products and no `price_usd`; admins get the full row (`private, no-store`). Only the admin editors
+  call it.
+- `GET /api/homepage-sections?includeAll=true` with an admin `auth_token`: hidden sections too
+  (`private, no-store`). Everyone else gets the active sections as before.
+- Requests with `includeAll` or an `auth_token` cookie are never edge-cached (`lib/edge-cache.ts`).
 
 ---
 
@@ -270,7 +333,8 @@ Everything is server-friendly unless marked (client). New storefront code import
 | `components/ui/Skeleton.tsx` | `<Skeleton>`, `<ProductCardSkeleton>`, `<ProductGridSkeleton count>`. Same geometry as the card. |
 | `components/ui/EmptyState.tsx` | `<EmptyState icon title description? action={{label,href}}?>{custom actions}</EmptyState>` |
 | `components/ui/FallbackImage.tsx` (client) | `<img>` with a one-shot chain: `src`(+`srcSet`) → `fallbackSrc` → `placeholderSrc` (default `/placeholder.svg`), then it stops. It also catches images that failed before hydration. Always pass `width`/`height` or use an aspect-ratio box. |
-| `components/product/ProductCard.tsx` | `<ProductCard product priority? freeShippingThreshold? sizes? headingLevel="h3" showAddButton?>`, see below. |
+| `components/product/ProductCard.tsx` | `<ProductCard product rating? priority? eager? freeShippingThreshold? sizes? headingLevel="h3" showAddButton?>`, see below. Also exports `RatingStars`. |
+| `components/product/ProductCardImages.tsx` (client) | The card's image well: main image plus the lazily added hover image (below). |
 | `components/product/ProductCardActions.tsx` (client) | `<QuickAddButton product variant="icon"\|"full" openDrawer?>`, `<FavoriteButton productId productName variant="card"\|"plain">`, `useFavorites()`, `toCartItem(product)`, `resetFavorites()` |
 
 ### ProductCard (spec §9)
@@ -278,12 +342,19 @@ Everything is server-friendly unless marked (client). New storefront code import
 - `product` accepts a catalogue `Product`, an `/api/products` row (images as a JSON string,
   `free_shipping` as 0/1) or the `?index=1` payload.
 - **Image well:** 1:1 and white, `object-contain` with 8% padding. On desktop hover it crossfades
-  to the second image. Badges sit top-left (Tükendi, then `%NN` when ≥ 5%). The heart sits
-  top-right. A round quick-add sits bottom-right on mobile.
-- **Body:** eyebrow `ONOPO · <CODE>`, then a 2-line title with the "onopo" prefix stripped (the full
-  name is kept in `alt`/`title`). Then up to 2 spec chips, the price and strikethrough, "✓ Kargo
-  bedava" (when `free_shipping` is set, or the display price ≥ `freeShippingThreshold`), and on
-  desktop a 40 px "Sepete Ekle" button.
+  to the second image. The second `<img>` (and its request) is only added after the first mouse or
+  pen `pointerenter` on the card while `(min-width: 1024px)` matches; the crossfade starts once it
+  has loaded. Touch and keyboard never load it. Badges sit top-left (Tükendi, then `%NN` when ≥ 5%).
+  The heart sits top-right. A round quick-add sits bottom-right on mobile.
+- **Body:** eyebrow `ONOPO · <CODE>`, then a 2-line title from `splitDisplayName` (the "onopo" prefix
+  stripped). A short generic leading phrase ending in "Uyumlu"/"İçin" moves to a muted line under the
+  title (`data-card-compat`, `aria-hidden`; 34 products today, e.g. "Android Xiaomi ve Samsung
+  uyumlu"), and the link then gets `aria-label` = the full name. The full name is always in
+  `alt`/`title`; product data, JSON-LD and feeds are unchanged. Then up to 2 spec chips, the star row
+  when `rating` is passed (`RatingStars`: the real average and count, or 5 stars "5,0 (0)" when there
+  are no reviews; never used for JSON-LD), the price and strikethrough, "✓ Kargo bedava" (when
+  `free_shipping` is set, or the display price ≥ `freeShippingThreshold`), and on desktop a 40 px
+  "Sepete Ekle" button.
 - **One stretched link** to `/<slug>/` (trailing slash, `prefetch={false}`) covers the card. The
   buttons sit above it.
 - **Add to cart** uses the unchanged payload `{ id, name, price (raw), image, category, slug,
@@ -291,12 +362,15 @@ Everything is server-friendly unless marked (client). New storefront code import
   amount for free shipping and a "Sepete git" action. Cards do not open the drawer
   (`openDrawer` is for the product page). Sold-out cards render a disabled "Stokta yok" and no
   mobile add button.
-- **Favourites:** `useFavorites()` loads `GET /api/favorites` once per page load (lazily, on idle)
-  and toggles with `POST /api/favorites {productId}` optimistically. A 401 sends the visitor to
-  `/login?redirect=<current url>`.
+- **Favourites:** `useFavorites()` loads `GET /api/favorites` once per page load (lazily, on idle),
+  but only when the session hint is set; guests get an empty set without a request. It toggles with
+  `POST /api/favorites {productId}` optimistically. A 401 (e.g. a guest's heart click) sends the
+  visitor to `/login?redirect=<current url>`.
 - **Images:** `productImageUrl(img, 400)` with srcset 200/400/800, `fallbackSrc` = the original.
-  Pass `priority` for the first 4 cards of a listing and the first 2 of a carousel (eager +
-  `fetchpriority=high`). Every other card is lazy.
+  `priority` (eager + `fetchpriority=high`) is only for the likely LCP: the first 2 cards of a
+  listing's first load (one row on phones) and at most 2 per home rail. `eager` (eager, normal
+  priority) covers cards 3–4 of a listing (the rest of a desktop row). Every other card is lazy,
+  including cards added by "Daha fazla göster".
 
 ---
 
@@ -307,9 +381,12 @@ Everything is server-friendly unless marked (client). New storefront code import
   domain, edge-cached).
 - Variant convention: `https://images.onopostore.com/v/<w>/<key>.webp` for w ∈ `IMAGE_WIDTHS`
   (200, 400, 800, 1200).
-- **The variants are not uploaded yet.** `IMAGE_VARIANTS_ENABLED` is false unless the build sets
-  `NEXT_PUBLIC_IMAGE_VARIANTS_ENABLED=true`. While it is false, every helper returns the original
-  URL and `productImageSrcSet` returns `undefined`.
+- **The variants of the existing images are not uploaded yet.** `IMAGE_VARIANTS_ENABLED` is false
+  unless the build sets `NEXT_PUBLIC_IMAGE_VARIANTS_ENABLED=true` (it is inlined at build time;
+  deploy.yml does not set it). While it is false, every helper returns the original URL and
+  `productImageSrcSet` returns `undefined`. Switch it on only once `v/<w>/` exists for every stored
+  image. New admin uploads already get their variants, made in the admin's browser
+  (`lib/imageVariants.ts`, one file at a time).
 - Helpers:
   - `originalImageUrl(url)`: same mapping as `getImageUrl`.
   - `productImageUrl(url, width)`: picks the next variant width ≥ the slot width.
@@ -318,7 +395,16 @@ Everything is server-friendly unless marked (client). New storefront code import
   - `PRODUCT_CARD_SIZES`, `PLACEHOLDER_IMAGE`.
 - Client `<img>`s must fall back once to the original (`FallbackImage`). No retry loops and no
   `?retry=` cache-busting.
-- Feeds, JSON-LD and og:image keep the ORIGINAL URLs.
+- **og:image.** With variants on, the product page's `og:image`/`twitter:image` is the 1200w variant
+  (`app/[slug]/page.tsx`); with variants off it is the original. The top comment of `lib/images.ts`
+  still says og:image keeps the original; that line is out of date.
+- **Logo.** With variants on, the header and footer logo use the 400w variant with a 200w/400w
+  srcset, then fall back once to the original, then to the site name as text (`logoSources()` and
+  `LOGO_SIZES` in `components/layout/Header.tsx`). With variants off, only the original.
+- Feeds and JSON-LD always keep the ORIGINAL URLs.
+- **Uploads** (`POST /api/admin/upload`): new originals get the key `<ms>-<8 hex>-<sanitized name>` and
+  `Cache-Control: public, max-age=31536000, immutable` (keys are never reused). Originals uploaded
+  before this change were stored without a Cache-Control.
 
 ---
 
@@ -334,20 +420,21 @@ The output never depends on ICU, so server HTML and hydration always match.
 
 ---
 
-## 9. Known leftovers for wave 2 (not done in the foundation)
+## 9. Known leftovers
 
-- **`app/products/ProductsPageClient.tsx` / `components/products/ProductsClient.tsx`:** these still
-  fetch site-settings and categories twice and read `.q`/`.category` from `URLSearchParams`, so the
-  h1 always says "Tüm Ürünler". Replace them with a server listing built on `listProducts`.
-- **`app/product/[id]/ProductClient.tsx`:** its main image `onError` sets the same `/api/images/…`
-  src again. If that URL fails too, it retries in an endless loop. Observed locally, where R2 is
-  empty: thousands of requests. Use `FallbackImage`.
-- **`components/home/*`:** ProductShowcase auto-scrolls and uses its own card. HeroSection and
-  CategoriesSection fetch client-side. `getHomepageSections()` already provides `slides` and
-  `categories`.
-- **Header/Footer/TopBar/MobileNav** got only minimal changes: data from context, sticky header,
-  client navigation and aria-labels. `header_links`, the mega menu, the search combobox and the
-  bottom-nav search sheet are still to do. The z-index scale in the spec (header 40, overlay 50,
-  drawer 60) is not applied yet: the header is still z-50.
-- **Canonical:** the root layout no longer emits a canonical. The home page sets
-  `alternates.canonical: '/'`, and every other page should set its own.
+The wave-1 list is done: the listing, product page and home page are server-rendered from the server
+data modules (`lib/catalog.ts`, `lib/listing-data.ts`, `lib/product-data.ts`, `lib/home-data.ts`),
+the old `ProductsClient`/`ProductClient` files are gone, and the header has the mega menu, the search
+combobox and the z-index utilities (`z-header`, `z-drawer`, …). Still open:
+
+- **404 body.** When a page calls `notFound()`, Next 16 answers 404 with noindex but an empty
+  `__next_error__` shell; the 404 view (`app/not-found.tsx`) renders in the browser, where
+  `NotFoundHead` (`components/status/status-islands.tsx`) keeps the title "Sayfa bulunamadı | Onopo"
+  and noindex. A server-rendered 404 body needs a Next change or a rewrite of unknown URLs.
+- **Image variants** are not in R2 yet, so `NEXT_PUBLIC_IMAGE_VARIANTS_ENABLED` stays off (§7).
+- **"Yeni Gelenler"** (`/new/` → `/products/?sort=newest`): the H1 still says "Tüm Ürünler", and
+  `MegaMenu`'s `isActive` never marks a link that has a query, so "Tüm Ürünler" is the highlighted
+  menu item there.
+- **Category rename** updates `products.category`, but not the names stored in
+  `site_settings.footer_categories` or in home sections with `selection_type: 'category'`. Fix those
+  by hand after a rename.
