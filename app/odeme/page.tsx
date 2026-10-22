@@ -18,6 +18,8 @@ import { ShoppingBag, Check, CreditCard, Lock, ChevronDown, Ticket, X, Truck, Re
  * Checkout (/odeme/). Design spec §13: VISUALS ONLY.
  * The state, validation, payload to POST /api/orders, the PayTR iframe + 3 s polling of
  * GET /api/orders/<id>/ and the success/failure handling below are unchanged; only the markup is new.
+ * Two additions: the phone number must look like a Turkish number before anything is sent (the value
+ * is still sent as typed), and the payment step shows the order API's totalAmount (what PayTR charges).
  * Totals come from the cart store, which uses lib/pricing.ts (exactly what the order API charges).
  */
 
@@ -145,6 +147,8 @@ export default function CheckoutPage() {
 
     // Payment Iframe State
     const [iframeUrl, setIframeUrl] = React.useState<string | null>(null)
+    // What PayTR charges: the order API's own total (cart prices saved in the browser can be outdated)
+    const [paymentTotal, setPaymentTotal] = React.useState<number | null>(null)
 
     // Calculations
     const calculateSubtotal = () => items.reduce((total, item) => total + (item.price || 0) * item.quantity, 0)
@@ -306,6 +310,7 @@ export default function CheckoutPage() {
             if (data.payment && data.payment.status === 'success' && data.payment.iframeUrl) {
                 // If payment required (PayTR), show iframe
                 setOrderId(data.orderId)
+                setPaymentTotal(typeof data.totalAmount === 'number' && Number.isFinite(data.totalAmount) ? data.totalAmount : null)
                 setIframeUrl(data.payment.iframeUrl)
                 window.scrollTo(0, 0)
                 return
@@ -432,7 +437,7 @@ export default function CheckoutPage() {
                                 <p className="mt-1 text-sm text-muted">
                                     Sipariş <span className="font-semibold text-ink-2 tabular">#{orderId}</span>
                                     <span aria-hidden="true"> · </span>
-                                    Ödenecek tutar <span className="font-semibold text-ink-2 tabular">{formatTL(finalTotal)}</span>
+                                    Ödenecek tutar <span className="font-semibold text-ink-2 tabular">{formatTL(paymentTotal ?? finalTotal)}</span>
                                 </p>
                             </div>
                         </div>

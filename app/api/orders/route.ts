@@ -290,7 +290,9 @@ export async function POST(req: NextRequest) {
             success: true,
             orderId,
             message: 'Siparişiniz başarıyla oluşturuldu!',
-            payment: paymentResult
+            payment: paymentResult,
+            // The exact amount of the order row (and of the PayTR payment), for the checkout's payment step
+            totalAmount
         })
 
     } catch (error: any) {
