@@ -160,7 +160,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <div className="flex flex-col h-full overflow-hidden">
                     {/* Logo - Fixed Height */}
                     <div className="h-16 px-6 border-b border-slate-800 flex items-center justify-between shrink-0">
-                        <Link href="/admin" className="text-xl font-bold truncate">
+                        <Link href="/admin" prefetch={false} className="text-xl font-bold truncate">
                             Onopo Admin
                         </Link>
                         <button
@@ -171,7 +171,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         </button>
                     </div>
 
-                    {/* Navigation */}
+                    {/* Navigation. prefetch={false}: otherwise every admin page load prefetched the RSC payload
+                        of all ~17 sidebar pages (each a Worker run with an auth check) */}
                     <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
                         {navItems.map(item => {
                             const isActive = pathname === item.href ||
@@ -180,6 +181,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                                 <Link
                                     key={item.href}
                                     href={item.href}
+                                    prefetch={false}
                                     onClick={() => setSidebarOpen(false)}
                                     className={`
                                         flex items-center gap-3 px-4 py-3 rounded-xl

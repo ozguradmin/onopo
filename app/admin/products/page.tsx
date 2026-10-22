@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Edit, Trash2, Plus, Upload, Trash, Loader2, Search } from 'lucide-react'
 import { formatPrice } from '@/lib/formatPrice'
 import { getImageUrl, parseProductImages } from '@/lib/utils'
-import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
 import { ProductEditModal } from '@/components/admin/ProductEditModal'
 
@@ -151,6 +150,8 @@ export default function AdminProductsPage() {
         reader.onload = async (evt) => {
             try {
                 const bstr = evt.target?.result
+                // SheetJS (~110 KB gzip) is loaded only when a file is actually imported
+                const XLSX = await import('xlsx')
                 const wb = XLSX.read(bstr, { type: 'binary' })
                 const wsname = wb.SheetNames[0]
                 const ws = wb.Sheets[wsname]
