@@ -194,22 +194,23 @@ export function ProductCard({
                     // a small round add button on the price's right
                     <>
                         {rating !== undefined && <RatingStars rating={rating} className="mt-1" />}
-                        <div className="mt-auto flex items-end justify-between gap-1.5 pt-1.5">
-                            <div className="min-w-0" data-price="">
-                                <p className="h-4 truncate text-xs leading-4 text-muted tabular-nums">
-                                    {pct > 0 && original != null && (
-                                        <>
-                                            <span className="sr-only">Eski fiyat: </span>
-                                            <s>{formatTL(original)}</s>
-                                        </>
-                                    )}
-                                </p>
-                                <p className="truncate text-[15px] font-extrabold leading-5 text-ink tabular-nums">
+                        <div className="mt-auto pt-1.5" data-price="">
+                            <p className="h-4 truncate text-xs leading-4 text-muted tabular-nums">
+                                {pct > 0 && original != null && (
+                                    <>
+                                        <span className="sr-only">Eski fiyat: </span>
+                                        <s>{formatTL(original)}</s>
+                                    </>
+                                )}
+                            </p>
+                            {/* Price and add button centred on one line (owner) */}
+                            <div className="flex items-center justify-between gap-1.5">
+                                <p className="min-w-0 truncate text-[15px] font-extrabold leading-5 text-ink tabular-nums">
                                     {pct > 0 && <span className="sr-only">İndirimli fiyat: </span>}
                                     {formatTL(shown)}
                                 </p>
+                                {!soldOut && <QuickAddButton product={cartProduct} variant="icon" className="h-8 w-8 shrink-0 shadow-none" />}
                             </div>
-                            {!soldOut && <QuickAddButton product={cartProduct} variant="icon" className="h-8 w-8 shrink-0 shadow-none" />}
                         </div>
                     </>
                 ) : (
