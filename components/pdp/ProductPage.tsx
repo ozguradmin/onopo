@@ -10,7 +10,7 @@ import { JsonLd } from '@/components/seo/JsonLd'
 import { ProductMachineData } from '@/components/seo/ProductMachineData'
 import { ProductCard } from '@/components/product/ProductCard'
 import { breadcrumbJsonLd, categoryPath, productBrand, type SiteSeo } from '@/lib/seo'
-import { brandOf, specChips } from '@/lib/search'
+import { brandOf, displayName, specChips } from '@/lib/search'
 import { formatDateTR, formatTL } from '@/lib/format'
 import { productImageSrcSet, productImageUrl } from '@/lib/images'
 import type { ProductPageData } from '@/lib/product-data'
@@ -27,6 +27,18 @@ import { infoText, parseDescription, type SpecRow } from './description-parser'
 const RAIL_SIZES = '(max-width: 639px) 42vw, (max-width: 1023px) 31vw, 290px'
 /** Must match MAIN_SIZES in ProductGallery (used for the LCP preload once image variants exist). */
 const GALLERY_SIZES = '(max-width: 767px) 100vw, (max-width: 1279px) 50vw, 620px'
+
+function SpecChips({ chips, className }: { chips: string[]; className: string }) {
+    return (
+        <ul className={`flex-wrap gap-1.5 ${className}`} aria-label="Öne çıkan özellikler">
+            {chips.map(c => (
+                <li key={c}>
+                    <Badge variant="neutral" className="h-7 px-2.5 text-xs">{c}</Badge>
+                </li>
+            ))}
+        </ul>
+    )
+}
 
 function whatsappLink(numberRaw: string | null | undefined, text: string): string | null {
     const digits = String(numberRaw || '').replace(/\D/g, '')
@@ -77,10 +89,16 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
         )
         : null
 
-    // ---- breadcrumb (visible + JSON-LD with the same items) ----------------------------------------
+    // ---- visible name: the H1 and the last crumb. A leading "onopo" goes (the eyebrow above the H1 shows the
+    // brand: brandOf() is set exactly when the name starts with it) and the casing is fixed (iPhone, USB, 20W).
+    // The raw name stays in <title> (productTitle), JSON-LD, #product-info, feeds, alt texts and the cart. ----
+    const heading = displayName(product.name)
+
+    // ---- breadcrumb (visible from md + JSON-LD with the same items; the JSON-LD keeps the raw name) ----------
     const crumbCategory = category ? { label: category.name, href: categoryPath(category.slug) } : { label: 'Tüm Ürünler', href: '/products/' }
     const crumbs: Array<{ label: string; href?: string }> = [{ label: 'Anasayfa', href: '/' }, crumbCategory, { label: product.name }]
     const crumbLd = breadcrumbJsonLd(crumbs.map(c => ({ name: c.label, path: c.href })))
+    const visibleCrumbs = [...crumbs.slice(0, -1), { label: heading }]
 
     // ---- rating row: real average when reviews exist, else 5 filled stars "5,0 (0)" (owner decision) ----
     const ratingValue = reviewStats.count > 0 ? reviewStats.average : 5
@@ -116,13 +134,16 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
             {data.partial && <div hidden data-onopo-nocache="" />}
 
             <div className="bg-canvas">
-                <Container className="pb-3 pt-3 lg:pb-4 lg:pt-5">
-                    {/* li:shrink-0 keeps every crumb whole; the line scrolls sideways on phones instead of overlapping */}
-                    <Breadcrumb items={crumbs} className="[&_li]:shrink-0" />
+                {/* Phones: no visible breadcrumb (the photo starts right under the header; the BreadcrumbList
+                    JSON-LD above stays). From md: one line, li:shrink-0 keeps every crumb whole. */}
+                <Container className="hidden pb-3 pt-3 md:block lg:pb-4 lg:pt-5">
+                    <Breadcrumb items={visibleCrumbs} className="[&_li]:shrink-0" />
                 </Container>
 
                 {/* ---------------- Above the fold ----------------
-                    Phones: one column (gallery, info, trust points). md–lg (768–1279): two equal columns,
+                    Phones: one column, built so the first screen (390x844) shows the photo (4:3), the title
+                    (18px, at most 3 lines), the rating, the price and "Sepete Ekle" + "Hemen Al" (BuyBox puts
+                    its info lines under the buttons); trust points and spec chips follow. md–lg (768–1279): two equal columns,
                     the trust points under the gallery so the left column is not an empty strip next to the
                     long info column, and a 22/24px H1 so price, quantity and "Sepete Ekle" fit in the first
                     screen at 1024x768. xl (≥1280): 7/5 with a sticky gallery, trust points under the info. */}
@@ -138,7 +159,7 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                             />
                         </div>
 
-                        <div className="mt-5 min-w-0 md:col-start-2 md:row-span-2 md:row-start-1 md:mt-0 xl:col-span-5 xl:col-start-8 xl:row-span-1">
+                        <div className="mt-3 min-w-0 md:col-start-2 md:row-span-2 md:row-start-1 md:mt-0 xl:col-span-5 xl:col-start-8 xl:row-span-1">
                             {(brand || code) && (
                                 <p className="text-xs font-semibold leading-4 tracking-[0.04em] text-muted">
                                     {brand && <span className="uppercase">{brand}</span>}
@@ -147,11 +168,11 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                                     {code && <span>Kod: {code}</span>}
                                 </p>
                             )}
-                            <h1 id="pdp-title" className="mt-1.5 text-pretty text-xl font-bold leading-7 tracking-[-0.01em] text-ink md:text-[22px] md:leading-[30px] lg:text-2xl lg:leading-8 xl:text-[28px] xl:leading-9">
-                                {product.name}
+                            <h1 id="pdp-title" className="mt-1 text-pretty text-lg font-bold leading-6 tracking-[-0.01em] text-ink max-md:line-clamp-3 md:mt-1.5 md:text-[22px] md:leading-[30px] lg:text-2xl lg:leading-8 xl:text-[28px] xl:leading-9">
+                                {heading}
                             </h1>
 
-                            <div className="mt-2 flex flex-wrap items-center gap-x-3 text-sm leading-5">
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 text-sm leading-5 md:mt-2">
                                 <a href="#yorumlar" className="-my-2 inline-flex min-h-11 items-center gap-1.5 rounded-thumb text-ink hover:underline hover:underline-offset-4">
                                     <Stars value={ratingValue} className="text-[15px]" />
                                     <span className="font-semibold tabular-nums">{formatRating(ratingValue)}</span>
@@ -165,18 +186,12 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                                 </a>
                             </div>
 
-                            {chips.length > 0 && (
-                                <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Öne çıkan özellikler">
-                                    {chips.map(c => (
-                                        <li key={c}>
-                                            <Badge variant="neutral" className="h-7 px-2.5 text-xs">{c}</Badge>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
+                            {/* Spec chips: here from md, under the buy box on phones (one copy is display:none) */}
+                            {chips.length > 0 && <SpecChips chips={chips} className="mt-2 hidden md:flex" />}
 
-                            {/* 1024–1279: 4px tighter rhythm here and in BuyBox so the CTA row stays in a 1024x768 first screen */}
-                            <div className="mt-5 border-t border-line pt-5 lg:mt-4 lg:pt-4 xl:mt-5 xl:pt-5">
+                            {/* Phones: 12px rhythm so price and buttons fit in the first screen.
+                                1024–1279: 4px tighter rhythm here and in BuyBox so the CTA row stays in a 1024x768 first screen */}
+                            <div className="mt-3 border-t border-line pt-3 md:mt-5 md:pt-5 lg:mt-4 lg:pt-4 xl:mt-5 xl:pt-5">
                                 <BuyBox
                                     product={{
                                         id: product.id,
@@ -197,6 +212,8 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                                     whatsappHref={whatsappHref}
                                 />
                             </div>
+
+                            {chips.length > 0 && <SpecChips chips={chips} className="mt-4 flex md:hidden" />}
 
                             {soldOut && related.length > 0 && (
                                 <a href="#benzer-urunler" className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-brand-600 underline-offset-4 hover:text-brand-700 hover:underline">
