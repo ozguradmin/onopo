@@ -175,3 +175,39 @@ CREATE INDEX IF NOT EXISTS idx_two_factor_challenges_user_id ON two_factor_chall
 CREATE INDEX IF NOT EXISTS idx_login_failures_email_ip ON login_failures(email_hash, ip_hash, attempted_at);
 CREATE INDEX IF NOT EXISTS idx_login_failures_ip ON login_failures(ip_hash, attempted_at);
 CREATE INDEX IF NOT EXISTS idx_login_failures_attempted_at ON login_failures(attempted_at);
+
+-- AI assistant (Onopo Asistan). Additive only: older code simply never reads these tables.
+-- No chat text is ever stored (KVKK option A): only daily counters and content-free events.
+CREATE TABLE IF NOT EXISTS ai_usage_daily (
+    day TEXT NOT NULL,                       -- 'YYYY-MM-DD', Europe/Istanbul
+    bucket TEXT NOT NULL,                    -- 'global' or 'ip:<daily HMAC>' (ip rows deleted after 2 days)
+    turns INTEGER NOT NULL DEFAULT 0,
+    model_calls INTEGER NOT NULL DEFAULT 0,
+    cost_micro_usd INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, bucket)
+);
+
+CREATE TABLE IF NOT EXISTS ai_chat_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    day TEXT NOT NULL,                       -- 'YYYY-MM-DD', Europe/Istanbul (pruned after 365 days)
+    kind TEXT NOT NULL,                      -- 'turn' | 'ui'
+    conv_hash TEXT,                          -- sha256(conversationId), 16 hex chars
+    turn INTEGER,
+    mode TEXT,                               -- llm | canned | fallback
+    intent TEXT,
+    flags TEXT,                              -- comma list, e.g. router_timeout,validator_drop,price_mismatch
+    model TEXT,
+    model_calls INTEGER,
+    tools TEXT,                              -- comma list of tool names
+    products TEXT,                           -- comma list of product ids shown / acted on
+    handoff TEXT,                            -- HandoffReason or NULL
+    in_tokens INTEGER,
+    cached_tokens INTEGER,
+    out_tokens INTEGER,
+    cost_micro_usd INTEGER,
+    first_text_ms INTEGER,
+    total_ms INTEGER,
+    outcome TEXT                             -- ok | canned | blocked | fallback | busy | error | timeout | aborted | <ui type>
+);
+CREATE INDEX IF NOT EXISTS idx_ai_chat_events_day ON ai_chat_events(day);

@@ -110,6 +110,8 @@ export interface PublicSiteSettings {
     products_per_page: number
     /** Optional override for the announcement bar (site_settings.topbar_messages JSON array). */
     topbar_messages: string[] | null
+    /** Kill switch of the Onopo Asistan chat (Admin › AI Asistan). Off: no launcher, the API answers 503. */
+    ai_assistant_enabled: boolean
 }
 
 export interface ShippingSettings {
@@ -307,6 +309,7 @@ const DEFAULT_SETTINGS: PublicSiteSettings = {
     maintenance_mode: false,
     products_per_page: 20,
     topbar_messages: null,
+    ai_assistant_enabled: false,
 }
 
 const DEFAULT_SHIPPING: ShippingSettings = { freeShippingThreshold: 500, shippingCost: 100 }
@@ -336,6 +339,7 @@ function toPublicSettings(rows: Record<string, any>[]): PublicSiteSettings {
     s.favicon_url = kv.favicon_url?.trim() || null
     s.footer_social_visible = bool(kv.footer_social_visible)
     s.maintenance_mode = bool(kv.maintenance_mode)
+    s.ai_assistant_enabled = bool(kv.ai_assistant_enabled)
     const perPage = parseInt(kv.products_per_page || '', 10)
     s.products_per_page = Number.isFinite(perPage) && perPage > 0 && perPage <= 200 ? perPage : DEFAULT_SETTINGS.products_per_page
     const footerCats = parseJson<unknown>(kv.footer_categories, [])

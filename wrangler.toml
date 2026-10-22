@@ -19,12 +19,39 @@ database_id = "750bb90b-a48c-4e9f-9c21-88e8a5e2e313"
 binding = "BUCKET"
 bucket_name = "onopo-storage"
 
+# Workers AI (Clef-flash router + DeepSeek V4.1 Flash). No API token: the binding uses the account identity.
+# Model calls are always remote and billed, also under `wrangler dev`.
+[ai]
+binding = "AI"
+
+# AI assistant throttles (Workers Rate Limiting; counted per Cloudflare location, approximate)
+[[ratelimits]]
+name = "CHAT_RL_BURST"
+namespace_id = "3101"
+simple = { limit = 3, period = 10 }
+
+[[ratelimits]]
+name = "CHAT_RL_MIN"
+namespace_id = "3102"
+simple = { limit = 8, period = 60 }
+
+# Keeps DeepSeek under its 20 requests/min account limit (key "deepseek"); over it the fallback model answers
+[[ratelimits]]
+name = "CHAT_RL_MODEL"
+namespace_id = "3103"
+simple = { limit = 18, period = 60 }
+
 # Environment Variables
 [vars]
 NEXT_PUBLIC_BASE_URL = "https://onopostore.com"
 R2_ENDPOINT = "https://3c39c225b3a27de7822833feb24b65b1.r2.cloudflarestorage.com"
 R2_BUCKET_NAME = "onopo-storage"
 CLOUDFLARE_ACCOUNT_ID = "3c39c225b3a27de7822833feb24b65b1"
+AI_CHAT_MODEL = "@cf/deepseek-ai/deepseek-v4.1-flash-1017"
+AI_ROUTER_MODEL = "@cf/cloudflare/clef-flash"
+AI_FALLBACK_MODEL = "@cf/zai-org/glm-4.7-flash"
+# Set to an AI Gateway id (created in the dashboard with logs OFF) to get gateway analytics/spend limits; empty = no gateway
+AI_GATEWAY_ID = ""
 
 # Secrets (add via: npx wrangler secret put R2_ACCESS_KEY_ID)
 # R2_ACCESS_KEY_ID
