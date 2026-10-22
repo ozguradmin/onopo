@@ -9,6 +9,7 @@ import { unitPrice } from '@/lib/pricing'
 import { originalImageUrl, productImageUrl } from '@/lib/images'
 import { cn } from '@/lib/utils'
 import { displayName } from '@/lib/search'
+import { isValidTurkishPhone } from '@/lib/phone'
 import { FallbackImage } from '@/components/ui/FallbackImage'
 import { Field, FormAlert, checkboxClass, inputClass, textareaClass } from '@/components/forms/Field'
 import { CHECKOUT_MIN_HEIGHT, CheckoutSkeleton } from '@/components/checkout/CheckoutSkeleton'
@@ -42,19 +43,6 @@ const FIELD_FOR_ERROR: Record<string, string> = {
     'Fatura ilçesi zorunlu': 'billingDistrict',
     'Fatura adresi zorunlu': 'billingAddress',
     [PHONE_INVALID]: 'phone',
-}
-
-/**
- * Turkish phone number, checked before the order is sent (the value itself is sent exactly as typed).
- * First removes what people paste or type around the digits: invisible format characters (the bidi
- * marks iOS Contacts adds, zero-width spaces), whitespace, parentheses, dots, slashes and dashes.
- * Then: 10 digits starting with 5 (mobile) or 2–4 (landline), optionally after a country code
- * (+90, 90 or 0090) and/or a trunk 0. Every accepted value has at least 10 digits, so the order
- * API's own check (app/api/orders/route.ts) accepts it too.
- */
-function isValidTurkishPhone(value: string): boolean {
-    const compact = value.replace(/[\p{Cf}\s().\/\p{Pd}]/gu, '')
-    return /^(?:\+?90|0090)?0?[2-5]\d{9}$/.test(compact)
 }
 
 /** 500 → "500 ₺", 499.9 → "499,90 ₺" */
