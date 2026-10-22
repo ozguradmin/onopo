@@ -6,6 +6,8 @@
  * cart drawer), "Hemen Al" (sets this line to the chosen quantity, then goes to /odeme/), favourite,
  * WhatsApp order, and the mobile sticky buy bar that appears while the main buttons are off screen
  * (its data-hide-bottom-nav attribute hides the mobile bottom nav on this page, see app/globals.css).
+ * On phones the buttons come right after the price (and the shipping line), so they are in the first
+ * screen; installments, stock and delivery move under them (see the comment above the JSX).
  *
  * Cart payload is the one every add-to-cart has always sent ({ id, name, price (RAW), image,
  * category, slug, free_shipping }), with id "<productId>-<variationIds…>" when variations are chosen,
@@ -18,6 +20,8 @@ import { Check, CreditCard, Minus, Plus, ShoppingBag, Truck, Clock } from 'lucid
 import { cn } from '@/lib/utils'
 import { getImageUrl } from '@/lib/utils'
 import { Price } from '@/components/ui/Price'
+import { FallbackImage } from '@/components/ui/FallbackImage'
+import { originalImageUrl, productImageUrl } from '@/lib/images'
 import { Button, buttonClasses } from '@/components/ui/button'
 import { FavoriteButton } from '@/components/product/ProductCardActions'
 import InstallmentModal from '@/components/product/InstallmentModal'
@@ -159,69 +163,91 @@ export function BuyBox({ product, variations, freeShippingThreshold, maxInstallm
         router.push('/odeme/')
     }
 
+    // ---- info lines (rendered in two places, see below) ----
+    const installments = !soldOut && (installmentInfo || maxInstallments) ? (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-5 text-ink-2">
+            <CreditCard className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+            <span>{installmentInfo || `Kredi kartına ${maxInstallments} aya varan taksit`}</span>
+            {maxInstallments ? (
+                <button
+                    type="button"
+                    onClick={() => setShowInstallments(true)}
+                    className="-my-2 inline-flex min-h-11 items-center font-semibold text-brand-600 underline decoration-brand-600/30 underline-offset-4 hover:text-brand-700 hover:decoration-brand-700"
+                >
+                    Taksit seçenekleri
+                </button>
+            ) : null}
+        </div>
+    ) : null
+    const stockLine = (
+        <li className="flex items-center gap-2">
+            {soldOut ? (
+                <>
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-danger" aria-hidden="true" />
+                    <span className="font-semibold text-danger">Tükendi</span>
+                    <span className="text-muted">· Şu an satışta değil</span>
+                </>
+            ) : (
+                <>
+                    <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
+                        <span className="h-2 w-2 rounded-full bg-success" />
+                    </span>
+                    <span className="font-semibold text-success">Stokta</span>
+                </>
+            )}
+        </li>
+    )
+    const shippingText = freeShipping ? (
+        <span className="font-semibold text-success">Kargo bedava</span>
+    ) : (
+        <span className="text-ink-2">
+            <span className="font-semibold tabular-nums">{formatTL(remaining)}</span> daha ekle, kargo bedava
+        </span>
+    )
+    const shippingIcon = <Truck className={cn('mt-0.5 h-4 w-4 shrink-0', freeShipping ? 'text-success' : 'text-muted')} aria-hidden="true" />
+    const deliveryLine = !soldOut && deliveryText ? (
+        <li className="flex items-start gap-2 text-ink-2">
+            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+            <span>{deliveryText}</span>
+        </li>
+    ) : null
+
+    // Phones (below md): price (+ the shipping line) → variations → quantity, "Sepete Ekle", "Hemen Al", so
+    // all of it is in the first screen; installments, stock and delivery follow under the buttons.
+    // md and up: the spec §11 order, price → installments → stock/shipping/delivery → variations → buttons.
+    // The info lines are rendered for both layouts and one copy is display:none, so the reading and tab
+    // order always match what is on screen.
     return (
         <div className="flex flex-col">
             {/* Price */}
             <Price price={finalPrice} originalPrice={product.original_price} size="lg" showDiscountBadge showSaving={!soldOut} />
 
-            {/* Installments */}
-            {!soldOut && (installmentInfo || maxInstallments) && (
-                <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-5 text-ink-2">
-                    <CreditCard className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
-                    <span>{installmentInfo || `Kredi kartına ${maxInstallments} aya varan taksit`}</span>
-                    {maxInstallments ? (
-                        <button
-                            type="button"
-                            onClick={() => setShowInstallments(true)}
-                            className="-my-2 inline-flex min-h-11 items-center font-semibold text-brand-600 underline decoration-brand-600/30 underline-offset-4 hover:text-brand-700 hover:decoration-brand-700"
-                        >
-                            Taksit seçenekleri
-                        </button>
-                    ) : null}
-                </div>
+            {/* Phones: shipping right under the price */}
+            {!soldOut && (
+                <p className="mt-1.5 flex items-start gap-2 text-sm leading-5 md:hidden">
+                    {shippingIcon}
+                    {shippingText}
+                </p>
             )}
 
-            {/* Stock, shipping, delivery */}
-            <ul className="mt-4 flex flex-col gap-2.5 border-t border-line pt-4 text-sm leading-5 lg:mt-3 lg:pt-3 xl:mt-4 xl:pt-4">
-                <li className="flex items-center gap-2">
-                    {soldOut ? (
-                        <>
-                            <span className="h-2 w-2 shrink-0 rounded-full bg-danger" aria-hidden="true" />
-                            <span className="font-semibold text-danger">Tükendi</span>
-                            <span className="text-muted">· Şu an satışta değil</span>
-                        </>
-                    ) : (
-                        <>
-                            <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
-                                <span className="h-2 w-2 rounded-full bg-success" />
-                            </span>
-                            <span className="font-semibold text-success">Stokta</span>
-                        </>
+            {/* md+: installments, then stock, shipping, delivery */}
+            <div className="hidden md:block">
+                {installments && <div className="mt-3">{installments}</div>}
+                <ul className="mt-4 flex flex-col gap-2.5 border-t border-line pt-4 text-sm leading-5 lg:mt-3 lg:pt-3 xl:mt-4 xl:pt-4">
+                    {stockLine}
+                    {!soldOut && (
+                        <li className="flex items-start gap-2">
+                            {shippingIcon}
+                            {shippingText}
+                        </li>
                     )}
-                </li>
-                {!soldOut && (
-                    <li className="flex items-start gap-2">
-                        <Truck className={cn('mt-0.5 h-4 w-4 shrink-0', freeShipping ? 'text-success' : 'text-muted')} aria-hidden="true" />
-                        {freeShipping ? (
-                            <span className="font-semibold text-success">Kargo bedava</span>
-                        ) : (
-                            <span className="text-ink-2">
-                                <span className="font-semibold tabular-nums">{formatTL(remaining)}</span> daha ekle, kargo bedava
-                            </span>
-                        )}
-                    </li>
-                )}
-                {!soldOut && deliveryText && (
-                    <li className="flex items-start gap-2 text-ink-2">
-                        <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
-                        <span>{deliveryText}</span>
-                    </li>
-                )}
-            </ul>
+                    {deliveryLine}
+                </ul>
+            </div>
 
             {/* Variations */}
             {groups.length > 0 && (
-                <div className="mt-5 flex flex-col gap-4">
+                <div className="mt-4 flex flex-col gap-4 md:mt-5">
                     {groups.map(([groupName, options]) => (
                         <fieldset key={groupName}>
                             <legend className="mb-2 text-sm font-semibold text-ink">
@@ -249,8 +275,8 @@ export function BuyBox({ product, variations, freeShippingThreshold, maxInstallm
                                             )}
                                         >
                                             {opt.image_url && (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={getImageUrl(opt.image_url)} alt="" width={24} height={24} className="h-6 w-6 rounded-chip object-cover" loading="lazy" />
+                                                // 24 px swatch: the 200w variant when variants are on (original otherwise), falls back once to the original
+                                                <FallbackImage src={productImageUrl(opt.image_url, 200)} fallbackSrc={originalImageUrl(opt.image_url)} alt="" width={24} height={24} className="h-6 w-6 rounded-chip object-cover" loading="lazy" />
                                             )}
                                             <span>{opt.value}</span>
                                             {opt.price_modifier !== 0 && (
@@ -268,7 +294,7 @@ export function BuyBox({ product, variations, freeShippingThreshold, maxInstallm
             )}
 
             {/* Actions */}
-            <div ref={ctaRef} className="mt-5 flex flex-col gap-2 lg:mt-4 xl:mt-5">
+            <div ref={ctaRef} className="mt-4 flex flex-col gap-2 md:mt-5 lg:mt-4 xl:mt-5">
                 <div className="flex items-stretch gap-2">
                     {!soldOut && (
                         <div className="flex h-12 shrink-0 items-center rounded-card border border-line-strong bg-white" role="group" aria-label="Adet">
@@ -339,6 +365,15 @@ export function BuyBox({ product, variations, freeShippingThreshold, maxInstallm
                         )}
                     </div>
                 )}
+            </div>
+
+            {/* Phones: installments, stock and delivery under the buttons */}
+            <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 md:hidden">
+                {installments}
+                <ul className="flex flex-col gap-2.5 text-sm leading-5">
+                    {stockLine}
+                    {deliveryLine}
+                </ul>
             </div>
 
             <InstallmentModal isOpen={showInstallments} onClose={() => setShowInstallments(false)} productPrice={shownPrice} />

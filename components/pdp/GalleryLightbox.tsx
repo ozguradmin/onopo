@@ -4,12 +4,17 @@
  * Full-screen image viewer for the product gallery (loaded on demand). Scroll-snap track for
  * swiping, arrow keys and buttons for navigation, click/tap to zoom 2.5x (the zoomed image follows
  * the pointer; drag to pan on touch), Escape or the close button to leave. Focus is trapped inside.
+ *
+ * Images: a slide gets its <img> when it is the current one or a neighbour (loading="lazy" does nothing
+ * inside the horizontal track). With image variants the slides use the 1200w WebP (srcset 400/800/1200)
+ * and only the zoomed slide switches to the original; the thumbnails use the 200w variant. Every image
+ * falls back once to the original (FallbackImage). Without variants all of these are the originals.
  */
 import * as React from 'react'
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FallbackImage } from '@/components/ui/FallbackImage'
-import { originalImageUrl } from '@/lib/images'
+import { originalImageUrl, productImageSrcSet, productImageUrl } from '@/lib/images'
 import { useDialog } from './useDialog'
 
 export interface GalleryLightboxProps {
@@ -21,10 +26,21 @@ export interface GalleryLightboxProps {
 
 const ZOOM = 2.5
 
+/** The slide fills the dialog (minus 16/32 px padding): the srcset picks 400/800/1200 for it. */
+const SLIDE_SIZES = '100vw'
+
+/** The current slide and its neighbours (the arrows and keys wrap around). */
+function around(i: number, count: number): number[] {
+    return [i, (i + 1) % count, (i - 1 + count) % count]
+}
+
 export default function GalleryLightbox({ images, name, startIndex, onClose }: GalleryLightboxProps) {
     const count = images.length
     const [index, setIndex] = React.useState(startIndex)
     const [zoomed, setZoomed] = React.useState(false)
+    // Slides that have their <img>: grows as the visitor moves, never shrinks (no re-download, no flash)
+    const [seen, setSeen] = React.useState<ReadonlySet<number>>(() => new Set(around(startIndex, count)))
+    if (around(index, count).some(i => !seen.has(i))) setSeen(new Set([...seen, ...around(index, count)]))
     const [origin, setOrigin] = React.useState({ x: 50, y: 50 })
     const trackRef = React.useRef<HTMLDivElement>(null)
     const drag = React.useRef<{ x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null)
@@ -162,16 +178,21 @@ export default function GalleryLightbox({ images, name, startIndex, onClose }: G
                                 onClick={onClickImage}
                                 className={cn('relative h-full w-full touch-pan-x', zoomed && i === index ? 'cursor-zoom-out touch-none' : 'cursor-zoom-in')}
                             >
-                                <FallbackImage
-                                    src={originalImageUrl(img)}
-                                    alt={`${name} - görsel ${i + 1}`}
-                                    width={1200}
-                                    height={1200}
-                                    loading={Math.abs(i - startIndex) <= 1 ? 'eager' : 'lazy'}
-                                    draggable={false}
-                                    className="pointer-events-none h-full w-full select-none object-contain transition-transform duration-200 ease-out"
-                                    style={zoomed && i === index ? { transform: `scale(${ZOOM})`, transformOrigin: `${origin.x}% ${origin.y}%` } : undefined}
-                                />
+                                {seen.has(i) && (
+                                    <FallbackImage
+                                        // Zoomed: the original (full resolution); the 1200w variant stays on screen until it has loaded
+                                        src={zoomed && i === index ? originalImageUrl(img) : productImageUrl(img, 1200)}
+                                        srcSet={zoomed && i === index ? undefined : productImageSrcSet(img, [400, 800, 1200])}
+                                        sizes={SLIDE_SIZES}
+                                        fallbackSrc={originalImageUrl(img)}
+                                        alt={`${name} - görsel ${i + 1}`}
+                                        width={1200}
+                                        height={1200}
+                                        draggable={false}
+                                        className="pointer-events-none h-full w-full select-none object-contain transition-transform duration-200 ease-out"
+                                        style={zoomed && i === index ? { transform: `scale(${ZOOM})`, transformOrigin: `${origin.x}% ${origin.y}%` } : undefined}
+                                    />
+                                )}
                             </div>
                         </div>
                     ))}
@@ -213,7 +234,7 @@ export default function GalleryLightbox({ images, name, startIndex, onClose }: G
                                 i === index ? 'border-brand-600 ring-2 ring-brand-600' : 'border-line',
                             )}
                         >
-                            <FallbackImage src={originalImageUrl(img)} alt="" width={56} height={56} loading="lazy" className="h-full w-full object-contain p-1" />
+                            <FallbackImage src={productImageUrl(img, 200)} fallbackSrc={originalImageUrl(img)} alt="" width={56} height={56} loading="lazy" className="h-full w-full object-contain p-1" />
                         </button>
                     ))}
                 </div>

@@ -11,7 +11,10 @@
  * URL. Turn variants on with the build-time env var NEXT_PUBLIC_IMAGE_VARIANTS_ENABLED=true once the
  * files exist. Client <img>s must still fall back to the original once on error (FallbackImage does).
  *
- * Feeds, JSON-LD and og:image keep using ORIGINAL urls (merchants want full-size images).
+ * Feeds and JSON-LD keep using ORIGINAL urls (merchants want full-size images). The product og:image uses
+ * /api/og-image/<key> while variants are on: it redirects to the 1200w variant only when that exists in R2,
+ * because a link preview cannot fall back (app/[slug]/page.tsx). The PDP's LCP <link rel=preload> has no
+ * fallback either: a missing variant costs one wasted 404 there, and the <img> then falls back to the original.
  */
 
 export const R2_PUBLIC_HOST = 'https://images.onopostore.com'

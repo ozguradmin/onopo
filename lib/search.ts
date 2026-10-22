@@ -364,11 +364,52 @@ export function specChips(name: string, max = 2): string[] {
     return chips.slice(0, max)
 }
 
-/** Product name for display: drops a leading "onopo" brand word (the full name stays in alt/title/SEO). */
+/**
+ * Casing fixes for product names on screen: the rules lib/seo.ts productTitle applies to <title> (its
+ * TITLE_CASE_FIXES, not exported; keep the two lists in step), plus lowercase "iphone"/"ipad", "USB-C" and
+ * "Onopo" inside a name. Only whole words, units right after a number and known misspellings change;
+ * model codes ("D6", "T120", "trml1") and every other word keep their case.
+ */
+const NAME_CASE_FIXES: Array<[RegExp, string]> = [
+    [/(^|\s)[İIi][Pp]hone(?=\s|$|[,.;:)/'’])/g, '$1iPhone'],
+    [/(^|\s)[İIi][Pp]ad(?=\s|$|[,.;:)/'’])/g, '$1iPad'],
+    [/(^|\s)[İI]nfinix(?=\s|$|[,.;:)/'’])/g, '$1Infinix'],
+    [/(^|\s)onopo(?=\s|$|[,.;:)/'’])/gi, '$1Onopo'],
+    [/\bUsb\b/g, 'USB'],
+    [/\bUSB-c\b/g, 'USB-C'],
+    [/\bType-c\b/gi, 'Type-C'],
+    [/\bPd\b/g, 'PD'],
+    [/\bGan\b/g, 'GaN'],
+    [/\bAux\b/g, 'AUX'],
+    [/\bTo\b/g, 'to'],
+    [/\bVe\b/g, 've'],
+    [/(\d)\s?mah\b/gi, '$1 mAh'],
+    [/(\d(?:[.,]\d+)?)w\b/g, '$1W'],
+    [/(\d(?:[.,]\d+)?)a\b/g, '$1A'],
+    [/(\d)\s?mt\b/gi, '$1 m'],
+    [/(\d)\s?MM\b/g, '$1 mm'],
+    [/(\d)\s?CM\b/g, '$1 cm'],
+    [/\bTurbu\b/g, 'Turbo'],
+    [/\bPubg\b/g, 'PUBG'],
+    [/(\d\s)In(?=\s+\d)/g, '$1in'], // "5 In 1" -> "5 in 1"
+    [/(^|\s)İn[cç](?=\s|$)/g, '$1inç'], // "9.6 İnc" -> "9.6 inç"
+]
+
+/** The casing fixes above, on any product name (display only). */
+export function fixNameCase(name: string): string {
+    let out = name
+    for (const [re, rep] of NAME_CASE_FIXES) out = out.replace(re, rep)
+    return out
+}
+
+/**
+ * Product name for display (cards, search, cart, the product page H1): drops a leading "onopo" brand word
+ * and fixes the casing (fixNameCase). The raw name stays in alt/title/aria-label, SEO, JSON-LD and feeds.
+ */
 export function displayName(name: string): string {
     const trimmed = (name || '').trim()
     const stripped = trimmed.replace(/^onopo(?:\s*[-|:·]\s*|\s+)/i, '')
-    return stripped.length > 0 ? stripped : trimmed
+    return fixNameCase(stripped.length > 0 ? stripped : trimmed)
 }
 
 /** Folded last words of a leading compatibility phrase ("… Uyumlu", "… İçin") and its joiner words. */
