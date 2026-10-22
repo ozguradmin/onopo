@@ -408,3 +408,42 @@ test('schema.sql has the same tables as the lazy ensure', () => {
         assert.ok(schema.includes(col), col)
     }
 })
+
+// ---- admin ----
+
+test('validateRedirect: old address must not open, new one must; no chains possible', () => {
+    const { validateRedirect } = R
+    const ok = validateRedirect('https://onopostore.com/Urun/Eski-Ad?utm_source=x', 'https://www.onopostore.com/onopo-iphone-15-anti-static-9d-cam-ekran-koruyucu-551/', index)
+    assert.deepEqual(ok, { ok: true, from: '/urun/eski-ad/', to: P551 })
+    assert.equal(validateRedirect('/eski.html', '/kategori/cep-telefonu-aksesuarlari', index).ok, true)
+    assert.equal(validateRedirect('/eski/', `${IMG}/a.png`, index).ok, true)
+    const bad = (from, to) => { const v = validateRedirect(from, to, index); assert.equal(v.ok, false, `${from} → ${to}`); return v.error }
+    assert.match(bad('https://evil.example/x', P551), /siteye ait/)
+    assert.match(bad('/admin/x/', P551), /admin/)
+    assert.match(bad('/api/products/', P551), /admin/)
+    assert.match(bad('/', P551), /Ana sayfa/)
+    assert.match(bad(P551, P401), /zaten açılıyor/, 'a live product page is never a source')
+    assert.match(bad('/kategori/cep-telefonu-aksesuarlari/', P401), /zaten açılıyor/)
+    assert.match(bad('/eski/', 'https://evil.example/'), /bu sitenin/)
+    assert.match(bad('/eski/', '/eski/'), /aynı/)
+    assert.match(bad('/eski/', '/baska-eski/'), /bulunamadı/, 'a target that 404s (e.g. another source) is refused')
+    assert.match(bad('/eski/', '/onopo-eski-pasif-urun-700/'), /bulunamadı/)
+    assert.match(bad('/eski/', ''), /Yeni adresi/)
+})
+
+test('classifyUrl: what happens to each Search Console address', async () => {
+    const { classifyUrl } = R
+    const existing = new Map([['/eski-kampanya/', P401]])
+    const deps = { index, existing: key => existing.get(key) ?? null }
+    const s = async u => (await classifyUrl(u, deps)).status
+    assert.equal(await s('https://evil.example/x'), 'invalid')
+    assert.equal(await s('https://onopostore.com/wp-login.php'), 'protected')
+    assert.equal(await s('https://onopostore.com/admin/'), 'protected')
+    assert.equal(await s(`https://onopostore.com${P551}`), 'live')
+    assert.equal(await s('https://onopostore.com/eski-kampanya?utm_source=x'), 'has-redirect')
+    assert.equal(await s('https://onopostore.com/urun/551'), 'auto')
+    assert.equal(await s('https://onopostore.com/urun/iphone-15-ekran-koruyucu'), 'suggested')
+    assert.equal(await s('https://onopostore.com/airpods-pro-kilif'), 'none')
+    const r = await classifyUrl('https://onopostore.com/eski-kampanya/', deps)
+    assert.equal(r.current, P401)
+})

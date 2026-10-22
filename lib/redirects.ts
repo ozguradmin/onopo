@@ -961,3 +961,74 @@ export async function trimNotFoundLog(db: RedirectsDb, max = NOT_FOUND_LOG_MAX_R
         .bind(extra)
         .run()
 }
+
+// ---- admin (Admin › Yönlendirmeler) ----------------------------------------------------------------------
+
+export type RedirectValidation =
+    | { ok: true; from: string; to: string }
+    | { ok: false; error: string }
+
+/**
+ * Checks an admin redirect before it is saved. The old address must be ours and must not open today (a
+ * redirect only runs where the site would answer 404, so a live page would never be redirected anyway); the
+ * new address must be a live page of the site or an image on images.onopostore.com. Because a source never
+ * opens and a target always does, a target can never be another redirect's source: no chains, no loops.
+ * Messages are for the shop owner (plain Turkish).
+ */
+export function validateRedirect(fromInput: string, toInput: string, index: RedirectIndex): RedirectValidation {
+    const from = parsePath(fromInput)
+    if (!from) return { ok: false, error: 'Eski adres bu siteye ait bir adres olmalı (ör. /urun/eski-ad/ ya da https://onopostore.com/...).' }
+    if (isProtectedPath(from.path)) return { ok: false, error: '/admin ve /api ile başlayan adresler yönlendirilemez.' }
+    if (from.path === '/' && !from.params.length) return { ok: false, error: 'Ana sayfa yönlendirilemez.' }
+    if (isJunkPath(from.path)) return { ok: false, error: 'Bu adres yönlendirilemez (tarayıcıların ve botların kendi istediği bir dosya).' }
+    if (isLiveTarget(from.key, index)) {
+        return { ok: false, error: 'Bu adres sitede zaten açılıyor. Yönlendirme yalnızca açılmayan (bulunamayan) adreslerde çalışır.' }
+    }
+    if (!String(toInput ?? '').trim()) return { ok: false, error: 'Yeni adresi yazın.' }
+    const to = safeTarget(toInput)
+    if (!to) return { ok: false, error: 'Yeni adres bu sitenin bir sayfası olmalı (ör. /urun-adi/ ya da https://onopostore.com/kategori/...).' }
+    if (to === from.key || to === from.path) return { ok: false, error: 'Eski ve yeni adres aynı olamaz.' }
+    if (!isLiveTarget(to, index)) {
+        return { ok: false, error: 'Yeni adres sitede bulunamadı. Ürün, kategori ya da sayfa adresini kontrol edin (pasif ürünler ve ürünsüz kategoriler açılmaz).' }
+    }
+    return { ok: true, from: from.key, to }
+}
+
+export type UrlStatus =
+    /** Not an address of this site (or unreadable). */
+    | 'invalid'
+    /** /admin, /api, scanner noise: never redirected. */
+    | 'protected'
+    /** Opens today: nothing to do. */
+    | 'live'
+    /** An admin redirect exists. */
+    | 'has-redirect'
+    /** The site already redirects it by itself (pattern or confident match). */
+    | 'auto'
+    /** Not redirected yet; a likely target is suggested for the admin to confirm. */
+    | 'suggested'
+    /** Not redirected and no good guess. */
+    | 'none'
+
+export interface UrlReport {
+    input: string
+    path: string | null
+    status: UrlStatus
+    /** has-redirect: the saved target. */
+    current?: string
+    suggestions: Suggestion[]
+}
+
+/** What the site does with one address from a Search Console list, and what it could do. */
+export async function classifyUrl(input: string, deps: ResolveDeps & { existing?: (key: string) => string | null }): Promise<UrlReport> {
+    const parsed = parsePath(input)
+    if (!parsed) return { input, path: null, status: 'invalid', suggestions: [] }
+    const base = { input, path: parsed.key }
+    if (isProtectedPath(parsed.path) || isJunkPath(parsed.path)) return { ...base, status: 'protected', suggestions: [] }
+    const current = deps.existing?.(parsed.key) ?? (parsed.key !== parsed.path ? deps.existing?.(parsed.path) : null) ?? null
+    if (current) return { ...base, status: 'has-redirect', current, suggestions: [] }
+    if (isLiveTarget(parsed.key, deps.index)) return { ...base, status: 'live', suggestions: [] }
+    const suggestions = await suggestTargets(parsed.key, deps)
+    const status: UrlStatus = suggestions[0]?.kind === 'auto' ? 'auto' : suggestions.length ? 'suggested' : 'none'
+    return { ...base, status, suggestions }
+}
