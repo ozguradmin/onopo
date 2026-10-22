@@ -669,8 +669,9 @@ test('runTurn: text only → one DeepSeek call and meta, step, text, suggestions
     assert.deepEqual(types.slice(-2), ['suggestions', 'done'])
     assert.equal(events.filter(e => e.t === 'text').map(e => e.v).join(''), 'iPhone 15 USB-C girişli. Sana 20W adaptör yeter.')
     assert.deepEqual(events.at(-1), { t: 'done', finish: 'stop', productIds: [], wa: true })
-    // Owner decision (w7): a compact WhatsApp row under every answer
+    // Owner decision (w7): a compact WhatsApp row under every answer; only a full card counts as a hand-off
     assert.equal(events.find(e => e.t === 'whatsapp').variant, 'compact')
+    assert.equal(log.handoff, null)
     assert.ok(types.includes('device'))
     assert.equal(log.outcome, 'ok')
     assert.equal(log.mode, 'llm')

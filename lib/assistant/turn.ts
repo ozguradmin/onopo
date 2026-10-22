@@ -838,7 +838,8 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
         for (const f of guardFlags) flags.add(f)
         log.flags = [...flags]
         log.products = [...state.productIds]
-        log.handoff = state.handoff
+        // Only a full card is a hand-off: the compact row now sits under every answer (w7)
+        log.handoff = state.waVariant === 'full' ? state.handoff : null
         log.totalMs = Date.now() - started
     }
 }
