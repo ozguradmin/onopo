@@ -2,11 +2,13 @@ import type { Metadata } from 'next'
 import { Check, Mail, Package } from 'lucide-react'
 import { buttonClasses } from '@/components/ui/button'
 import { privatePageMetadata } from '@/lib/seo'
+import { ClearCartOnSuccess } from '@/components/checkout/ClearCartOnSuccess'
 
 // PayTR's merchant_ok_url (lib/payment/paytr.ts). It opens inside the PayTR iframe on /odeme/ (which
 // polls the order and switches to its own success view) or on its own. Static content only: it
 // must not depend on the order, the session or the cart. Every link has target="_top" so it leaves
-// the iframe (plain <a>: works before hydration; on its own, _top is the same window).
+// the iframe (plain <a>: works before hydration; on its own, _top is the same window). An inline
+// script empties the saved cart before those links exist (ClearCartOnSuccess).
 export const metadata: Metadata = {
     title: 'Ödeme başarılı',
     ...privatePageMetadata,
@@ -15,6 +17,7 @@ export const metadata: Metadata = {
 export default function OrderSuccessPage() {
     return (
         <div className="min-h-[60vh] bg-surface py-8 lg:py-14">
+            <ClearCartOnSuccess />
             <div className="container-store">
                 <div className="mx-auto max-w-xl rounded-sheet border border-line bg-white p-6 text-center shadow-card sm:p-10">
                     <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-success-50 text-success">
