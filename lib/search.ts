@@ -243,8 +243,22 @@ export interface SearchOptions<T> {
     limit?: number
     /** Put sold-out items after in-stock ones (default true when items have a numeric `stock`). */
     soldOutLast?: boolean
-    /** Custom tie-breaker after score (default: shorter name, then higher id). */
+    /** Custom tie-breaker after score (default: compareSearchTies). */
     tieBreak?: (a: T, b: T) => number
+}
+
+/**
+ * Order of results with the same score: shorter name first (the query is a larger part of the title,
+ * so "iphone 15" lists "iPhone 15" before "iPhone 15 Pro Max"), then the newer product (higher id).
+ * The one rule for every search surface: the instant-search dropdown, /api/products?q= and the
+ * "Önerilen" order of the /products/?q= listing (lib/catalog listProducts) all use it, so pressing
+ * Enter shows the dropdown's products in the same order.
+ */
+export function compareSearchTies(a: { name?: string | null; id?: number | string | null }, b: { name?: string | null; id?: number | string | null }): number {
+    const la = a.name?.length ?? 0
+    const lb = b.name?.length ?? 0
+    if (la !== lb) return la - lb
+    return Number(b.id ?? 0) - Number(a.id ?? 0)
 }
 
 /**
@@ -271,11 +285,7 @@ export function searchItems<T extends SearchableFields & { id?: number | string;
             if (sa !== sb) return sa - sb
         }
         if (b.score !== a.score) return b.score - a.score
-        if (options.tieBreak) return options.tieBreak(a.item, b.item)
-        const la = a.item.name?.length ?? 0
-        const lb = b.item.name?.length ?? 0
-        if (la !== lb) return la - lb
-        return Number(b.item.id ?? 0) - Number(a.item.id ?? 0)
+        return (options.tieBreak ?? compareSearchTies)(a.item, b.item)
     })
     const out = scored.map(s => s.item)
     return options.limit != null ? out.slice(0, options.limit) : out
