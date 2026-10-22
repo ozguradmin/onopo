@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { onPageAwake } from '@/components/layout/page-awake'
 
 function prefersReducedMotion(): boolean {
     return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -10,17 +11,23 @@ function prefersReducedMotion(): boolean {
 
 /** Time a slide stays before the slider moves on by itself. */
 const AUTOPLAY_MS = 5000
+/** Autoplay starts this long after load (or at the first interaction), see onPageAwake. */
+const CAROUSEL_START_MS = 1000
 
 /**
  * Swipe slider for the campaign banners at the top of the home page (components/home/CampaignBanners).
- * The slides are server-rendered <li> children; this island adds the dots, the desktop arrows and a
- * gentle autoplay. Autoplay never runs with prefers-reduced-motion, while the slider is off screen or
- * the tab is hidden, or while the pointer or focus is on it. A swipe or a control does NOT stop it (owner):
+ * The slides are server-rendered role="group" children (the section around this is the labelled carousel,
+ * the ARIA carousel pattern); this island adds the dots, the desktop arrows and a gentle autoplay. Autoplay starts
+ * with the visitor's first scroll, touch, click or key, or 6 s after the page has loaded and is visible
+ * (components/layout/page-awake.ts; owner: a phone that only opened the page must see the banners slide too),
+ * whichever comes first; the first slide stays still while the page loads. It never runs
+ * with prefers-reduced-motion, while the slider is off screen or the tab is hidden, or while the pointer
+ * or focus is on it. A swipe or a control does NOT stop it (owner):
  * it only restarts the 5 s countdown, so the next slide comes a full interval later. The pause button keeps
  * it under the visitor's control (WCAG 2.2.2).
  */
-export function CampaignCarousel({ count, label, children }: { count: number; label: string; children: React.ReactNode }) {
-    const listRef = React.useRef<HTMLUListElement>(null)
+export function CampaignCarousel({ count, children }: { count: number; children: React.ReactNode }) {
+    const listRef = React.useRef<HTMLDivElement>(null)
     const [active, setActive] = React.useState(0)
     const [edges, setEdges] = React.useState({ start: true, end: count < 2 })
     const [playing, setPlaying] = React.useState(false)
@@ -30,7 +37,7 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
     /** When the slide last changed (by autoplay or by the visitor): the countdown runs from here. */
     const lastMove = React.useRef(0)
 
-    const slideAt = (el: HTMLUListElement, i: number) => el.children[i] as HTMLElement | undefined
+    const slideAt = (el: HTMLDivElement, i: number) => el.children[i] as HTMLElement | undefined
 
     const scrollToSlide = React.useCallback((i: number, smooth = true) => {
         const el = listRef.current
@@ -74,9 +81,15 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
         }
     }, [count])
 
-    // Autoplay: on once mounted (unless reduced motion), off for good after the visitor takes over
+    // Autoplay: on at the first interaction with the page or 6 s after it has loaded and is visible, unless
+    // reduced motion
     React.useEffect(() => {
-        if (count > 1 && !prefersReducedMotion()) setPlaying(true)
+        if (count < 2 || prefersReducedMotion()) return
+        // Started 1 s after load, so the first slide moves at about 6 s (AUTOPLAY_MS later), not at 11 s
+        return onPageAwake(() => {
+            lastMove.current = Date.now()
+            setPlaying(true)
+        }, CAROUSEL_START_MS)
     }, [count])
 
     React.useEffect(() => {
@@ -135,9 +148,8 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
             }}
             onBlurCapture={hold(false)}
         >
-            <ul
+            <div
                 ref={listRef}
-                aria-label={label}
                 // Inside the gutter, one slide per view: the neighbours are only seen while swiping
                 className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain rounded-sheet"
                 // A real swipe (not our own smooth scroll) hands control to the visitor
@@ -147,7 +159,7 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
                 }}
             >
                 {children}
-            </ul>
+            </div>
 
             {count > 1 && (
                 <>
@@ -191,7 +203,7 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
                             >
                                 <span
                                     aria-hidden="true"
-                                    className={cn('h-1.5 rounded-full transition-all duration-200', i === active ? 'w-5 bg-brand-600' : 'w-1.5 bg-line-strong')}
+                                    className={cn('h-1.5 rounded-full transition-colors duration-200', i === active ? 'w-5 bg-brand-600' : 'w-1.5 bg-line-strong')}
                                 />
                             </button>
                         ))}

@@ -411,25 +411,27 @@ html[data-header-collapsed] [data-under-header="sidebar"] {
 }
 
 /* Mobile announcement bar: one message at a time, 4 s each (2–4 messages); static under reduced motion */
+/* Hidden messages are visibility: hidden as well as transparent: out of the accessibility tree and never read as
+   low-contrast text (Lighthouse color-contrast) */
 @keyframes topbar-cycle-2 {
-  0% { opacity: 0; transform: translateY(6px); }
-  4% { opacity: 1; transform: translateY(0); }
-  46% { opacity: 1; transform: translateY(0); }
-  50%, 100% { opacity: 0; transform: translateY(-6px); }
+  0% { opacity: 0; visibility: hidden; transform: translateY(6px); }
+  4% { opacity: 1; visibility: visible; transform: translateY(0); }
+  46% { opacity: 1; visibility: visible; transform: translateY(0); }
+  50%, 100% { opacity: 0; visibility: hidden; transform: translateY(-6px); }
 }
 
 @keyframes topbar-cycle-3 {
-  0% { opacity: 0; transform: translateY(6px); }
-  3% { opacity: 1; transform: translateY(0); }
-  30% { opacity: 1; transform: translateY(0); }
-  33.333%, 100% { opacity: 0; transform: translateY(-6px); }
+  0% { opacity: 0; visibility: hidden; transform: translateY(6px); }
+  3% { opacity: 1; visibility: visible; transform: translateY(0); }
+  30% { opacity: 1; visibility: visible; transform: translateY(0); }
+  33.333%, 100% { opacity: 0; visibility: hidden; transform: translateY(-6px); }
 }
 
 @keyframes topbar-cycle-4 {
-  0% { opacity: 0; transform: translateY(6px); }
-  2% { opacity: 1; transform: translateY(0); }
-  23% { opacity: 1; transform: translateY(0); }
-  25%, 100% { opacity: 0; transform: translateY(-6px); }
+  0% { opacity: 0; visibility: hidden; transform: translateY(6px); }
+  2% { opacity: 1; visibility: visible; transform: translateY(0); }
+  23% { opacity: 1; visibility: visible; transform: translateY(0); }
+  25%, 100% { opacity: 0; visibility: hidden; transform: translateY(-6px); }
 }
 
 .topbar-rotator > [data-msg] {
@@ -438,6 +440,21 @@ html[data-header-collapsed] [data-under-header="sidebar"] {
   animation-fill-mode: both;
   animation-timing-function: ease-out;
 }
+
+/* The first message stands still until html[data-interacted] (LayoutProvider, components/layout/page-awake.ts): the
+   visitor's first scroll, tap or key, or 6 s after the page has loaded and is visible, so the bar also rotates on a
+   phone nobody touches, while the first paint stays calm. */
+html:not([data-interacted]) .topbar-rotator > [data-msg] {
+  animation: none !important;
+  opacity: 0;
+  visibility: hidden;
+}
+
+html:not([data-interacted]) .topbar-rotator > [data-msg]:first-child {
+  opacity: 1;
+  visibility: visible;
+}
+
 
 .topbar-rotator[data-count="2"] > [data-msg] {
   animation-name: topbar-cycle-2;
@@ -455,10 +472,12 @@ html[data-header-collapsed] [data-under-header="sidebar"] {
   .topbar-rotator > [data-msg] {
     animation: none !important;
     opacity: 0;
+    visibility: hidden;
   }
 
   .topbar-rotator > [data-msg]:first-child {
     opacity: 1;
+    visibility: visible;
   }
 
   .animate-badge-bump {

@@ -3,10 +3,12 @@
 /**
  * Small helpers for the shell's overlays (cart drawer, menu drawer, search sheet):
  *   useScrollLock(active)       body scroll lock with a counter (nested overlays), no layout jump
- *   useFocusTrap(ref, active)   Tab stays inside, initial focus, focus returns to the trigger
+ *   useFocusTrap(ref, active)   Tab stays inside, initial focus, focus returns to the trigger (rules in
+ *                               focus-rules.ts: never into a hidden element, never away from one the visitor chose)
  *   useEscape(active, onEscape)
  */
 import * as React from 'react'
+import { focusRestoreTarget, mustDropFocus, shouldTakeInitialFocus } from './focus-rules'
 
 let lockCount = 0
 let savedPaddingRight = ''
@@ -55,7 +57,9 @@ function focusables(root: HTMLElement): HTMLElement[] {
 
 /**
  * While `active`, keeps keyboard focus inside `ref`. On activation it focuses `initialFocus` (or the
- * container itself); on deactivation it returns focus to the element that had it before.
+ * container itself), unless the visitor has meanwhile focused something outside. On deactivation focus left in
+ * the layer is dropped (a field of a sheet that is now hidden must not keep the phone keyboard), then it returns
+ * to the element that had it before, when that is still on screen and the visitor has not moved on.
  */
 export function useFocusTrap(
     ref: React.RefObject<HTMLElement | null>,
@@ -72,7 +76,7 @@ export function useFocusTrap(
         const target = initialFocus?.current ?? root
         // Focus after the panel became visible (visibility switches in the same frame)
         const raf = requestAnimationFrame(() => {
-            if (!root.contains(document.activeElement)) target.focus({ preventScroll: true })
+            if (shouldTakeInitialFocus(root, document.activeElement, previous, document.body)) target.focus({ preventScroll: true })
         })
 
         const onKeyDown = (e: KeyboardEvent) => {
@@ -98,9 +102,11 @@ export function useFocusTrap(
         return () => {
             cancelAnimationFrame(raf)
             document.removeEventListener('keydown', onKeyDown)
-            if (restore && previous && previous.isConnected && typeof previous.focus === 'function') {
-                previous.focus({ preventScroll: true })
-            }
+            const current = document.activeElement as HTMLElement | null
+            if (mustDropFocus(root, current, document.body)) current?.blur()
+            if (!restore) return
+            const back = focusRestoreTarget(root, previous, current, document.body)
+            if (back && typeof back.focus === 'function') back.focus({ preventScroll: true })
         }
         // initialFocus is a ref object (stable)
         // eslint-disable-next-line react-hooks/exhaustive-deps

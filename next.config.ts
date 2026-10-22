@@ -21,6 +21,14 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '50mb', // Increase limit for file uploads
     },
+    // Client router cache (in the visitor's tab only, never shared): a page visited in the last 30 s, or prefetched
+    // in full (components/layout/PrefetchLink.tsx) in the last 3 min, opens without waiting for the server when the
+    // visitor taps back to it (bottom-nav tabs). Every page is dynamic, so the default (0 s) re-rendered it on each
+    // tap. Logout calls router.refresh() and login is a full page load, both of which drop this cache.
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
   },
   // Force trailing slashes for better SEO
   trailingSlash: true,

@@ -32,6 +32,7 @@ import { Header } from "@/components/layout/Header"
 import { Footer } from "@/components/layout/Footer"
 import { MobileNav } from "@/components/layout/MobileNav"
 import { useShellUI } from "@/components/layout/shell-ui"
+import { onPageAwake } from "@/components/layout/page-awake"
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary'
 import { DEFAULT_SHELL_FACTS, ShellChromeContext, ShellFactsContext, StoreDataProvider } from '@/components/layout/store-data'
 import { syncSavedCart, useCartStore, watchSavedCart } from "@/store/cart-store"
@@ -160,6 +161,14 @@ export function LayoutProvider({
         syncSavedCart() // changes made while this page was on /odeme
         return watchSavedCart()
     }, [isCheckout])
+
+    // html[data-interacted] at the first scroll, tap or key, or 6 s after the page has loaded and is visible
+    // (page-awake.ts): the top bar starts rotating then (app/globals.css)
+    React.useEffect(() => {
+        const root = document.documentElement
+        if (root.hasAttribute('data-interacted')) return
+        return onPageAwake(() => root.setAttribute('data-interacted', ''))
+    }, [])
 
     // Page-view tracking (was in Footer on mount; now also counts client-side navigations)
     React.useEffect(() => {

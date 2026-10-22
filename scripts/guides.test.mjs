@@ -239,6 +239,54 @@ test('articleJsonLd and faqPageJsonLd: absolute canonical URL, dates, the store 
     assert.doesNotMatch(seo.serializeJsonLd(seo.faqPageJsonLd([{ question: '</script>?', answer: 'a' }])), /<\/script>/)
 })
 
+test('guide pictures: our own photos of in-stock related products, in the product row order, each photo once, at most 3', () => {
+    // The real catalogue names with made-up image references (the fixture has no images)
+    const withImages = CATALOG.map(p => ({ ...p, image: `/api/images/${p.id}-photo.webp` }))
+    for (const g of G.GUIDES) {
+        const images = G.selectGuideImages(withImages, g)
+        const expected = G.selectGuideProducts(withImages, g.products, withImages.length).filter(p => p.in_stock).slice(0, G.GUIDE_IMAGE_COUNT)
+        assert.ok(images.length >= 1 && images.length <= 3, `${g.slug}: ${images.length}`)
+        assert.deepEqual(images.map(i => i.image), expected.map(p => p.image), g.slug)
+        for (const img of images) {
+            assert.ok(img.alt.length > 3 && img.alt.length <= 90, `${g.slug}: alt "${img.alt}"`)
+            assert.doesNotMatch(img.alt, /^onopo\b| \| /i, `${g.slug}: alt "${img.alt}"`)
+        }
+    }
+    const rule = { products: { clauses: [{ q: 'kablo' }] } }
+    const products = [
+        { id: 1, name: 'Onopo Kablo A | 1 Metre', in_stock: false, image: '/api/images/a.webp' },
+        { id: 2, name: 'Kablo B', in_stock: true, image: null },
+        { id: 3, name: 'Kablo C', in_stock: true, image: '  ' },
+        { id: 4, name: 'Kablo D', in_stock: true, image: '/api/images/d.webp' },
+        { id: 5, name: 'Kablo E (aynı foto)', in_stock: true, image: '/api/images/d.webp' },
+        { id: 6, name: 'Onopo Kablo F | Hızlı Şarj | 2 Metre', stock: 3, image: '/api/images/f.webp' },
+        { id: 7, name: 'Kablo G', stock: 1, image: '/api/images/g.webp' },
+        { id: 8, name: 'Kablo H', stock: 1, image: '/api/images/h.webp' },
+        { id: 9, name: 'Şarj Aleti', in_stock: true, image: '/api/images/s.webp' },
+    ]
+    // Sold out (1), no photo (2, 3), the same photo again (5) and unrelated products (9) are skipped
+    assert.deepEqual(G.selectGuideImages(products, rule), [
+        { image: '/api/images/d.webp', alt: 'Kablo D' },
+        { image: '/api/images/f.webp', alt: 'Kablo F' },
+        { image: '/api/images/g.webp', alt: 'Kablo G' },
+    ])
+    assert.equal(G.selectGuideImages(products, rule, 1).length, 1)
+    assert.deepEqual(G.selectGuideImages([], rule), [])
+    // Every guide, keyed by slug (hub cards, lists)
+    const bySlug = G.guideImagesBySlug(products)
+    assert.deepEqual(Object.keys(bySlug).sort(), [...G.GUIDE_SLUGS].sort())
+    assert.equal(G.guideImageAlt('Onopo   T120 USB-A to Type-C Kablo | 120W GaN | 1 Metre'), 'T120 USB-A to Type-C Kablo')
+    assert.ok(G.guideImageAlt('X'.repeat(200)).length <= 90)
+})
+
+test("articleJsonLd: the guide's product photos as the Article image (absolute originals), the og-image without them", () => {
+    const g = G.getGuide('powerbank-secimi-mah-ve-cikis-gucu')
+    const base = { headline: g.title, description: g.description, path: G.guidePath(g.slug), datePublished: g.datePublished, dateModified: g.dateModified }
+    const images = ['https://images.onopostore.com/a.webp', 'https://images.onopostore.com/b.webp']
+    assert.deepEqual(seo.articleJsonLd({ ...base, images }).image, images)
+    assert.deepEqual(seo.articleJsonLd({ ...base, images: [] }).image, ['https://onopostore.com/og-image.jpg'])
+})
+
 // ---------------------------------------------------------------------------------------------
 // Sitemap
 // ---------------------------------------------------------------------------------------------

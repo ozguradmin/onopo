@@ -13,6 +13,10 @@
 // version (site_settings.cache_version), which worker.ts bumps after every successful admin/content write
 // and after the daily price cron, so edits show up at once (within the ~10 s version memo per isolate).
 //
+// RSC payloads (the Next client router's navigations and prefetches of the same public pages) are cached under the
+// same rules with their own key (rscCacheKeyUrl: the payload depends on the router headers) and their own body checks
+// (isStorableRscBody); see "RSC payloads" below.
+//
 // Also here (pure rules used by worker.ts): tracking parameters stripped before Next renders (and put back
 // on Next's same-origin redirects), the browser Cache-Control of anonymous allowlisted HTML (bfcache), the
 // maintenance render (503), the readable session hint cookie kept in sync with auth_token, and HSTS.
@@ -253,6 +257,105 @@ export function cacheKeyUrl(url: URL, buildId: string, version: string): string 
     params.sort()
     const query = params.toString()
     return `https://${CANONICAL_HOST}/__edge-cache/${encodeURIComponent(buildId)}/${encodeURIComponent(version)}${url.pathname}${query ? `?${query}` : ''}`
+}
+
+// ---- RSC payloads (client-side navigations and prefetches) ----
+//
+// A tap on a store link (bottom nav, header, drawer) asks for the page's RSC payload: the same URL with the `RSC: 1`
+// header (and `_rsc`, a hash of the router headers that only busts browser caches). For the allowlisted public pages
+// that payload is as anonymous as their HTML, so it is cached the same way: same allowlist, no auth_token, same TTL,
+// same build id + cache_version in the key, so an admin save or the price cron drops it too.
+// What differs:
+//   - the key: the payload depends on the router headers (Next's Vary: RSC, Next-Router-State-Tree,
+//     Next-Router-Prefetch, Next-Router-Segment-Prefetch), so their values are part of it (rscVariant, hashed by
+//     worker.ts) under a separate /__edge-cache-rsc/ root: an HTML entry and a payload can never answer each other. Next-Url
+//     is not: Next drops it for every route that cannot be intercepted, and a response that varies on it (Vary:
+//     Next-Url) is never stored. `_rsc` is not either (it is derived from those same headers).
+//   - the body checks: a payload carries server markup as JSON ("data-onopo-nocache":""), React error rows (a page
+//     that threw, notFound(), redirect()), and the shell's layout data when the request re-renders the root layout
+//     (LayoutProvider's degraded render = an empty category list).
+//   - maintenance: never served from or written to the cache; worker.ts answers the 503 that sends the router to a
+//     full page load (blocksRscDuringMaintenance), as before.
+
+/** Switch for RSC payload caching alone (the HTML cache keeps EDGE_CACHE_ENABLED). */
+export const RSC_EDGE_CACHE_ENABLED = true
+
+/** The router headers an RSC payload depends on, in key order. */
+export const RSC_VARY_HEADERS = ['rsc', 'next-router-state-tree', 'next-router-prefetch', 'next-router-segment-prefetch'] as const
+
+/** The RSC query parameter (Next's cache-busting hash of the router headers). */
+export const RSC_QUERY_PARAM = '_rsc'
+
+/** An RSC GET of an allowlisted public page by an anonymous visitor (not a server action, not an API). */
+export function isCacheableRscRequest(req: RequestLike): boolean {
+    if (!EDGE_CACHE_ENABLED || !RSC_EDGE_CACHE_ENABLED) return false
+    if (req.method !== 'GET') return false
+    if (req.headers.get('rsc') !== '1') return false
+    if (hasAuthCookie(req.headers.get('cookie'))) return false
+    if (req.headers.has('authorization')) return false
+    if (req.headers.has('next-action') || req.headers.has('x-prerender-revalidate')) return false
+    if (ADMIN_PARAMS.some(p => req.url.searchParams.has(p))) return false
+    const path = req.url.pathname
+    if (path === '/api' || path.startsWith('/api/')) return false
+    return isCacheablePath(path)
+}
+
+/** The router header values that select the payload, as one string (worker.ts hashes it into the key). */
+export function rscVariant(headers: { get(name: string): string | null }): string {
+    return JSON.stringify(RSC_VARY_HEADERS.map(name => headers.get(name) ?? ''))
+}
+
+/**
+ * Cache key of an RSC payload: like cacheKeyUrl (build id, content version, path, query without tracking
+ * parameters), without `_rsc`, plus the variant hash, under its own /__edge-cache-rsc/ root so it can never be
+ * the key of an HTML page (whatever that page's path).
+ */
+export function rscCacheKeyUrl(url: URL, buildId: string, version: string, variantHash: string): string {
+    const clean = new URL(url.href)
+    clean.searchParams.delete(RSC_QUERY_PARAM)
+    const htmlKey = cacheKeyUrl(clean, buildId, version)
+    const htmlPrefix = `https://${CANONICAL_HOST}/__edge-cache/${encodeURIComponent(buildId)}/${encodeURIComponent(version)}`
+    return `https://${CANONICAL_HOST}/__edge-cache-rsc/${encodeURIComponent(buildId)}/${encodeURIComponent(version)}/${encodeURIComponent(variantHash)}${htmlKey.slice(htmlPrefix.length)}`
+}
+
+const RSC_CONTENT_TYPE = /^text\/x-component\b/i
+
+/** Response rules for a payload: 200, no Set-Cookie, a Flight payload, not varying on Next-Url, no explicit opt-out. */
+export function isStorableRscResponse(res: ResponseLike): boolean {
+    if (res.status !== 200) return false
+    if (res.headers.has('set-cookie')) return false
+    const vary = (res.headers.get('vary') || '').toLowerCase()
+    if (vary.includes('*') || /(^|[\s,])next-url([\s,]|$)/.test(vary)) return false
+    if (!RSC_CONTENT_TYPE.test(res.headers.get('content-type') || '')) return false
+    // Partial (postponed) renders and server-action answers are never stored
+    if (res.headers.has('x-nextjs-postponed') || res.headers.has('x-action-redirect') || res.headers.has('x-action-revalidated')) return false
+    const cacheControl = (res.headers.get('cache-control') || '').trim().toLowerCase()
+    if (cacheControl && cacheControl !== NEXT_DYNAMIC_DEFAULT && /(^|[\s,])(private|no-store)([\s,=]|$)/.test(cacheControl)) {
+        return false
+    }
+    return true
+}
+
+// The markers as server components put them into a payload (JSON props, not HTML attributes)
+const RSC_NO_CACHE_MARKER = '"data-onopo-nocache":""'
+const RSC_MAINTENANCE_MARKER = '"data-onopo-maintenance":""'
+const RSC_PRODUCT_PAGE_MARKER = '"id":"product-info"'
+// A React Flight error row: "<hex id>:E{...}" at the start of a line (a thrown error, notFound(), redirect())
+const RSC_ERROR_ROW = /(^|\n)[0-9a-f]+:E\{/
+// The shell's layout data with no categories: LayoutProvider's degraded render (its marker is client-side)
+const RSC_DEGRADED_LAYOUT = '"categories":[]'
+
+/**
+ * Body rules for a payload. Anything that looks like an error, a fallback or the maintenance view is not stored (a
+ * wrong "no" only costs a cache miss); a /<slug>/ payload must contain the product page's block.
+ */
+export function isStorableRscBody(pathname: string, body: string): boolean {
+    if (!body) return false
+    if (body.includes(RSC_NO_CACHE_MARKER) || body.includes(RSC_MAINTENANCE_MARKER)) return false
+    if (RSC_ERROR_ROW.test(body)) return false
+    if (body.includes(RSC_DEGRADED_LAYOUT)) return false
+    if (isProductSlugPath(pathname)) return body.includes(RSC_PRODUCT_PAGE_MARKER)
+    return true
 }
 
 // Successful writes to these change what the storefront shows: bump the content version afterwards
