@@ -4,6 +4,7 @@ import { resolveSlugCached } from '@/lib/seo-routing'
 import { buildMetadata, productMetaDescription, productPath, productTitle } from '@/lib/seo'
 import { getSiteSeo } from '@/lib/seo-server'
 import { getProductPageData } from '@/lib/product-data'
+import { IMAGE_VARIANTS_ENABLED, productImageUrl } from '@/lib/images'
 import { ProductPage } from '@/components/pdp/ProductPage'
 
 /**
@@ -31,12 +32,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     if (!data) return {}
     const { product } = data
     const site = await getSiteSeo()
+    // og:image / twitter:image = the product's first image: the 1200w WebP variant once variants exist
+    // (originals are up to 8 MB, too big for link previews), else the original. Its pixel size is not
+    // stored anywhere (variants keep the original's aspect ratio and never upscale), so no
+    // og:image:width/height. JSON-LD and the feeds keep the originals.
+    const ogImage = product.images[0]
     return buildMetadata({
         title: productTitle(product.name),
         description: productMetaDescription(product, site),
         path: productPath(product.slug),
-        // og:image = the product's first original image (absolute images.onopostore.com URL)
-        images: product.images.length ? [{ url: product.images[0], alt: product.name }] : undefined,
+        images: ogImage ? [{ url: IMAGE_VARIANTS_ENABLED ? productImageUrl(ogImage, 1200) : ogImage, alt: product.name }] : undefined,
         site,
     })
 }

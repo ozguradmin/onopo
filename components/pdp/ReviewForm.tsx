@@ -161,7 +161,7 @@ export function ReviewForm({ productId, hasReviews }: { productId: number; hasRe
                                                 aria-hidden="true"
                                                 className={cn(
                                                     'h-11 w-11 p-1.5 transition-colors duration-150 peer-focus-visible:rounded-thumb peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-brand-600',
-                                                    n <= shown ? 'text-ink' : 'text-line-strong',
+                                                    n <= shown ? 'text-warning' : 'text-line-strong',
                                                 )}
                                                 fill="currentColor"
                                             >

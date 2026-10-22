@@ -3,8 +3,9 @@
 /**
  * The buying part of the product page (spec §11 items 4–11): price block, installment line with the
  * PayTR table, free-shipping / stock / delivery lines, variations, quantity, "Sepete Ekle" (opens the
- * cart drawer), "Hemen Al" (adds, then goes to /odeme/), favourite, WhatsApp order, and the mobile
- * sticky buy bar that appears while the main buttons are off screen.
+ * cart drawer), "Hemen Al" (sets this line to the chosen quantity, then goes to /odeme/), favourite,
+ * WhatsApp order, and the mobile sticky buy bar that appears while the main buttons are off screen
+ * (its data-hide-bottom-nav attribute hides the mobile bottom nav on this page, see app/globals.css).
  *
  * Cart payload is the one every add-to-cart has always sent ({ id, name, price (RAW), image,
  * category, slug, free_shipping }), with id "<productId>-<variationIds…>" when variations are chosen,
@@ -72,6 +73,7 @@ function WhatsAppIcon({ className }: { className?: string }) {
 export function BuyBox({ product, variations, freeShippingThreshold, maxInstallments, installmentInfo, deliveryText, whatsappHref }: BuyBoxProps) {
     const router = useRouter()
     const addItem = useCartStore(s => s.addItem)
+    const updateQuantity = useCartStore(s => s.updateQuantity)
     const openCart = useCartStore(s => s.openCart)
 
     const [selected, setSelected] = React.useState<Record<string, BuyBoxVariation>>({})
@@ -144,10 +146,16 @@ export function BuyBox({ product, variations, freeShippingThreshold, maxInstallm
         openCart()
     }
 
+    // "Hemen Al" buys exactly the chosen quantity: the line for this product/variation is SET to qty,
+    // never added to, so "Sepete Ekle" followed by "Hemen Al" does not double it. addItem() creates the
+    // line (or refreshes its name/price/image like every add does), updateQuantity() sets the count.
+    // Other cart lines stay as they are.
     const onBuyNow = () => {
         if (soldOut || buying) return
         setBuying(true)
-        addToCart()
+        const item = cartItem()
+        addItem(item)
+        updateQuantity(item.id, qty)
         router.push('/odeme/')
     }
 
@@ -174,7 +182,7 @@ export function BuyBox({ product, variations, freeShippingThreshold, maxInstallm
             )}
 
             {/* Stock, shipping, delivery */}
-            <ul className="mt-4 flex flex-col gap-2.5 border-t border-line pt-4 text-sm leading-5">
+            <ul className="mt-4 flex flex-col gap-2.5 border-t border-line pt-4 text-sm leading-5 lg:mt-3 lg:pt-3 xl:mt-4 xl:pt-4">
                 <li className="flex items-center gap-2">
                     {soldOut ? (
                         <>
@@ -260,7 +268,7 @@ export function BuyBox({ product, variations, freeShippingThreshold, maxInstallm
             )}
 
             {/* Actions */}
-            <div ref={ctaRef} className="mt-5 flex flex-col gap-2">
+            <div ref={ctaRef} className="mt-5 flex flex-col gap-2 lg:mt-4 xl:mt-5">
                 <div className="flex items-stretch gap-2">
                     {!soldOut && (
                         <div className="flex h-12 shrink-0 items-center rounded-card border border-line-strong bg-white" role="group" aria-label="Adet">
@@ -335,9 +343,11 @@ export function BuyBox({ product, variations, freeShippingThreshold, maxInstallm
 
             <InstallmentModal isOpen={showInstallments} onClose={() => setShowInstallments(false)} productPrice={shownPrice} />
 
-            {/* Mobile sticky buy bar (above the bottom nav: z 45 > 40), only while the main buttons are off screen */}
+            {/* Mobile sticky buy bar, only while the main buttons are off screen. It replaces the bottom nav on
+                this page (spec §11): data-hide-bottom-nav makes app/globals.css hide [data-bottom-nav]. */}
             {!soldOut && (
             <div
+                data-hide-bottom-nav=""
                 className={cn(
                     'fixed inset-x-0 bottom-0 z-[45] border-t border-line bg-white shadow-overlay transition-transform duration-200 ease-sheet md:hidden',
                     ctaVisible ? 'pointer-events-none translate-y-full' : 'translate-y-0',

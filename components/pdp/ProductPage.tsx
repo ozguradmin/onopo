@@ -11,7 +11,7 @@ import { ProductMachineData } from '@/components/seo/ProductMachineData'
 import { ProductCard } from '@/components/product/ProductCard'
 import { breadcrumbJsonLd, categoryPath, productBrand, type SiteSeo } from '@/lib/seo'
 import { brandOf, specChips } from '@/lib/search'
-import { discountPercent, formatDateTR, formatTL, MIN_DISCOUNT_BADGE_PERCENT } from '@/lib/format'
+import { formatDateTR, formatTL } from '@/lib/format'
 import { productImageSrcSet, productImageUrl } from '@/lib/images'
 import type { ProductPageData } from '@/lib/product-data'
 import { getReviewStatsMapSafe } from '@/lib/reviews'
@@ -26,7 +26,7 @@ import { infoText, parseDescription, type SpecRow } from './description-parser'
 
 const RAIL_SIZES = '(max-width: 639px) 42vw, (max-width: 1023px) 31vw, 290px'
 /** Must match MAIN_SIZES in ProductGallery (used for the LCP preload once image variants exist). */
-const GALLERY_SIZES = '(max-width: 767px) 100vw, (max-width: 1023px) 50vw, (max-width: 1279px) 560px, 620px'
+const GALLERY_SIZES = '(max-width: 767px) 100vw, (max-width: 1279px) 50vw, 620px'
 
 function whatsappLink(numberRaw: string | null | undefined, text: string): string | null {
     const digits = String(numberRaw || '').replace(/\D/g, '')
@@ -51,7 +51,6 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
     const specBrand = parsed.specs.find(r => r.label === 'Marka')?.value
     const brand = brandOf(product.name) || specBrand || productBrand(product) || null
     const chips = specChips(product.name, 3)
-    const pct = discountPercent(product.display_price, product.display_original_price)
 
     const handling = site.handlingTime ? `Siparişler ödeme onayından sonra ${site.handlingTime.minDays}-${site.handlingTime.maxDays} iş günü içinde kargoya verilir.` : null
     const deliveryText = infoText(product.delivery_info) || data.featuresDelivery || handling
@@ -122,26 +121,24 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                     <Breadcrumb items={crumbs} className="[&_li]:shrink-0" />
                 </Container>
 
-                {/* ---------------- Above the fold ---------------- */}
+                {/* ---------------- Above the fold ----------------
+                    Phones: one column (gallery, info, trust points). md–lg (768–1279): two equal columns,
+                    the trust points under the gallery so the left column is not an empty strip next to the
+                    long info column, and a 22/24px H1 so price, quantity and "Sepete Ekle" fit in the first
+                    screen at 1024x768. xl (≥1280): 7/5 with a sticky gallery, trust points under the info. */}
                 <Container as="section" aria-labelledby="pdp-title" className="pb-8 lg:pb-14">
-                    <div className="md:grid md:grid-cols-2 md:gap-8 lg:grid-cols-12 lg:gap-12">
-                        <div className="md:sticky md:top-24 md:self-start lg:col-span-7">
+                    <div className="md:grid md:grid-cols-2 md:grid-rows-[auto_1fr] md:gap-x-8 md:gap-y-5 lg:gap-x-10 xl:grid-cols-12 xl:gap-x-12">
+                        <div className="md:col-start-1 md:row-start-1 md:self-start xl:sticky xl:top-24 xl:col-span-7 xl:row-span-2">
                             <ProductGallery
                                 images={product.images}
                                 name={product.name}
                                 soldOut={soldOut}
-                                badges={
-                                    soldOut || pct >= MIN_DISCOUNT_BADGE_PERCENT ? (
-                                        <>
-                                            {soldOut && <Badge variant="soldout">Tükendi</Badge>}
-                                            {pct >= MIN_DISCOUNT_BADGE_PERCENT && <Badge variant="sale">%{pct} indirim</Badge>}
-                                        </>
-                                    ) : null
-                                }
+                                // The discount is shown once, next to the price (BuyBox)
+                                badges={soldOut ? <Badge variant="soldout">Tükendi</Badge> : null}
                             />
                         </div>
 
-                        <div className="mt-5 min-w-0 md:mt-0 lg:col-span-5">
+                        <div className="mt-5 min-w-0 md:col-start-2 md:row-span-2 md:row-start-1 md:mt-0 xl:col-span-5 xl:col-start-8 xl:row-span-1">
                             {(brand || code) && (
                                 <p className="text-xs font-semibold leading-4 tracking-[0.04em] text-muted">
                                     {brand && <span className="uppercase">{brand}</span>}
@@ -150,7 +147,7 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                                     {code && <span>Kod: {code}</span>}
                                 </p>
                             )}
-                            <h1 id="pdp-title" className="mt-1.5 text-pretty text-xl font-bold leading-7 tracking-[-0.01em] text-ink lg:text-[28px] lg:leading-9">
+                            <h1 id="pdp-title" className="mt-1.5 text-pretty text-xl font-bold leading-7 tracking-[-0.01em] text-ink md:text-[22px] md:leading-[30px] lg:text-2xl lg:leading-8 xl:text-[28px] xl:leading-9">
                                 {product.name}
                             </h1>
 
@@ -178,7 +175,8 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                                 </ul>
                             )}
 
-                            <div className="mt-5 border-t border-line pt-5">
+                            {/* 1024–1279: 4px tighter rhythm here and in BuyBox so the CTA row stays in a 1024x768 first screen */}
+                            <div className="mt-5 border-t border-line pt-5 lg:mt-4 lg:pt-4 xl:mt-5 xl:pt-5">
                                 <BuyBox
                                     product={{
                                         id: product.id,
@@ -205,31 +203,31 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                                     Benzer ürünlere göz at <ArrowDown className="h-4 w-4" aria-hidden="true" />
                                 </a>
                             )}
-
-                            {trust.length > 0 && (
-                                <ul className="mt-5 divide-y divide-line rounded-card border border-line">
-                                    {trust.map(t => (
-                                        <li key={t.title} className="flex items-center gap-3 px-4 py-3">
-                                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600" aria-hidden="true">
-                                                <t.icon className="h-[18px] w-[18px]" />
-                                            </span>
-                                            <span className="min-w-0 text-sm leading-5">
-                                                <span className="block font-semibold text-ink">{t.title}</span>
-                                                <span className="block text-[13px] text-muted">{t.text}</span>
-                                            </span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
                         </div>
+
+                        {trust.length > 0 && (
+                            <ul className="mt-5 min-w-0 divide-y divide-line self-start rounded-card border border-line md:col-start-1 md:row-start-2 md:mt-0 xl:col-span-5 xl:col-start-8">
+                                {trust.map(t => (
+                                    <li key={t.title} className="flex items-center gap-3 px-4 py-3">
+                                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600" aria-hidden="true">
+                                            <t.icon className="h-[18px] w-[18px]" />
+                                        </span>
+                                        <span className="min-w-0 text-sm leading-5">
+                                            <span className="block font-semibold text-ink">{t.title}</span>
+                                            <span className="block text-[13px] text-muted">{t.text}</span>
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                     </div>
                 </Container>
 
                 {/* ---------------- Details ---------------- */}
                 <div className="border-t border-line">
                     <Container className="lg:section-y">
-                        <div className="lg:grid lg:grid-cols-12 lg:gap-12">
-                            <div className="lg:col-span-7">
+                        <div className="lg:grid lg:grid-cols-2 lg:gap-10 xl:grid-cols-12 xl:gap-12">
+                            <div className="min-w-0 xl:col-span-7">
                                 {hasDescription ? (
                                     <InfoSection id="aciklama" title="Ürün açıklaması" defaultOpen>
                                         <ProductDescription tagline={parsed.tagline} blocks={parsed.blocks} />
@@ -240,7 +238,7 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                                     </InfoSection>
                                 )}
                             </div>
-                            <div className="lg:col-span-5 lg:flex lg:flex-col lg:gap-10">
+                            <div className="min-w-0 lg:flex lg:flex-col lg:gap-10 xl:col-span-5">
                                 {hasDescription && specRows.length > 0 && (
                                     <InfoSection id="ozellikler" title="Teknik özellikler">
                                         <SpecsTable rows={specRows} />

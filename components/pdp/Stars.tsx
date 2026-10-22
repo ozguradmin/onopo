@@ -17,7 +17,8 @@ function StarRow({ className }: { className?: string }) {
 
 /**
  * Five stars filled to `value` (0–5, fractions allowed). Decorative: pair it with the number as text.
- * Size follows the font size (`text-base` = 16px stars). Server-friendly.
+ * Size follows the font size (`text-base` = 16px stars). Filled stars use the same colour as the product
+ * cards' RatingStars (text-warning). Server-friendly.
  */
 export function Stars({ value, className }: { value: number; className?: string }) {
     const pct = Math.max(0, Math.min(100, (value / 5) * 100))
@@ -25,7 +26,7 @@ export function Stars({ value, className }: { value: number; className?: string 
         <span className={cn('relative inline-flex shrink-0 leading-none', className)} aria-hidden="true">
             <StarRow className="text-line-strong" />
             <span className="absolute inset-y-0 left-0 overflow-hidden" style={{ width: `${pct}%` }}>
-                <StarRow className="text-ink" />
+                <StarRow className="text-warning" />
             </span>
         </span>
     )

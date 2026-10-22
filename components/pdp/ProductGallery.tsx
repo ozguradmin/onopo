@@ -19,12 +19,12 @@ const GalleryLightbox = React.lazy(() => import('./GalleryLightbox'))
 export interface ProductGalleryProps {
     images: string[]
     name: string
-    /** Badges over the image (discount %, Tükendi), rendered on the server. */
+    /** Badges over the image ("Tükendi"; the discount is shown next to the price), rendered on the server. */
     badges?: React.ReactNode
     soldOut?: boolean
 }
 
-const MAIN_SIZES = '(max-width: 767px) 100vw, (max-width: 1023px) 50vw, (max-width: 1279px) 560px, 620px'
+const MAIN_SIZES = '(max-width: 767px) 100vw, (max-width: 1279px) 50vw, 620px'
 
 export function ProductGallery({ images: rawImages, name, badges, soldOut = false }: ProductGalleryProps) {
     const images = rawImages.length ? rawImages : ['']
