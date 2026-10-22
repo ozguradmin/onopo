@@ -340,7 +340,7 @@ CREATE INDEX IF NOT EXISTS idx_not_found_log_seen ON not_found_log(last_seen);
 CREATE TABLE IF NOT EXISTS system_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TEXT NOT NULL,
-    source TEXT NOT NULL,                    -- redirects | facts | images | cron | assistant | reviews | other
+    source TEXT NOT NULL,                    -- redirects | facts | images | cron | assistant | reviews | indexnow | other
     level TEXT NOT NULL,                     -- error | warn | info
     message TEXT NOT NULL,
     detail TEXT,
@@ -351,3 +351,8 @@ CREATE TABLE IF NOT EXISTS system_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_system_logs_last ON system_logs(last_at);
 CREATE INDEX IF NOT EXISTS idx_system_logs_key ON system_logs(source, message, last_at);
+
+-- IndexNow (lib/indexnow.ts): canonical URLs already sent to the search engines and when. The daily cron sends
+-- sitemap URLs that are new, changed since submitted_at (lastmod) or gone from the sitemap (their row is then
+-- deleted). Admin saves record what they sent too. Public URLs only.
+CREATE TABLE IF NOT EXISTS indexnow_urls (url TEXT PRIMARY KEY, submitted_at TEXT NOT NULL);

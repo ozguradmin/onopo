@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
+import { notifyIndexNow } from '@/lib/indexnow-server'
+import { cmsPagePath } from '@/lib/seo'
 
 // GET: Get a specific page
 export async function GET(
@@ -48,6 +50,9 @@ export async function PUT(
         await db.prepare(
             'UPDATE pages SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?'
         ).bind(title, content, slug).run()
+
+        // Bing, Yandex & co. recrawl the page (lib/indexnow.ts)
+        await notifyIndexNow(req.url, { paths: [cmsPagePath(slug)] })
 
         return NextResponse.json({ success: true })
     } catch (error: any) {

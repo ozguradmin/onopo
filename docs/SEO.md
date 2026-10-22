@@ -31,6 +31,8 @@ and carry no query string. The only exception is `?page=N` (N ≥ 2) on listings
 | `/cart/`, `/checkout/` | 404 | | Only linked from the hidden Akakçe block; disallowed in robots.txt |
 | Guides hub | `/rehber/` | `GUIDES_PATH` | Shopping guides ("Alışveriş rehberleri"); see §12 |
 | Guide | `/rehber/<slug>/` | `guidePath(slug)` | Text in code (`lib/guides`); unknown slug 404, other case 308 |
+| `/llms.txt` | (a text file, no canonical) | | Store summary for AI assistants (§13). Not in the sitemap; reserved slug, live redirect target |
+| `/<INDEXNOW_KEY>.txt` | (a text file) | | IndexNow key file, answered by `worker.ts` (§13) |
 | Utility pages | (no canonical, noindex) | `privatePageMetadata` | `/odeme/ /profile/ /orders/ /login/ /register/ /siparis-basarili/ /siparis-hata/ /maintenance/ /admin/*`. `/admin` and `/admin/*` also send `X-Robots-Tag: noindex, nofollow` (`next.config.ts`), because the admin client app has no page metadata |
 
 `LEGACY_CATEGORY_TARGETS` lives in `lib/seo.ts` (client-safe, so the menus can use it) and is re-exported from
@@ -180,7 +182,7 @@ Render with `<JsonLd data={…} />` from `components/seo/JsonLd.tsx`, on the ser
 | Page | JSON-LD |
 |---|---|
 | Root layout (every page) | `organizationJsonLd(site)` (OnlineStore, with the return policy) + `websiteJsonLd(site)` (SearchAction → `/products/?q={search_term_string}`) |
-| Product | `<ProductMachineData product={row} site={site} reviews={{ count, average }} />` + `breadcrumbJsonLd([...])` |
+| Product | `<ProductMachineData product={row} site={site} reviews={{ count, average }} />` + `breadcrumbJsonLd([...])` + `faqPageJsonLd` of the visible "Sık sorulan sorular" (§13; only when it has items) |
 | Category | `breadcrumbJsonLd` + `itemListJsonLd(productsOnThisPage.map(p => ({ path: productPath(p.slug), name: p.name })), { startIndex })` |
 | /products/ (page 1, no filters) | `itemListJsonLd(...)` (optional) |
 | CMS | `breadcrumbJsonLd` |
@@ -508,3 +510,40 @@ Contract details:
   fuzzy match to a product).
 - Tests: `node --test scripts/guides.test.mjs` (data, rules against `scripts/fixtures/guide-catalog.json` = the
   active products' public names, sitemap, edge cache, redirects).
+
+## 13. IndexNow, /llms.txt and the product FAQ
+
+**IndexNow** (`lib/indexnow.ts`, admin hooks in `lib/indexnow-server.ts`, https://www.indexnow.org/documentation).
+One POST to `https://api.indexnow.org/indexnow` reaches Bing, Yandex, Seznam, Naver …; ChatGPT search reads Bing.
+
+- Key: `INDEXNOW_KEY` in `wrangler.toml` `[vars]` (public by design). `worker.ts` answers `/<key>.txt` with exactly
+  the key (`text/plain`) before the edge cache and the old-URL resolver; www 301s to the apex like any page. An empty
+  or invalid key switches IndexNow off.
+- Body: `{ host: 'onopostore.com', key, keyLocation: 'https://onopostore.com/<key>.txt', urlList }`. Only canonical
+  `https://onopostore.com/…/` URLs (trailing slash, no query; no `/api`, `/admin`, files), de-duplicated, ≤ 10 000.
+- Admin saves (one POST per save, in `ctx.waitUntil`): product create (page, category listing, `/products/`), product
+  save (page, its listing and the listing it left), product delete (page, listing, `/products/`), bulk import, category
+  rename (its listing) and delete, CMS page save. Variation saves are not sent separately (they belong to the same save).
+- Daily cron (`/api/cron/automation/?job=indexnow`): `app/sitemap.ts` is the list. Sent: URLs never sent, URLs whose
+  `lastmod` is newer than their last submission, and URLs that left the sitemap (their row is then dropped). What was
+  sent is in D1 `indexnow_urls (url, submitted_at)`; admin saves record theirs too, so the cron does not repeat them.
+  Pages added to the sitemap later (guides, device pages) are sent once by themselves; the first run sends the whole
+  sitemap once.
+- Off unless the key is valid, the host is onopostore.com / www and `NODE_ENV` is not development. Never throws; a
+  refused (4xx/5xx) or failed POST is a system-log row (source `indexnow`, de-duplicated per day). 200 and 202 count as
+  accepted. The USD price cron does not touch `updated_at`, so exchange-rate price changes are not sent.
+
+**`/llms.txt`** (https://llmstxt.org; `app/llms.txt/route.ts`, text in `lib/llms-txt.ts`): H1 store name, a blockquote
+summary (product types from the catalogue), the store facts (shipping rule from `shipping_settings`, handling days and
+return window from the CMS shipping page, card payment and max installments, contact from `site_settings`; each left
+out when its data is missing), then link sections: categories with product counts, the guides, an extra-sections hook
+for other modules (device pages), the 30 most viewed in-stock products with the price checkout charges, the CMS
+pages, and an "Optional" section (all products, sitemap). Edge-cached like the sitemap (cache_version); 500 on a
+catalogue read failure. Allowed by the robots `/` rule; not in the sitemap.
+
+**Product FAQ** (`lib/product-faq.ts`, `components/pdp/ProductFaq.tsx`): a "Sık sorulan sorular" block between the
+details and the reviews, native `<details>` rows (no client JS), 4–6 questions from real data only: compatibility
+(only when the product name itself lists the device model(s); the answer repeats them), stock (live flag, no
+quantity), handling days, shipping cost (settings + the product's free-shipping flag / price), returns, payment and
+installments. A question whose data is missing is left out. The FAQPage JSON-LD carries exactly the visible items.
+Tests: `node --test scripts/indexnow.test.mjs scripts/product-faq.test.mjs`.

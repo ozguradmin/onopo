@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import { getActiveProducts, listProducts, type Product } from '@/lib/catalog'
 import { prepareQuery, searchItems } from '@/lib/search'
 import { runInBackground } from '@/lib/automation/background'
+import { notifyIndexNow } from '@/lib/indexnow-server'
 import { refreshFactsForProducts } from '@/lib/assistant/data'
 import { GTIN_NOT_SAVED_WARNING, gtinError, normalizeGtin, writeProductGtin } from '@/lib/gtin'
 
@@ -332,6 +333,8 @@ export async function POST(req: NextRequest) {
             }
             // The assistant learns the new product right away (lib/assistant/facts-auto.ts), after the answer
             if (productId) await runInBackground('facts', env => refreshFactsForProducts(env, [Number(productId)]))
+            // The search engines learn the new page (and its listings) right away (lib/indexnow.ts)
+            if (productId) await notifyIndexNow(req.url, { productIds: [Number(productId)], paths: ['/products/'] })
             if (productId && (warranty_info || delivery_info || installment_info)) {
                 try {
                     await db.prepare(

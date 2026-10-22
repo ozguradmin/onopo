@@ -1,6 +1,8 @@
 import { requireAdmin } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
+import { notifyIndexNow } from '@/lib/indexnow-server'
+import { categoryPath } from '@/lib/seo'
 
 type DB = Awaited<ReturnType<typeof getDB>>
 
@@ -61,6 +63,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         ]
         if (oldName && oldName !== name) statements.push(...await renameReferences(db, oldName, name))
         await db.batch(statements)
+        // The listing shows the new name (its URL stays)
+        await notifyIndexNow(req.url, { categories: [name] })
 
         return NextResponse.json({ success: true })
     } catch (error: any) {
@@ -74,7 +78,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 // DELETE: Remove category
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const denied = await requireAdmin()
     if (denied) return denied
 
@@ -82,9 +86,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         const { id } = await params
         const db = await getDB()
 
+        const gone = await db.prepare('SELECT slug FROM categories WHERE id = ?').bind(id).first<{ slug: string | null }>().catch(() => null)
+
         await db.prepare('DELETE FROM categories WHERE id = ?')
             .bind(id)
             .run()
+
+        // Its listing no longer answers: the search engines recrawl it and drop it
+        if (gone?.slug) await notifyIndexNow(req.url, { paths: [categoryPath(gone.slug)] })
 
         return NextResponse.json({ success: true })
     } catch (error: any) {

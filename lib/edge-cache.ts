@@ -75,6 +75,8 @@ const PAGE_ALLOW = [
     /^\/product\/\d+\/?$/,
     /^\/sitemap\.xml$/,
     /^\/robots\.txt$/,
+    // The store summary for AI assistants (app/llms.txt/route.ts), built from live data like the sitemap
+    /^\/llms\.txt$/,
 ]
 
 // Product pages /<slug>/ (slugs are lowercase a-z, 0-9 and '-')

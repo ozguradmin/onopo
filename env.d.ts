@@ -19,4 +19,6 @@ interface CloudflareEnv {
     AI_ROUTER_MODEL?: string;
     AI_FALLBACK_MODEL?: string;
     AI_GATEWAY_ID?: string;
+    /** IndexNow key (wrangler.toml [vars]; lib/indexnow.ts). */
+    INDEXNOW_KEY?: string;
 }

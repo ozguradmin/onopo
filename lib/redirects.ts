@@ -58,7 +58,7 @@ export const SUGGEST_MIN_SCORE = 0.4
 /** Pages that exist without a database row. /help/ … redirect to /page/<slug>/ themselves (lib/seo-routing.ts). */
 const STATIC_LIVE = new Set([
     '/', '/products/', '/categories/', '/kategoriler/', '/odeme/', '/login/', '/register/', '/profile/', '/orders/',
-    '/help/', '/policy/', '/shipping/', '/terms/', GUIDES_PATH,
+    '/help/', '/policy/', '/shipping/', '/terms/', GUIDES_PATH, '/llms.txt',
 ])
 
 const PRODUCT_PREFIXES = new Set(['urun', 'urunler', 'product', 'products', 'p', 'item', 'items', 'shop', 'magaza'])

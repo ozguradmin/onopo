@@ -41,12 +41,16 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   `NEXT_PUBLIC_BASE_URL` bulunsun.
 - Yerel `wrangler dev`'e sahte değerler ver ki gerçek anahtarlar hiç kullanılmasın: `--var JWT_SECRET:yerel`,
   `CRON_SECRET`, `RESEND_API_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_API_TOKEN` için de aynısı.
+  Cron'u yerelde tetikleyeceksen `--var INDEXNOW_KEY:` (boş) ver: cron'un iç isteği `NEXT_PUBLIC_BASE_URL` host'uyla
+  gider, anahtar dolu kalırsa IndexNow'a gerçek bildirim gönderir (admin kayıtları 127.0.0.1'de zaten göndermez).
 - `--persist-to` yolunu kısa tut: Windows'un 259 karakterlik yol sınırına takılmasın.
 - `tsc`, `.next/types` altında ödeme callback route'u için eskiden kalan hatalar verir; `next.config.ts` build'de
   tip hatalarını yok sayar (`ignoreBuildErrors`).
 - Birim testleri: `node --test scripts/edge-cache.test.mjs scripts/seo.test.mjs scripts/redirects.test.mjs scripts/guides.test.mjs scripts/worker-hsts.test.mjs` (Node 23.6+; CI çalıştırmaz).
   Otomatik işler: `node --test scripts/automation.test.mjs` (D1 yerine `node:sqlite`, saat/AI/R2/Images sahte).
   Yorumlar/değerlendirme e-postaları ve migration: `node --test scripts/reviews.test.mjs`; Google feed ve barkod: `node --test scripts/feeds.test.mjs`.
+  IndexNow (sahte fetch, anahtar dosyası, cron adımı): `node --test scripts/indexnow.test.mjs`; ürün SSS ve `/llms.txt`:
+  `node --test scripts/product-faq.test.mjs`.
 
 ## Gizli değişkenler (sadece adlar)
 - Cloudflare Worker secret'ları: `BIRFATURA_TOKEN`, `CRON_SECRET`, `JWT_SECRET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `RESEND_API_KEY`;
@@ -111,6 +115,20 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   zaman açılan bir sayfa ya da images.onopostore.com (açık yönlendirme yok, `/api` ve `/admin` hiç yönlenmez).
   Bulunamayanlar `not_found_log`'a (yalnızca yol, sayılar, referrer host; IP/UA yok; Googlebot dışı botlar sayılmaz).
   Ürün/kategori indeksi isolate başına 10 dk tutulur. Testler: `node --test scripts/redirects.test.mjs`.
+
+## IndexNow, `/llms.txt`, ürün SSS (ayrıntı: `docs/SEO.md` §13)
+- **IndexNow** (`lib/indexnow.ts`, `lib/indexnow-server.ts`): Bing, Yandex vb. (ChatGPT araması Bing'i kullanır) değişen
+  sayfayı dakikalar içinde yeniden tarar. Anahtar `wrangler.toml` `[vars] INDEXNOW_KEY` (açık olması normal; boş = kapalı),
+  `worker.ts` `https://onopostore.com/<anahtar>.txt` olarak sunar. Admin'de ürün ekle/kaydet/sil, toplu içe aktarma,
+  kategori adı/silme ve CMS sayfası kaydı, kayıt başına **tek** POST atar (`ctx.waitUntil`); günlük cron
+  (`job=indexnow`, yorum e-postalarından sonra) sitemap'te yeni, `lastmod`'u son gönderimden yeni ya da sitemap'ten
+  düşmüş adresleri tek POST'ta yollar. Gönderilenler D1 `indexnow_urls`'te. Yalnızca onopostore.com/www host'unda ve
+  geçerli anahtarla çalışır; hata sistem kayıtlarına (`indexnow`, "Arama motoru bildirimleri") yazılır, asla fırlatmaz.
+  USD fiyat cron'u `updated_at`'i değiştirmediği için yalnızca kur yüzünden değişen fiyatlar ayrıca bildirilmez.
+- **`/llms.txt`** (`app/llms.txt/route.ts`, biçim `lib/llms-txt.ts`): canlı veriden mağaza özeti (kargo, iade, ödeme,
+  iletişim, kategoriler, rehberler, en çok görüntülenen 30 stoklu ürün ve fiyatı). Edge cache'te; sitemap'te yok.
+- **Ürün sayfası SSS** (`lib/product-faq.ts`, `components/pdp/ProductFaq.tsx`): 4–6 soru, yalnızca gerçek veriden; veri
+  yoksa soru yok. Uyumluluk sorusu sadece ürün adı cihaz modelini açıkça yazıyorsa. FAQPage JSON-LD = görünen sorular.
 
 ## Alışveriş rehberleri (`/rehber/`)
 - Metinler kodda: `lib/guides/content/*.ts` (6 rehber), slug listesi `lib/guides/slugs.ts`. İlgili ürünler D1'den canlı
@@ -185,8 +203,9 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
      günceller; başarıda `cache_version` artırılır. Hata sistem kaydına yazılır, aşağıdakiler yine çalışır, çağrı en
      sonda hata fırlatır (Cloudflare panelinde "failed" görünsün).
   3. `/api/cron/automation/?job=reviews` (en çok 2 dk): değerlendirme e-postaları (aşağıda).
-  4. `/api/cron/automation/?job=images` (en çok 4 dk): eksik görsel varyantları.
-  5. `/api/cron/automation/?job=facts` (kalan süre, en çok 9 dk): asistanın eksik/eski ürün bilgisi satırları,
+  4. `/api/cron/automation/?job=indexnow` (en çok 1 dk): değişen sitemap adresleri IndexNow'a, tek POST.
+  5. `/api/cron/automation/?job=images` (en çok 4 dk): eksik görsel varyantları.
+  6. `/api/cron/automation/?job=facts` (kalan süre, en çok 9 dk): asistanın eksik/eski ürün bilgisi satırları,
      4 sn'de bir DeepSeek çağrısı (hesap sınırı 20/dk, canlı sohbetlere yer kalsın), en çok 120 ürün/gün.
 
 ## Değerlendirme e-postaları ve misafir yorumları
