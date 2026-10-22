@@ -152,9 +152,6 @@ export function ProductCard({
 
                 <FavoriteButton productId={product.id} productName={product.name} className="absolute right-2 top-2" />
 
-                {!soldOut && (
-                    <QuickAddButton product={cartProduct} variant="icon" className={cn('absolute bottom-2 right-2', !compact && 'lg:hidden')} />
-                )}
             </div>
 
             {/* Body: text on top, price block pinned to the bottom so prices line up across a row */}
@@ -194,7 +191,13 @@ export function ProductCard({
                 <div className={cn('mt-auto flex flex-col', compact ? 'gap-1 pt-1.5' : 'gap-1.5 pt-2')}>
                     {rating !== undefined && <RatingStars rating={rating} />}
 
-                    <Price price={product.price} originalPrice={product.original_price ?? null} size="card" />
+                    {/* Owner: the round add button sits next to the price, not on the photo */}
+                    <div className="flex items-end justify-between gap-2">
+                        <Price price={product.price} originalPrice={product.original_price ?? null} size="card" className="min-w-0" />
+                        {!soldOut && (
+                            <QuickAddButton product={cartProduct} variant="icon" className={cn('shrink-0', !compact && 'lg:hidden')} />
+                        )}
+                    </div>
 
                     {freeShipping && !soldOut && !compact && (
                         <p className="flex items-center gap-1 text-xs font-semibold leading-4 text-success">

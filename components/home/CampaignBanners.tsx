@@ -121,9 +121,12 @@ function fromHeroSlide(s: HeroSlide): BannerSlide {
     }
 }
 
-/** Phones: one banner and the edge of the next; from md: two side by side. Always 2:1. */
-const SLIDE_CLASS = 'relative w-[calc(100%-24px)] shrink-0 snap-start md:w-[calc((100%-16px)/2)]'
-const IMAGE_SIZES = '(min-width: 768px) 50vw, 92vw'
+/**
+ * One whole banner at a time (owner: no edges of the neighbours). 2:1 on phones and tablets, 11:4 from lg so
+ * the products still start high; the 16:9 photos keep their printed text inside the middle 70% (safe for both).
+ */
+const SLIDE_CLASS = 'relative w-full shrink-0 snap-start'
+const IMAGE_SIZES = '(min-width: 1280px) 1216px, 100vw'
 
 /** Product photos on white tiles, fanned out on the right half (until the campaign has its own photo). */
 function Artwork({ images, glow, eager }: { images: string[]; glow: string; eager: boolean }) {
@@ -232,7 +235,7 @@ function Slide({ slide, index, count }: { slide: BannerSlide; index: number; cou
                 // Listing variants (?sort=, ?f=) are noindex: nofollow, like the other links to them
                 rel={isNoindexListingHref(slide.href) ? 'nofollow' : undefined}
                 aria-label={slide.label}
-                className={cn('group @container relative block aspect-[2/1] overflow-hidden rounded-sheet outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2', t.bg)}
+                className={cn('group @container relative block aspect-[2/1] overflow-hidden rounded-sheet lg:aspect-[11/4] outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2', t.bg)}
             >
                 {img ? (
                     <FallbackImage

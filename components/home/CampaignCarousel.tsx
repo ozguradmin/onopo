@@ -116,7 +116,8 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
             <ul
                 ref={listRef}
                 aria-label={label}
-                className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain scroll-px-4 px-4 md:-mx-6 md:gap-4 md:scroll-px-6 md:px-6 lg:mx-0 lg:scroll-px-0 lg:px-0"
+                // Inside the gutter, one slide per view: the neighbours are only seen while swiping
+                className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain rounded-sheet"
                 // A real swipe (not our own smooth scroll) hands control to the visitor
                 onTouchStart={takeOver}
                 onWheel={e => {
