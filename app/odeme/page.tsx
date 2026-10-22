@@ -8,9 +8,10 @@ import { formatNumberTR, formatTL } from '@/lib/format'
 import { unitPrice } from '@/lib/pricing'
 import { originalImageUrl, productImageUrl } from '@/lib/images'
 import { cn } from '@/lib/utils'
+import { displayName } from '@/lib/search'
 import { FallbackImage } from '@/components/ui/FallbackImage'
 import { Field, FormAlert, checkboxClass, inputClass, textareaClass } from '@/components/forms/Field'
-import { CheckoutSkeleton } from '@/components/checkout/CheckoutSkeleton'
+import { CHECKOUT_MIN_HEIGHT, CheckoutSkeleton } from '@/components/checkout/CheckoutSkeleton'
 import { TrustNote } from '@/components/checkout/TrustNote'
 import { ShoppingBag, Check, CreditCard, Lock, ChevronDown, Ticket, X, Truck, RefreshCw } from 'lucide-react'
 
@@ -153,6 +154,8 @@ export default function CheckoutPage() {
     const [iframeUrl, setIframeUrl] = React.useState<string | null>(null)
     // What PayTR charges: the order API's own total (cart prices saved in the browser can be outdated)
     const [paymentTotal, setPaymentTotal] = React.useState<number | null>(null)
+    // The total the summary showed when the order was sent (display only: explains a different paymentTotal)
+    const [shownTotalAtSubmit, setShownTotalAtSubmit] = React.useState<number | null>(null)
 
     // Calculations
     const calculateSubtotal = () => items.reduce((total, item) => total + (item.price || 0) * item.quantity, 0)
@@ -315,6 +318,7 @@ export default function CheckoutPage() {
                 // If payment required (PayTR), show iframe
                 setOrderId(data.orderId)
                 setPaymentTotal(typeof data.totalAmount === 'number' && Number.isFinite(data.totalAmount) ? data.totalAmount : null)
+                setShownTotalAtSubmit(finalTotal)
                 setIframeUrl(data.payment.iframeUrl)
                 window.scrollTo(0, 0)
                 return
@@ -368,10 +372,11 @@ export default function CheckoutPage() {
         return <CheckoutSkeleton />
     }
 
-    // Empty cart check
-    if (items.length === 0 && !orderComplete) {
+    // Empty cart check. Not while the PayTR iframe is shown: the success page inside it empties the
+    // saved cart, and the payment step must stay until the poll switches to the confirmation.
+    if (items.length === 0 && !orderComplete && !iframeUrl) {
         return (
-            <div className="min-h-[60vh] bg-surface py-10 lg:py-16">
+            <div className={cn(CHECKOUT_MIN_HEIGHT, 'bg-surface py-10 lg:py-16')}>
                 <div className="container-store">
                     <div className="mx-auto flex max-w-lg flex-col items-center rounded-sheet border border-line bg-white px-6 py-12 text-center shadow-card">
                         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-surface text-muted" aria-hidden="true">
@@ -430,6 +435,11 @@ export default function CheckoutPage() {
 
     // Payment Iframe (PayTR)
     if (iframeUrl) {
+        // Cart prices are saved when an item is added; the order API charges today's prices
+        const priceNote = paymentTotal !== null && shownTotalAtSubmit !== null
+            && Math.round(paymentTotal * 100) !== Math.round(shownTotalAtSubmit * 100)
+            ? { charged: paymentTotal, shown: shownTotalAtSubmit }
+            : null
         return (
             <div className="min-h-[60vh] bg-surface pb-12 pt-5 lg:pb-16 lg:pt-8">
                 <div className="container-store">
@@ -445,6 +455,12 @@ export default function CheckoutPage() {
                                 </p>
                             </div>
                         </div>
+                        {priceNote && (
+                            <FormAlert tone="info" className="mt-4">
+                                Fiyatlar güncellendi: ödenecek tutar <strong className="whitespace-nowrap font-bold tabular">{formatTL(priceNote.charged)}</strong>.
+                                {' '}Sepetinde eski fiyatlarla <span className="whitespace-nowrap tabular">{formatTL(priceNote.shown)}</span> görünüyordu.
+                            </FormAlert>
+                        )}
                         <div className="mt-4 overflow-hidden rounded-sheet border border-line bg-white shadow-card">
                             <iframe
                                 src={iframeUrl}
@@ -562,9 +578,10 @@ export default function CheckoutPage() {
                                                         href={item.slug ? `/${item.slug}/` : `/product/${item.id}/`}
                                                         target="_blank"
                                                         rel="noopener"
+                                                        title={item.name}
                                                         className="line-clamp-2 text-sm font-medium leading-5 text-ink hover:text-brand-600 hover:underline"
                                                     >
-                                                        {item.name}
+                                                        {displayName(item.name)}
                                                     </Link>
                                                     <p className="mt-1 text-[13px] leading-5 text-muted tabular">
                                                         {item.quantity} adet × {formatTL(unitPrice(item.price))}
