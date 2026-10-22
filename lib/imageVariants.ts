@@ -105,10 +105,10 @@ let queue: Promise<void> = Promise.resolve()
  * Call without awaiting after the original upload succeeded: `void uploadImageVariants(file, result.url)`.
  * Calls are queued and processed one after another; the promise settles when this file is done.
  */
-export function uploadImageVariants(file: File, uploadedUrl: string): Promise<void> {
+export async function uploadImageVariants(file: File, uploadedUrl: string): Promise<void> {
     const key = originalKeyFromUrl(uploadedUrl)
-    if (!key || !file.type.startsWith('image/') || file.type === 'image/svg+xml' || file.type === 'image/gif') return Promise.resolve()
-    if (typeof createImageBitmap !== 'function') return Promise.resolve()
+    if (!key || !file.type.startsWith('image/') || file.type === 'image/svg+xml' || file.type === 'image/gif') return
+    if (typeof createImageBitmap !== 'function') return
 
     const job = queue.then(() => createAndUploadVariants(file, key))
     queue = job.catch(() => { })
