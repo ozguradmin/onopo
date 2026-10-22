@@ -20,8 +20,9 @@ export function TopBar() {
     if (messages.length === 0) return null
     const count = Math.min(messages.length, 4)
 
+    // Its own landmark: the announcements and help links are not loose content outside every region
     return (
-        <div className="bg-ink text-white">
+        <aside aria-label="Duyurular" className="bg-ink text-white">
             {/* Mobile: rotating single line */}
             <div className="lg:hidden">
                 <div
@@ -69,6 +70,6 @@ export function TopBar() {
                     </Link>
                 </div>
             </div>
-        </div>
+        </aside>
     )
 }
