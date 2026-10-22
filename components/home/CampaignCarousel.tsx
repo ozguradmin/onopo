@@ -11,6 +11,8 @@ function prefersReducedMotion(): boolean {
 
 /** Time a slide stays before the slider moves on by itself. */
 const AUTOPLAY_MS = 5000
+/** Autoplay starts this long after load (or at the first interaction), see onPageAwake. */
+const CAROUSEL_START_MS = 1000
 
 /**
  * Swipe slider for the campaign banners at the top of the home page (components/home/CampaignBanners).
@@ -83,10 +85,11 @@ export function CampaignCarousel({ count, children }: { count: number; children:
     // reduced motion
     React.useEffect(() => {
         if (count < 2 || prefersReducedMotion()) return
+        // Started 1 s after load, so the first slide moves at about 6 s (AUTOPLAY_MS later), not at 11 s
         return onPageAwake(() => {
             lastMove.current = Date.now()
             setPlaying(true)
-        })
+        }, CAROUSEL_START_MS)
     }, [count])
 
     React.useEffect(() => {
