@@ -132,8 +132,16 @@ export function applyEvent(msg: UiMessage, ev: AssistantEvent): UiMessage {
         case 'compare':
         case 'links':
         case 'store_info':
-        case 'cart':
             return { ...msg, cards: [...msg.cards, ev] }
+        case 'cart': {
+            // A turn can send the cart more than once (after each batch of cart changes): one card, the newest
+            // lines (links and photos of products just added), in the place of the first one
+            const i = msg.cards.findIndex(c => c.t === 'cart')
+            if (i < 0) return { ...msg, cards: [...msg.cards, ev] }
+            const cards = msg.cards.slice()
+            cards[i] = ev
+            return { ...msg, cards }
+        }
         case 'cart_ops': {
             const receipt: CartReceipt = {
                 note: String(ev.note ?? '').replace(/\s+/g, ' ').trim().slice(0, 140),

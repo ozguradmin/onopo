@@ -373,6 +373,19 @@ test('chat-reducer: a cart card is a card, and cart_ops become a pending receipt
     assert.deepEqual([...reducer.shownProducts([settled]).keys()], [1, 2])
 })
 
+test('chat-reducer: a second cart event in one turn replaces the cart card instead of stacking a copy', () => {
+    const m = fold([
+        { t: 'text', v: 'Sepetin:' },
+        cartEvent([card(1), card(2)]),
+        { t: 'cart_ops', ops: [{ id: 2, qty: 0 }, { id: 3, qty: 1 }], note: 'x' },
+        { t: 'links', items: [] },
+        cartEvent([card(1), card(3)]),
+        { t: 'done', finish: 'cards', productIds: [], wa: false },
+    ])
+    assert.deepEqual(m.cards.map(c => c.t), ['cart', 'links'])
+    assert.deepEqual(m.cards[0].lines.map(l => l.product.id), [1, 3])
+})
+
 test('persist: applied receipts survive a reload, pending ones do not', () => {
     const store = memoryStorage()
     const m = { ...reducer.assistantMessage(1), status: 'done', text: 'Tamam.' }
