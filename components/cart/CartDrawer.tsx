@@ -196,6 +196,7 @@ function CartLine({
     const href = itemHref(item)
     const line = cartLineTotal(item)
     const unit = unitPrice(item.price)
+    const plusRef = React.useRef<HTMLButtonElement>(null)
     return (
         <li className="flex gap-3.5 py-4">
             <Link
@@ -232,19 +233,26 @@ function CartLine({
                 {item.quantity > 1 && <p className="mt-0.5 text-[13px] text-muted tabular-nums">{formatTL(unit)} / adet</p>}
                 <div className="mt-auto flex items-center justify-between pt-2.5">
                     <div className="flex items-center rounded-thumb border border-line-strong" role="group" aria-label={`Adet: ${item.name}`}>
+                        {/* Like the product page stepper: "−" stops at 1; removing is only "Kaldır" */}
                         <button
                             type="button"
-                            onClick={() => onQuantity(item.quantity - 1)}
-                            aria-label={item.quantity <= 1 ? `Sepetten çıkar: ${item.name}` : `Bir azalt: ${item.name}`}
-                            className="relative inline-flex h-9 w-9 items-center justify-center text-ink transition-colors hover:bg-surface before:absolute before:-inset-1 before:content-['']"
+                            onClick={() => {
+                                onQuantity(item.quantity - 1)
+                                // The button disables itself at 1: keep keyboard focus in the stepper
+                                if (item.quantity - 1 <= 1) plusRef.current?.focus()
+                            }}
+                            disabled={item.quantity <= 1}
+                            aria-label={`Bir azalt: ${item.name}`}
+                            className="relative inline-flex h-9 w-9 items-center justify-center text-ink transition-colors hover:bg-surface before:absolute before:-inset-1 before:content-[''] disabled:text-subtle disabled:hover:bg-transparent"
                         >
-                            {item.quantity <= 1 ? <Trash2 className="h-4 w-4" aria-hidden="true" /> : <Minus className="h-4 w-4" aria-hidden="true" />}
+                            <Minus className="h-4 w-4" aria-hidden="true" />
                         </button>
                         <span className="w-8 text-center text-sm font-bold text-ink tabular-nums" aria-live="polite" aria-atomic="true">
                             <span className="sr-only">Adet </span>
                             {item.quantity}
                         </span>
                         <button
+                            ref={plusRef}
                             type="button"
                             onClick={() => onQuantity(item.quantity + 1)}
                             aria-label={`Bir artır: ${item.name}`}
