@@ -1204,6 +1204,7 @@ export function productJsonLd(p: ProductSeoInput, opts: { site?: SiteSeo; review
  * The hidden #product-info block that Akakçe's crawler parses (in addition to the Product JSON-LD).
  * Byte-for-byte the markup app/[slug]/page.tsx renders today (see docs/SEO.md, "Akakçe crawl contract"):
  * element ids, tr-TR price format with " ₺", "Stokta"/"Tükendi", image order and the two legacy links.
+ * The only addition is loading="lazy" at the end of each <img>, so the hidden images are never downloaded.
  * Render it with components/seo/ProductMachineData.tsx; do not edit the format without checking Akakçe.
  */
 export function productInfoHtml(p: ProductSeoInput): string {
@@ -1224,7 +1225,9 @@ export function productInfoHtml(p: ProductSeoInput): string {
         `  <span id="product-stock">${Number(p.stock) > 0 ? 'Stokta' : 'Tükendi'}</span>`,
         `  <span id="product-category">${String(p.category || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')}</span>`,
         ...images.map((img, i) =>
-            `  <img id="product-image-${i + 1}" src="${resolveImageUrl(img) || DEFAULT_OG_IMAGE.url}" alt="${name.replace(/"/g, '&quot;')}" />`,
+            // loading="lazy" (last attribute, everything before it unchanged): the block is display:none, so browsers
+            // never fetch these originals (up to 32 MB per page); Akakçe reads the src attribute from the HTML.
+            `  <img id="product-image-${i + 1}" src="${resolveImageUrl(img) || DEFAULT_OG_IMAGE.url}" alt="${name.replace(/"/g, '&quot;')}" loading="lazy" />`,
         ),
         `  <a id="add-to-cart" href="/cart?add=${p.id}">Sepete Ekle</a>`,
         `  <a id="buy-now" href="/checkout?product=${p.id}">Hemen Al</a>`,
