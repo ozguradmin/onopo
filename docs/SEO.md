@@ -138,7 +138,9 @@ render (`getSiteSeo()` is cached per request only; the admin write also bumps th
 - **One visible `<h1>` per page.**
   - Home: one real H1 in the "Onopo Store hakkında" block at the bottom (`HomeAbout` in `components/home/HomeHero.tsx`, `id="home-title"`); the top of the page is the campaign slider and the products.
   - Category: the category name.
-  - /products/: "Tüm Ürünler" (also on `?sort=newest`, the "Yeni Gelenler" target), or `Arama: “q”` for a search.
+  - /products/: "Tüm Ürünler", or `Arama: “q”` for a search. `?sort=newest` with no search or filter (the
+    "Yeni Gelenler" target) has H1, breadcrumb and title "Yeni Gelenler" (still noindex,follow, no canonical);
+    menu links to noindex listing variants carry `rel="nofollow"`.
   - Product: `product.name`.
   - CMS: the page title.
 - The hidden Akakçe block has its own `<h1 id="product-name">`. Keep it (contract), and **do not give the visible
@@ -447,7 +449,9 @@ Contract details:
   - there is no `public/apple-touch-icon.png` (180×180); the layout uses the admin favicon (`favicon_url`) as
     the apple icon when one is set
 - **Before launch:** rename the category slug "ok-satanlar" (Çok Satanlar, made by the old broken slugifier) to
-  "cok-satanlar", with a 308 from `/kategori/ok-satanlar/`. New categories already get Turkish-safe slugs
+  "cok-satanlar": back up D1, run `UPDATE categories SET slug='cok-satanlar' WHERE slug='ok-satanlar'`, deploy.
+  `/ok-satanlar/`, `/kategori/ok-satanlar/` and `?category=ok-satanlar` then 308 automatically
+  (`CATEGORY_SLUG_ALIASES` in `lib/seo.ts`). New categories already get Turkish-safe slugs
   (`POST /api/categories` uses `slugifyTr()`); renaming a category in the admin keeps its slug.
 - Product 1107 (Samsung S24 Ultra screen protector): its description names the wrong model ("Samsung S24 Plus").
   The meta description now starts with the right model, which makes the mismatch visible. Correct the text in

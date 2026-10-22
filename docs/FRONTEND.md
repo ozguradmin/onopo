@@ -65,20 +65,22 @@ RootLayout (server)            getStorefrontData(): settings, shipping, maxInsta
   `Retry-After` and `X-Robots-Tag: noindex`. Any other maintenance view must keep both markers.
 - **The element around the page never changes type**, so pages mount exactly once. There is no mount
   gate and no remount.
-- **Cart.** The shell calls `useCartStore.persist.rehydrate()` once on mount (the store uses
-  `skipHydration`). Cart counts render 0 on the server and update after mount.
+- **Cart.** The shell rehydrates the store once on mount (`skipHydration`), then follows the saved cart
+  (`watchSavedCart()`: storage events from other tabs, `pageshow` after a bfcache restore) everywhere
+  except `/odeme`, and every cart write first takes over the saved cart (`syncSavedCart()`). Cart counts
+  render 0 on the server and update after mount. `/siparis-basarili` empties the saved cart while the
+  page is parsed (`components/checkout/ClearCartOnSuccess.tsx`, which repeats the persist key and shape).
 - **Analytics.** The shell sends `POST /api/analytics/track {page}` once per store page view,
   including client-side navigations. It moved here from Footer.
 - **Sticky header.** The TopBar (`<aside aria-label="Duyurular">`) is static and the `<header>` is
   `position: sticky; top: 0` in normal flow. `<main>` has no top padding hack. On scroll-down the
   header's second row (mobile search field, desktop nav) slides under the first; on scroll-up it comes
   back (transforms only, from a passive rAF scroll listener).
-- **`--header-offset`.** `components/layout/Header.tsx` publishes the header's visible height (open or
-  collapsed) as the CSS variable `--header-offset` on `<html>` and removes it on unmount. Sticky parts
-  under the header use it as their `top`, with the header's 200 ms transition: the mobile listing
-  toolbar (`top-[var(--header-offset,109px)]`) and the desktop filter sidebar
-  (`top-[calc(var(--header-offset,122px)+16px)]`). The fallbacks are the open header heights for the
-  first paint; update them if the header height changes.
+- **Sticky parts under the header.** `components/layout/Header.tsx` writes `--header-open` /
+  `--header-collapsed` on `<html>` only when its size or the breakpoint changes, and toggles
+  `html[data-header-collapsed]` on collapse. Sticky parts under the header (listing toolbar, filter
+  sidebar) carry `data-under-header` and get their `top` from rules in `app/globals.css`. Never write an
+  inherited custom property on `<html>` on scroll (it restyles the whole page).
 - **Session hint.** `lib/session-hint.ts` `hasSessionHint()` reads the readable cookie `onopo_oturum=1`,
   which worker.ts keeps in sync with the HttpOnly `auth_token` (login, verify-2fa and logout also set
   or clear it). It only means "this visitor may be logged in". Use it to skip pointless calls or pick a
@@ -395,9 +397,17 @@ Everything is server-friendly unless marked (client). New storefront code import
   - `PRODUCT_CARD_SIZES`, `PLACEHOLDER_IMAGE`.
 - Client `<img>`s must fall back once to the original (`FallbackImage`). No retry loops and no
   `?retry=` cache-busting.
-- **og:image.** With variants on, the product page's `og:image`/`twitter:image` is the 1200w variant
-  (`app/[slug]/page.tsx`); with variants off it is the original. The top comment of `lib/images.ts`
-  still says og:image keeps the original; that line is out of date.
+- **og:image.** With variants on, the product page's `og:image`/`twitter:image` is
+  `https://onopostore.com/api/og-image/<key>`, which redirects (302) to the 1200w variant when it exists
+  in R2, else to the original; with variants off it is the original. PDP gallery slides 2+ and the
+  desktop thumbnails mount on demand.
+- **Home campaign slider.** `components/home/CampaignBanners.tsx` (+ `CampaignCarousel.tsx` island) at
+  the top of the home page: admin Hero slides first (when that section is on), then the campaigns from
+  `lib/campaigns.ts`, built from live data. Photos live in `public/kampanya/<name>-800|1600.webp`
+  (16:9, shown cropped to 2:1). A photo with printed text lists what the text claims (`claims`); while
+  the live data no longer says so, its text-free twin (`plain`) is shown with live text, so a printed
+  discount or price is never stale. The 9D screen-protector banner always draws its price live (USD-based
+  prices). Tests: `node --test scripts/campaigns.test.mjs`.
 - **Logo.** With variants on, the header and footer logo use the 400w variant with a 200w/400w
   srcset, then fall back once to the original, then to the site name as text (`logoSources()` and
   `LOGO_SIZES` in `components/layout/Header.tsx`). With variants off, only the original.

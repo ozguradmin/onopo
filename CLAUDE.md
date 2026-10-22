@@ -96,8 +96,10 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 ## Admin girişi ve 2FA
 - Admin hesabı `admin@onopo.com` (`lib/login-alias.ts`). Sahip kişisel bir takma adresle (alias) de giriş
   yapabilir; o adres repoda yalnızca SHA-256 özeti olarak durur. **Adresi hiçbir dosyaya yazma.**
-- 2FA kodu yazılan alias'a gider; alias yazılmadıysa `site_settings.admin_email`'e, o da yoksa `ADMIN_RESET_EMAIL`
-  secret'ına. `admin@onopo.com`'a asla gitmez; kullanılabilir alıcı yoksa giriş 503 döner. Müşteri girişinde 2FA yok.
+- 2FA kodu yazılan alias'a gider; alias yazılmadıysa `ADMIN_RESET_EMAIL` secret'ına, o da yoksa
+  `site_settings.admin_email`'e (tek yardımcı fonksiyon, şifre sıfırlamayla aynı sıra). `admin@onopo.com`'a asla
+  gitmez; kullanılabilir alıcı yoksa giriş 503 döner. Müşteri girişinde 2FA yok. Admin girişinde IP başına deneme
+  sınırı var (D1 tablosu `login_failures`, `CF-Connecting-IP`).
 - `/api/auth/login` kodu gönderirken HttpOnly `onopo_2fa` challenge çerezini koyar (Path `/api/auth/`, 5 dk;
   satır `two_factor_challenges`'ta). `/api/auth/verify-2fa` bu çerez olmadan 401 döner. Challenge başına en fazla
   5 deneme (tek koşullu UPDATE ile atomik, sonra 429); kod bir kez kullanılır. verify-2fa'yı doğrudan çağıran
