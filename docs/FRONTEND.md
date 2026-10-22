@@ -341,7 +341,8 @@ Everything is server-friendly unless marked (client). New storefront code import
 | `components/product/ProductCard.tsx` | `<ProductCard product rating? priority? eager? freeShippingThreshold? sizes? headingLevel="h3" showAddButton?>`, see below. Also exports `RatingStars`. |
 | `components/product/ProductCardImages.tsx` (client) | The card's image well: main image plus the lazily added hover image (below). |
 | `components/guides/GuideBody.tsx` | Guide article parts: `<GuideBody sections>` (H2 per section, paragraphs/lists/tips with `[label](/path/)` links), `<GuideToc>`, `<GuideFaqList>` (always visible), `<InlineText>`. Data: `lib/guides` (docs/SEO.md §12) |
-| `components/guides/GuideCards.tsx` | `<GuideCards guides headingLevel>` (hub, "Diğer rehberler"), `<GuideLinkList guides>` (/kategoriler/ block) |
+| `components/guides/GuideCards.tsx` | `<GuideCards guides images? eagerImages? headingLevel>` (hub, "Diğer rehberler"; one stretched title link per card), `<GuideLinkList guides images?>` (/kategoriler/ block, device pages) |
+| `components/guides/GuideArt.tsx` | `<GuideArt images variant="hero"\|"card" eager?>` (a guide's product photos on white tiles, fixed aspect ratio), `<GuideThumb image>` (decorative small photo). Data: `selectGuideImages` / `getGuideImages` (docs/SEO.md §12) |
 | `components/product/ProductCardActions.tsx` (client) | `<QuickAddButton product variant="icon"\|"full" openDrawer?>`, `<FavoriteButton productId productName variant="card"\|"plain">`, `useFavorites()`, `toCartItem(product)`, `resetFavorites()` |
 
 ### ProductCard (spec §9)

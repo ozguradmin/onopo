@@ -3,7 +3,7 @@
  * related products come live from D1 (lib/guides/server.ts). Isomorphic and pure, so scripts/guides.test.mjs
  * can check the data and the product rules against the real catalogue names.
  */
-import { matchesFacet, matchesSearch, normalizeText } from '../search'
+import { displayName, matchesFacet, matchesSearch, normalizeText } from '../search'
 import { aracSarjGuide } from './content/arac-sarj'
 import { ekranKoruyucuGuide } from './content/ekran-koruyucu'
 import { hizliSarjGuide } from './content/hizli-sarj'
@@ -108,6 +108,55 @@ export function selectGuideProducts<T extends GuideProductLike>(products: readon
     const longest = Math.max(0, ...lists.map(l => l.length))
     for (let i = 0; i < longest; i++) for (const list of lists) push(list[i])
     return [...ordered.filter(isInStock), ...ordered.filter(p => !isInStock(p))].slice(0, limit)
+}
+
+// ---- pictures ------------------------------------------------------------------------------------------
+
+/**
+ * A guide's pictures are our own product photos (R2), never stock or generated images: the first in-stock related
+ * products that have a photo, in the order of the page's product row (selectGuideProducts). Used for the guide's
+ * hero, the cards and lists that link guides, og:image and the Article JSON-LD image.
+ */
+export interface GuideImage {
+    /** Stored image reference (`/api/images/<key>` or an images.onopostore.com URL), for lib/images helpers. */
+    image: string
+    /** Alt text: the product's short name. */
+    alt: string
+}
+
+/** Photos per guide (the hero shows up to three on white tiles). */
+export const GUIDE_IMAGE_COUNT = 3
+
+/** "Onopo T120 USB-A to Type-C Kablo | 120W GaN | 1 Metre" → "T120 USB-A to Type-C Kablo" (alt text). */
+export function guideImageAlt(name: string): string {
+    const short = displayName(name).split(/\s+\|\s+/)[0].trim()
+    return short.length > 90 ? `${short.slice(0, 89).trimEnd()}…` : short
+}
+
+/**
+ * The guide's photos from a product list (getActiveProducts or the guide's own products): in-stock related products
+ * with an image, each photo once, at most `count`. Empty when none qualifies (the page then shows no picture).
+ */
+export function selectGuideImages<T extends GuideProductLike & { image?: string | null }>(
+    products: readonly T[],
+    guide: Pick<Guide, 'products'>,
+    count = GUIDE_IMAGE_COUNT,
+): GuideImage[] {
+    const out: GuideImage[] = []
+    const seen = new Set<string>()
+    for (const p of selectGuideProducts(products, guide.products, products.length)) {
+        if (out.length >= count) break
+        const image = typeof p.image === 'string' ? p.image.trim() : ''
+        if (!isInStock(p) || !image || seen.has(image)) continue
+        seen.add(image)
+        out.push({ image, alt: guideImageAlt(p.name) })
+    }
+    return out
+}
+
+/** Every guide's photos (hub cards, "Diğer rehberler", the /kategoriler/ and device page lists). */
+export function guideImagesBySlug<T extends GuideProductLike & { image?: string | null }>(products: readonly T[]): Record<GuideSlug, GuideImage[]> {
+    return Object.fromEntries(GUIDES.map(g => [g.slug, selectGuideImages(products, g)])) as Record<GuideSlug, GuideImage[]>
 }
 
 /** The one guide a product page links to ("İlgili rehber"), or null. */

@@ -6,6 +6,7 @@ import { GuideLinkList } from '@/components/guides/GuideCards'
 import { DeviceBrandLinks } from '@/components/devices/DeviceLinks'
 import { SectionHeader } from '@/components/ui/SectionHeader'
 import { GUIDES, GUIDES_PATH } from '@/lib/guides'
+import { getGuideImages } from '@/lib/guides/server'
 import { DEVICES_PATH, type DeviceBrandEntry } from '@/lib/devices'
 import { getDeviceData } from '@/lib/devices/server'
 import { getHomeData } from '@/lib/home-data'
@@ -41,7 +42,7 @@ async function deviceBrands(): Promise<DeviceBrandEntry[] | null> {
 }
 
 export default async function CategoriesHubPage() {
-    const [data, devices] = await Promise.all([getHomeData(), deviceBrands()])
+    const [data, devices, guideImages] = await Promise.all([getHomeData(), deviceBrands(), getGuideImages()])
     const types = data.shortcuts.filter(s => s.kind === 'type')
     const categories = data.shortcuts.filter(s => s.kind === 'category')
     const stats = data.stats
@@ -51,7 +52,7 @@ export default async function CategoriesHubPage() {
 
     return (
         <div className="bg-canvas pb-14 pt-4 lg:pb-16 lg:pt-6">
-            {(data.failed.length > 0 || !devices) && <div hidden data-onopo-nocache="" />}
+            {(data.failed.length > 0 || !devices || guideImages.failed) && <div hidden data-onopo-nocache="" />}
             <div className="container-store">
                 <Breadcrumb items={[{ label: 'Anasayfa', href: '/' }, { label: 'Kategoriler' }]} jsonLd />
                 <h1 className="type-h1 mt-3 text-ink">Kategoriler</h1>
@@ -76,7 +77,7 @@ export default async function CategoriesHubPage() {
 
             <section aria-labelledby="kategoriler-rehberler" className="container-store mt-10 lg:mt-12">
                 <SectionHeader id="kategoriler-rehberler" title="Alışveriş rehberleri" href={GUIDES_PATH} linkLabel="Tüm rehberler" />
-                <GuideLinkList guides={GUIDES} />
+                <GuideLinkList guides={GUIDES} images={guideImages.images} />
             </section>
         </div>
     )

@@ -23,6 +23,7 @@ import {
     siblingDevicePages,
 } from '@/lib/devices'
 import { getDeviceData } from '@/lib/devices/server'
+import { guideImagesBySlug } from '@/lib/guides'
 import { getReviewStatsMapSafe } from '@/lib/reviews'
 import { buildMetadata, categoryMetaDescription, itemListJsonLd, productPath } from '@/lib/seo'
 import { getSiteSeo } from '@/lib/seo-server'
@@ -120,7 +121,7 @@ export default async function DevicePage({ params }: { params: Params }) {
                 {guides.length > 0 && (
                     <section aria-labelledby="cihaz-rehberler" className="mt-12 lg:mt-16">
                         <SectionHeader id="cihaz-rehberler" title="İlgili rehberler" href="/rehber/" linkLabel="Tüm rehberler" />
-                        <GuideLinkList guides={guides} />
+                        <GuideLinkList guides={guides} images={guideImagesBySlug(data.products)} />
                     </section>
                 )}
 

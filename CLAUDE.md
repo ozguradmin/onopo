@@ -134,6 +134,8 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 ## Alışveriş rehberleri (`/rehber/`)
 - Metinler kodda: `lib/guides/content/*.ts` (6 rehber), slug listesi `lib/guides/slugs.ts`. İlgili ürünler D1'den canlı
   (`lib/guides/server.ts`, en çok 8, stoktakiler önce); metinde fiyat/stok yazılmaz. Metin değişince `dateModified`'i güncelle.
+- Görseller yalnızca kendi ürün fotoğraflarımız (stok/AI görsel yok): ilgili stoktaki ilk 3 ürünün fotoğrafı (`selectGuideImages`)
+  rehberin başlık görseli, kartlar, `/kategoriler/` ve cihaz sayfası listeleri, og:image ve Article JSON-LD `image` olur.
 - Ürün sayfasında tek "İlgili rehber" bağlantısı (`guideForProduct`), footer'da "Rehberler", `/kategoriler/`'de blok.
   Sitemap'te var; edge cache allowlist'inde; yönlendirme çözücü `/rehber/` altında tahmin yapmaz. Ayrıntı: `docs/SEO.md` §12.
 

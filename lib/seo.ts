@@ -1269,11 +1269,13 @@ export interface ArticleSeoInput {
     /** YYYY-MM-DD */
     datePublished: string
     dateModified: string
+    /** Absolute image URLs (the guide's product photos); the site's og-image when there is none. */
+    images?: string[]
 }
 
 /**
  * Article for an editorial page (the shopping guides). Author and publisher are the store itself (the root
- * layout's OnlineStore node, same @id); the image is the site's og-image, as no guide has its own picture.
+ * layout's OnlineStore node, same @id); the images are the guide's product photos (originals), or the site's og-image.
  */
 export function articleJsonLd(article: ArticleSeoInput, site: Pick<SiteSeo, 'name' | 'logo'> = DEFAULT_SITE_SEO): JsonLdObject {
     const url = canonicalUrl(article.path)
@@ -1294,7 +1296,7 @@ export function articleJsonLd(article: ArticleSeoInput, site: Pick<SiteSeo, 'nam
         inLanguage: SITE.language,
         datePublished: article.datePublished,
         dateModified: article.dateModified,
-        image: [DEFAULT_OG_IMAGE.url],
+        image: article.images?.length ? article.images : [DEFAULT_OG_IMAGE.url],
         author: organization,
         publisher: organization,
     }
