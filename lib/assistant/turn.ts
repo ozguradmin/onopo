@@ -365,8 +365,9 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
             return log
         }
 
-        // ---- Daily budget: WhatsApp mode ----
-        if (await deps.budgetExceeded().catch(() => false)) {
+        // ---- Daily budget: WhatsApp mode. Fails CLOSED: when the spend cannot be read (D1 down),
+        // the turn cannot be counted either, so it goes to WhatsApp instead of running unmetered ----
+        if (await deps.budgetExceeded().catch(() => true)) {
             k = await knowledgeP
             state = newToolState({ pageProduct: pageRow(req.context.page, k), maskedInput: masked, loggedIn: deps.loggedIn })
             log.mode = 'canned'

@@ -167,13 +167,19 @@ export function parseBudgetUsd(v: string | null | undefined): number {
 export async function budgetExceeded(db: D1Lite, now: Date, budgetUsd: number): Promise<boolean> {
     const day = istanbulDay(now)
     if (!budgetMemo || budgetMemo.day !== day || now.getTime() - budgetMemo.at > BUDGET_MEMO_MS) {
-        await ensureTables(db)
-        const row = await db
-            .prepare("SELECT cost_micro_usd FROM ai_usage_daily WHERE day = ? AND bucket = 'global'")
-            .bind(day)
-            .first<{ cost_micro_usd: number }>()
-        budgetMemo = { day, at: now.getTime(), cost: Number(row?.cost_micro_usd) || 0 }
-        localCost = 0
+        try {
+            await ensureTables(db)
+            const row = await db
+                .prepare("SELECT cost_micro_usd FROM ai_usage_daily WHERE day = ? AND bucket = 'global'")
+                .bind(day)
+                .first<{ cost_micro_usd: number }>()
+            budgetMemo = { day, at: now.getTime(), cost: Number(row?.cost_micro_usd) || 0 }
+            localCost = 0
+        } catch (err) {
+            // A read failure keeps today's last known spend (plus this isolate's own); with none, the
+            // caller treats the error as "exceeded" (runTurn fails closed)
+            if (!budgetMemo || budgetMemo.day !== day) throw err
+        }
     }
     return budgetMemo.cost + localCost > budgetUsd * 1e6
 }

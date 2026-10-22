@@ -849,6 +849,14 @@ test('runTurn: budget exceeded → zero AI calls, busy text and a full WhatsApp 
     assert.equal(log.outcome, 'busy')
 })
 
+test('runTurn: budget check failing (D1 down) fails closed → no AI calls, busy text', async () => {
+    const ai = mockAi()
+    const { events, log } = await runIt(ai, {}, { budgetExceeded: async () => { throw new Error('D1 down') } })
+    assert.equal(ai.calls.length, 0)
+    assert.equal(events.find(e => e.t === 'text').v, canned.CANNED.busy)
+    assert.equal(log.outcome, 'busy')
+})
+
 test('runTurn: early handoff → WhatsApp card before any text and tool_choice none', async () => {
     const ai = mockAi({ answers: A({ intent: 'order_status', handoff: 0.93 }), chat: [textChunks('Ekibimiz yardımcı olur.')] })
     const { events, types, log } = await runIt(ai, { input: 'Siparişim nerede?' })
