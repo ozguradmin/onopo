@@ -6,6 +6,11 @@
 
 export const ASSISTANT_API_PATH = '/api/ai/chat/'
 export const ASSISTANT_EVENT_PATH = '/api/ai/event/'
+/**
+ * Public site setting (JSON string array, at most 3) with the questions visitors asked most last week,
+ * written by the weekly analysis; the empty chat shows them after the fixed "Kargo bedava için ne eklesem?".
+ */
+export const POPULAR_QUESTIONS_KEY = 'ai_popular_questions'
 export const PROTOCOL_VERSION = 1 as const
 
 export const LIMITS = {
@@ -134,6 +139,16 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
 export interface LinkItem { title: string; href: string; count: number | null; fromPrice: number | null; icon: string | null }
 export interface InfoRow { icon: 'truck' | 'clock' | 'card' | 'return' | 'shield' | 'chat'; text: string }
 
+/** One line of the visitor's cart as the server priced it from D1 (v2). */
+export interface CartLine { product: CardProduct; qty: number; lineTotal: number }
+
+/**
+ * A change to the visitor's own cart that the assistant made because the visitor asked ("toz haznesini sil",
+ * "bundan 2 tane olsun"). qty 0 removes the product. The UI applies it to the local cart store at once and
+ * shows a receipt row with "Geri al". Only products already in the cart, or shown in this conversation.
+ */
+export interface CartOp { id: number; qty: number }
+
 export type AssistantEvent =
     | { t: 'meta'; turnId: string; mode: 'llm' | 'canned' | 'fallback'; waBase: string | null }
     | { t: 'step'; id: StepId; state: 'active' | 'done'; n?: number }
@@ -145,10 +160,13 @@ export type AssistantEvent =
     | { t: 'store_info'; rows: InfoRow[]; href: string | null }
     | { t: 'whatsapp'; variant: 'full' | 'compact'; reason: HandoffReason; message: string; waBase: string; productIds: number[] }
     | { t: 'suggestions'; chips: Suggestion[] }
+    // v2: the cart as a card (lines with quantity controls and remove), and changes the assistant made to it
+    | { t: 'cart'; lines: CartLine[]; count: number; total: number; threshold: number; freeShippingRemaining: number }
+    | { t: 'cart_ops'; ops: CartOp[]; note: string }
     | { t: 'error'; code: ErrorCode; retryAfter?: number }
     | { t: 'done'; finish: 'stop' | 'cards' | 'canned' | 'error'; productIds: number[]; wa: boolean }
 
-export type UiEventType = 'open' | 'card_click' | 'add_to_cart' | 'wa_shown' | 'wa_click' | 'stop' | 'new_chat'
+export type UiEventType = 'open' | 'card_click' | 'add_to_cart' | 'wa_shown' | 'wa_click' | 'stop' | 'new_chat' | 'cart_change' | 'cart_undo'
 export interface UiEventBody {
     v: 1
     conversationId: string
