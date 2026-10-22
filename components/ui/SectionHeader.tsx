@@ -13,6 +13,11 @@ export interface SectionHeaderProps {
     as?: 'h1' | 'h2' | 'h3'
     /** id for the heading (use with aria-labelledby on the <section>). */
     id?: string
+    /**
+     * Controls right of the link (e.g. a rail's ‹ › buttons), centred on the link's line. Give taller
+     * controls a negative vertical margin (40px buttons: -my-2.5) so the row keeps its height.
+     */
+    actions?: React.ReactNode
     className?: string
 }
 
@@ -21,7 +26,7 @@ export interface SectionHeaderProps {
  * link on the right, on the heading's (first) baseline. The link box is only as tall as its text so
  * the baselines can meet; a pseudo-element gives it the 44px hit area. Server-friendly.
  */
-export function SectionHeader({ title, description, href, linkLabel = 'Tümünü gör', as = 'h2', id, className }: SectionHeaderProps) {
+export function SectionHeader({ title, description, href, linkLabel = 'Tümünü gör', as = 'h2', id, actions, className }: SectionHeaderProps) {
     const Heading = as
     return (
         <div className={cn('mb-4 flex items-baseline justify-between gap-4 lg:mb-6', className)}>
@@ -31,15 +36,22 @@ export function SectionHeader({ title, description, href, linkLabel = 'Tümünü
                 </Heading>
                 {description && <p className="mt-1 text-sm leading-5 text-muted">{description}</p>}
             </div>
-            {href && (
-                <Link
-                    href={href}
-                    prefetch={false}
-                    className="relative inline-flex shrink-0 items-center gap-1 rounded-thumb text-sm font-semibold text-brand-600 underline-offset-4 before:absolute before:-inset-x-2 before:-inset-y-3 before:content-[''] hover:text-brand-700 hover:underline"
-                >
-                    {linkLabel}
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </Link>
+            {(href || actions) && (
+                // The group's baseline is the link's, so the link sits on the heading baseline. Without a
+                // link the controls align to the top of the heading line instead.
+                <div className={cn('flex shrink-0 items-center gap-4', !href && 'self-start')}>
+                    {href && (
+                        <Link
+                            href={href}
+                            prefetch={false}
+                            className="relative inline-flex shrink-0 items-center gap-1 rounded-thumb text-sm font-semibold text-brand-600 underline-offset-4 before:absolute before:-inset-x-2 before:-inset-y-3 before:content-[''] hover:text-brand-700 hover:underline"
+                        >
+                            {linkLabel}
+                            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                        </Link>
+                    )}
+                    {actions}
+                </div>
             )}
         </div>
     )

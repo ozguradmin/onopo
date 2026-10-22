@@ -25,43 +25,53 @@ function Tile({ item }: { item: Shortcut }) {
     )
 }
 
-/**
- * Entry points under the hero: product types (counts = what the listing shows) and the real
- * categories with products. Swipe row on phones, one row of tiles on wide screens.
- */
-export function ShortcutTiles({
-    items,
-    title = 'Kategoriler',
-    id = 'home-shortcuts',
-    className,
-}: {
-    items: Shortcut[]
-    title?: string
-    id?: string
-    className?: string
-}) {
-    if (!items.length) return null
-    const headingId = `${id}-title`
+/** Desktop strip tile widths: at least 88px (lg, 4px gaps) / 96px (xl, 12px gaps); wider when they fit. */
+const STRIP_MIN_LG = 88
+const STRIP_MIN_XL = 96
+
+function StripTile({ item }: { item: Shortcut }) {
+    const Icon = homeIcon(item.icon)
     return (
-        <section aria-labelledby={headingId} className={cn('container-store', className)}>
+        <Link
+            href={item.href}
+            prefetch={false}
+            // Product-type links are listing filter/search URLs (noindex); categories are real pages
+            rel={item.kind === 'type' ? 'nofollow' : undefined}
+            className="group flex w-full flex-col items-center gap-1.5 rounded-card text-center lg:px-1 lg:py-1 xl:px-0 lg:transition-colors lg:duration-150 lg:hover:bg-surface"
+        >
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-600 transition-colors duration-150 group-hover:bg-brand-100 group-hover:text-brand-700 lg:h-11 lg:w-11 xl:h-12 xl:w-12">
+                <Icon className="h-[22px] w-[22px] xl:h-6 xl:w-6" strokeWidth={1.75} aria-hidden="true" />
+            </span>
+            <span className="line-clamp-2 break-words text-xs leading-[15px] font-semibold text-ink lg:text-[13px] lg:leading-4">{item.label}</span>
+        </Link>
+    )
+}
+
+/**
+ * The home page's compact category row, right under the header and before the first products:
+ * product types (listing filters) and the real categories with products as small round icons with
+ * short labels, no counts (about 80px tall on phones). A swipe row on phones and tablets; one row of
+ * equal tiles on desktop, which scrolls with ‹ › over its ends only when the tiles do not fit.
+ */
+export function ShortcutTiles({ items, label = 'Kategoriler', className }: { items: Shortcut[]; label?: string; className?: string }) {
+    if (!items.length) return null
+    const n = items.length
+    return (
+        <nav aria-label={label} className={className}>
             <RailScroller
-                label={title}
-                header={<SectionHeader id={headingId} title={title} href="/products/" linkLabel="Tüm ürünler" />}
-                listClassName="md:gap-3 lg:gap-4"
-                fitsLg={items.length <= 7}
-                // xl: flexible tiles, at least 100px wide with 16px gaps in the 1216px container
-                fitsXl={items.length * 100 + (items.length - 1) * 16 <= 1216}
+                label={label}
+                listClassName="gap-2 md:gap-3 lg:gap-1 xl:gap-3"
+                // Every tile fits at its minimum width in the 960px (lg) / 1216px (xl) container
+                fitsLg={n * STRIP_MIN_LG + (n - 1) * 4 <= 960}
+                fitsXl={n * STRIP_MIN_XL + (n - 1) * 12 <= 1216}
             >
                 {items.map(item => (
-                    <li
-                        key={item.key}
-                        className="flex w-[92px] shrink-0 snap-start sm:w-[108px] lg:w-[calc((100%-6*16px)/7)] xl:w-auto xl:min-w-[100px] xl:flex-1"
-                    >
-                        <Tile item={item} />
+                    <li key={item.key} className="flex w-[72px] shrink-0 snap-start md:w-[84px] lg:w-auto lg:min-w-[88px] lg:flex-1 xl:min-w-[96px]">
+                        <StripTile item={item} />
                     </li>
                 ))}
             </RailScroller>
-        </section>
+        </nav>
     )
 }
 

@@ -1,6 +1,5 @@
 import * as React from 'react'
 import { ProductCard, type ProductCardProduct } from '@/components/product/ProductCard'
-import { SectionHeader } from '@/components/ui/SectionHeader'
 import { cn } from '@/lib/utils'
 import { getReviewStatsMapSafe } from '@/lib/reviews'
 import { RailScroller } from './RailScroller'
@@ -21,6 +20,8 @@ export interface ProductRailProps {
     freeShippingThreshold?: number | null
     /** Cards that load eagerly with fetchpriority=high (max 2 per rail; 0 below the fold). */
     priorityCount?: number
+    /** Extra classes for the section header row (e.g. a tighter bottom margin for the row at the top). */
+    headerClassName?: string
     className?: string
 }
 
@@ -38,6 +39,7 @@ export async function ProductRail({
     products,
     freeShippingThreshold,
     priorityCount = 0,
+    headerClassName,
     className,
 }: ProductRailProps) {
     if (!products.length) return null
@@ -51,7 +53,7 @@ export async function ProductRail({
                 label={title}
                 fitsLg={products.length <= 4}
                 fitsXl={products.length <= 5}
-                header={<SectionHeader id={headingId} title={title} description={description || undefined} href={href} linkLabel={linkLabel} />}
+                heading={{ id: headingId, title, description: description || undefined, href, linkLabel, className: headerClassName }}
             >
                 {products.map((p, i) => (
                     <li key={p.id} className={RAIL_ITEM_CLASS}>

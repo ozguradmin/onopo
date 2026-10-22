@@ -62,7 +62,9 @@ export interface StoreStats {
 }
 
 export interface HomeIntroCopy {
+    /** The page H1 (one compact line at the top). */
     h1: string
+    /** Real-data sentence for the "Onopo Store hakkında" text near the bottom. */
     lead: string
 }
 
@@ -92,8 +94,6 @@ export interface HomeData {
     shipping: ShippingSettings
     /** Newest in-stock products, used when sections are missing or failed. */
     fallbackProducts: Product[]
-    /** "Çok Satanlar"-like category for the secondary hero CTA, if it has products. */
-    featuredCategory: { label: string; href: string } | null
     /** Names of the parts that failed to load (empty = everything loaded). */
     failed: string[]
 }
@@ -117,7 +117,7 @@ const TYPE_SHORTCUTS: Array<{ key: string; label: string; h1?: string; icon: str
     { key: 'supurge', label: 'Süpürge ve Parçaları', icon: 'brush-cleaning', q: 'süpürge' },
 ]
 
-/** Device / connector searches shown as chips under the H1. */
+/** Device / connector searches shown as "Cihazına göre" chips under the trust strip. */
 const DEVICE_SEARCHES: Array<{ label: string; q: string }> = [
     { label: 'iPhone', q: 'iphone' },
     { label: 'Samsung', q: 'samsung' },
@@ -302,7 +302,7 @@ export const getHomeData = cache(async (): Promise<HomeData> => {
         }))
     shortcuts = [...shortcuts, ...categoryShortcuts]
 
-    // Store facts for the intro and the fallback banner
+    // Store facts for the intro text and the promo banner
     const stats: StoreStats | null = products
         ? {
             productCount: products.length,
@@ -363,9 +363,6 @@ export const getHomeData = cache(async (): Promise<HomeData> => {
         href: s.type === 'products' || s.type === 'new_products' ? sectionHref(s, categories) : undefined,
     }))
 
-    const featured = categories.find(c => /cok satan/.test(foldTr(c.name)) && c.product_count > 0)
-    const featuredCategory = featured ? { label: featured.name, href: categoryPath(featured.slug) } : null
-
     // Newest in-stock products when sections are missing (none active) or failed
     const needFallback = !sectionsRaw || !sections.some(s => (s.type === 'products' || s.type === 'new_products') && (s.products?.length ?? 0) > 0)
     const fallbackProducts = needFallback ? inStock.slice(0, 8) : []
@@ -381,7 +378,6 @@ export const getHomeData = cache(async (): Promise<HomeData> => {
         trust,
         shipping,
         fallbackProducts,
-        featuredCategory,
         failed,
     }
 })

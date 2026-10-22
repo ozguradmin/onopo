@@ -20,8 +20,45 @@ export interface HomeSectionsProps {
     /** Real categories with products, for a 'categories' section. */
     categoryShortcuts: Shortcut[]
     freeShippingThreshold: number
-    /** Ids of sections already rendered elsewhere (the hero at the top). */
+    /** Ids of sections already rendered elsewhere (the first product row at the top, the slider in the promo slot). */
     skip?: number[]
+}
+
+/** True for an admin product row ("Ürün Bölümü" / "Yeni Ürünler") that has products to show. */
+export function isProductSection(section: HomeSectionView): boolean {
+    return (section.type === 'products' || section.type === 'new_products') && (section.products?.length ?? 0) > 0
+}
+
+/** One admin product row as a rail. `priorityCount`: eager LCP cards, only for the row at the top. */
+export function HomeProductSection({
+    section,
+    freeShippingThreshold,
+    priorityCount = 0,
+    headerClassName,
+    className,
+}: {
+    section: HomeSectionView
+    freeShippingThreshold: number
+    priorityCount?: number
+    headerClassName?: string
+    className?: string
+}) {
+    const products: Product[] = section.products ?? []
+    if (!products.length) return null
+    const cfg = section.config || {}
+    return (
+        <ProductRail
+            id={`home-section-${section.id}`}
+            title={section.title || (section.type === 'new_products' ? 'Yeni Ürünler' : 'Ürünler')}
+            description={typeof cfg.description === 'string' ? cfg.description.trim() : undefined}
+            href={section.href ?? '/products/'}
+            products={products}
+            freeShippingThreshold={freeShippingThreshold}
+            priorityCount={priorityCount}
+            headerClassName={headerClassName}
+            className={className}
+        />
+    )
 }
 
 /**
@@ -41,22 +78,8 @@ export function HomeSections({ sections, slides, categoryShortcuts, freeShipping
 
                 switch (section.type) {
                     case 'products':
-                    case 'new_products': {
-                        const products: Product[] = section.products ?? []
-                        if (!products.length) return null
-                        return (
-                            <ProductRail
-                                key={key}
-                                id={id}
-                                title={section.title || (section.type === 'new_products' ? 'Yeni Ürünler' : 'Ürünler')}
-                                description={typeof cfg.description === 'string' ? cfg.description.trim() : undefined}
-                                href={section.href ?? '/products/'}
-                                products={products}
-                                freeShippingThreshold={freeShippingThreshold}
-                                className={SECTION_GAP}
-                            />
-                        )
-                    }
+                    case 'new_products':
+                        return <HomeProductSection key={key} section={section} freeShippingThreshold={freeShippingThreshold} className={SECTION_GAP} />
                     case 'features':
                         return <FeaturesSection key={key} id={id} title={section.title} features={cfg.items} className={SECTION_GAP} />
                     case 'image_card':

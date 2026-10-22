@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
 import { RefreshCw } from 'lucide-react'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { HomeHero, QuickSearchChips } from '@/components/home/HomeHero'
-import { HomeSections, SECTION_GAP } from '@/components/home/HomeSections'
+import { HeroCarousel } from '@/components/home/HeroCarousel'
+import { HERO_HEIGHT_CLASS, HomeAbout, HomeIntro, PromoBanner, QuickSearchChips, toCarouselSlides } from '@/components/home/HomeHero'
+import { HomeProductSection, HomeSections, isProductSection, SECTION_GAP } from '@/components/home/HomeSections'
 import { ProductRail } from '@/components/home/ProductRail'
-import { ShortcutTiles } from '@/components/home/ShortcutTiles'
 import { TrustStrip } from '@/components/home/TrustStrip'
 import { getActiveProducts } from '@/lib/catalog'
 import { getHomeData } from '@/lib/home-data'
@@ -30,9 +30,20 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * Home page (Server Component, design spec §8). Everything above the fold is in the server HTML:
- * hero (Admin › Ana Sayfa › Hero slides, or a banner built from real data) with the page H1,
- * shortcut tiles, trust strip; then the Admin › Ana Sayfa sections in admin order.
+ * Category row → first product row, and that row's heading → its cards: kept tight, so the first cards'
+ * prices stay above the fold at 360×740 and 1024×768 even for the tallest card (2-line name,
+ * compatibility line, spec chips, old price) next to one without the "Kargo bedava" line.
+ */
+const TOP_GAP = 'mt-4'
+const TOP_HEADER = 'lg:mb-4'
+
+/**
+ * Home page (Server Component, design spec §8). Shoppers come for products and prices, so the top is
+ * products first, as on the big Turkish stores: the page H1 as one small line, a compact category row,
+ * then right away the first admin product row ("Öne Çıkan Ürünler"), whose first cards (image, name,
+ * price) are above the fold on phones (360×740 and up) and desktops (1024×768 and up). Then the slim
+ * promo banner (or the admin slider), the trust strip, the device chips, the other Admin › Ana Sayfa
+ * sections in admin order and the "Onopo Store hakkında" text. Everything is in the server HTML.
  *
  * Data failures never take the whole page down: a failed part is left out, the rest renders, and the
  * HTML carries the data-onopo-nocache marker so the edge cache does not keep the degraded page.
@@ -40,75 +51,56 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function Home() {
     const data = await getHomeData()
     const { sections, slides, shortcuts, failed } = data
+    const threshold = data.shipping.freeShippingThreshold
 
     // Nothing could be loaded at all (D1 down): a real error (500), never an empty 200 page
     if (failed.includes('products') && failed.includes('sections') && failed.includes('hero')) {
         throw new Error('Home page data unavailable')
     }
 
+    // The first product row in admin order goes to the top, right under the category row
+    const topSection = sections.find(isProductSection) ?? null
+
     // The admin slider shows only for an active 'hero' section (Admin › Ana Sayfa switch, as on the old
-    // site): at the top when that section comes first, otherwise where it sits. The top then shows
-    // the banner built from store data. No active hero section → no slides anywhere.
+    // site). It never sits above the first product row: when the section comes before that row in admin
+    // order, it takes the promo slot right under the row; otherwise it stays where it sits and the promo
+    // slot shows the banner built from store data. No active hero section → no slides anywhere.
     const heroSection = sections.find(s => s.type === 'hero')
-    const heroOnTop = !!heroSection && sections[0]?.id === heroSection.id
-    const heroInPlace = !!heroSection && !heroOnTop && slides.length > 0
-    const topSlides = heroOnTop ? slides : []
+    const heroBeforeTop = !!heroSection && (!topSection || sections.indexOf(heroSection) < sections.indexOf(topSection))
+    const heroInSlot = heroBeforeTop && slides.length > 0
+    const heroInPlace = !!heroSection && !heroBeforeTop && slides.length > 0
+    const skip = [topSection?.id, heroSection && !heroInPlace ? heroSection.id : undefined].filter((id): id is number => id != null)
 
     const hasCategoriesSection = sections.some(s => s.type === 'categories')
     const categoryShortcuts = shortcuts.filter(s => s.kind === 'category')
     // When the admin shows a categories section, the top row keeps to product types (no duplicates)
     const topShortcuts = hasCategoriesSection ? shortcuts.filter(s => s.kind === 'type') : shortcuts
 
-    const hasProductRows = sections.some(s => (s.type === 'products' || s.type === 'new_products') && (s.products?.length ?? 0) > 0)
     const productsFailed = failed.includes('products') || failed.includes('sections')
 
     return (
         <div className="pb-12 lg:pb-16">
             {failed.length > 0 && <div hidden data-onopo-nocache="" />}
 
-            <HomeHero
-                slides={topSlides}
-                intro={data.intro}
-                stats={data.stats}
-                quickSearches={data.quickSearches}
-                freeShippingThreshold={data.shipping.freeShippingThreshold}
-                featuredCategory={data.featuredCategory}
-            />
+            <HomeIntro h1={data.intro.h1} shortcuts={topShortcuts} />
 
-            <ShortcutTiles items={topShortcuts} className="mt-6 lg:mt-10" />
-
-            <TrustStrip items={data.trust} className="mt-6 lg:mt-8" />
-
-            {/* Device chips sit in the hero panel on desktop; on phones they follow the trust strip */}
-            <QuickSearchChips
-                items={data.quickSearches}
-                className="container-store mt-6 lg:hidden"
-                listClassName="no-scrollbar -mx-4 overflow-x-auto px-4 md:-mx-6 md:px-6"
-            />
-
-            <HomeSections
-                sections={sections}
-                slides={heroInPlace ? slides : []}
-                categoryShortcuts={categoryShortcuts}
-                freeShippingThreshold={data.shipping.freeShippingThreshold}
-                skip={heroSection && !heroInPlace ? [heroSection.id] : []}
-            />
-
-            {/* No product row from the admin (none active, or the sections failed): newest products */}
-            {!hasProductRows && data.fallbackProducts.length > 0 && (
+            {/* First products: the first admin product row, else the newest products (none active, or the sections failed) */}
+            {topSection ? (
+                <HomeProductSection section={topSection} freeShippingThreshold={threshold} priorityCount={2} headerClassName={TOP_HEADER} className={TOP_GAP} />
+            ) : data.fallbackProducts.length > 0 ? (
                 <ProductRail
                     id="home-newest"
                     title="Yeni Ürünler"
                     description="Stoklara en son giren ürünler"
                     href="/products/"
                     products={data.fallbackProducts}
-                    freeShippingThreshold={data.shipping.freeShippingThreshold}
-                    className={SECTION_GAP}
+                    freeShippingThreshold={threshold}
+                    priorityCount={2}
+                    headerClassName={TOP_HEADER}
+                    className={TOP_GAP}
                 />
-            )}
-
-            {productsFailed && data.fallbackProducts.length === 0 && (
-                <div className={`container-store ${SECTION_GAP}`}>
+            ) : productsFailed ? (
+                <div className={`container-store ${TOP_GAP}`}>
                     <EmptyState
                         icon={<RefreshCw />}
                         title="Ürünler şu an yüklenemedi"
@@ -117,7 +109,35 @@ export default async function Home() {
                         className="rounded-card border border-line"
                     />
                 </div>
+            ) : null}
+
+            {heroInSlot ? (
+                <div className={`container-store ${SECTION_GAP}`}>
+                    <div className={HERO_HEIGHT_CLASS}>
+                        <HeroCarousel slides={toCarouselSlides(slides)} priority={false} />
+                    </div>
+                </div>
+            ) : (
+                <PromoBanner stats={data.stats} className={SECTION_GAP} />
             )}
+
+            <TrustStrip items={data.trust} className="mt-6 lg:mt-8" />
+
+            <QuickSearchChips
+                items={data.quickSearches}
+                className="container-store mt-6 lg:mt-8"
+                listClassName="no-scrollbar -mx-4 overflow-x-auto px-4 md:-mx-6 md:px-6 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0"
+            />
+
+            <HomeSections
+                sections={sections}
+                slides={heroInPlace ? slides : []}
+                categoryShortcuts={categoryShortcuts}
+                freeShippingThreshold={threshold}
+                skip={skip}
+            />
+
+            <HomeAbout text={data.intro.lead} className={SECTION_GAP} />
         </div>
     )
 }
