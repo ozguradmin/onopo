@@ -12,6 +12,7 @@ import { parseProductImages } from '@/lib/utils'
  * Lists the product, hero, image-card and logo images whose WebP variants (https://images.onopostore.com/v/<w>/<key>.webp)
  * are missing (HEAD from the browser; the image host allows CORS), and creates them here in the browser, one image at
  * a time, with lib/imageVariants: the original is downloaded, resized and stored via POST /api/admin/upload (variantOf).
+ * The fallback: the server makes variants after uploads and in the daily cron (lib/image-variants-server.ts).
  */
 
 // Keys the upload API accepts as variantOf (app/api/admin/upload/route.ts)
@@ -197,7 +198,11 @@ export function MissingVariantsPanel() {
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
                 Varyantlar açıkken mağaza ürün, hero, görsel kart ve logo görsellerinin küçültülmüş WebP kopyalarını
                 ({IMAGE_VARIANT_WIDTHS.join(', ')} px) gösterir. Kopyası olmayan görsel önce boşa istenir, sonra orijinale düşer.
-                Buradan eksikleri bulup bu tarayıcıda oluşturabilirsin.
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                Bu kopyalar artık kendiliğinden oluşturulur: yüklediğin her görselin kopyaları yüklemeden hemen sonra sunucuda
+                yapılır, her sabah da eksik kalanlar taranıp tamamlanır. Bir sorun olursa Sistem kayıtları sayfasında görünür.
+                Aşağıdaki düğmeler yalnızca yedek yol: eksikleri bulup bu tarayıcıda hemen oluşturmak istersen kullan.
             </p>
             <p className="mt-2 text-sm text-slate-600">
                 Varyantlar mağazada şu an: <span className="font-semibold">{IMAGE_VARIANTS_ENABLED ? 'açık' : 'kapalı'}</span>
