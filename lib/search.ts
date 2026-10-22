@@ -303,7 +303,8 @@ export interface FacetDefinition {
     test: (normName: string) => boolean
 }
 
-const wattOf = (norm: string): number => {
+/** Highest "NNw" wattage in a folded, punctuation-free name (0 when none). */
+export const wattOf = (norm: string): number => {
     let max = 0
     for (const m of norm.matchAll(/(?:^|\s)(\d{2,3})\s?w(?=\s|$)/g)) max = Math.max(max, parseInt(m[1], 10))
     return max

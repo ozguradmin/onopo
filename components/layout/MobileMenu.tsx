@@ -20,7 +20,7 @@ import { useStoreData } from "@/components/layout/store-data"
 import { useShellUI } from "@/components/layout/shell-ui"
 import { Drawer } from "./Drawer"
 import { CategoryIcon } from "./CategoryIcon"
-import { ShellLink } from "./MegaMenu"
+import { ShellLink, useActiveNavHref } from "./MegaMenu"
 import { buildMenuTree, CONNECTOR_LINKS, normalizeHref, PRODUCT_TYPE_LINKS, SUPPORT_LINKS, telHref, whatsappHref } from "./nav-data"
 
 type AuthState = { status: 'unknown' } | { status: 'out' } | { status: 'in'; name: string }
@@ -53,7 +53,8 @@ function useAuthOnOpen(open: boolean): AuthState {
     return auth
 }
 
-const ROW = 'flex min-h-[52px] items-center gap-3 px-4 text-[15px] font-medium text-ink transition-colors active:bg-surface hover:bg-surface'
+// aria-current rows (the page you are on) get the brand tint
+const ROW = 'flex min-h-[52px] items-center gap-3 px-4 text-[15px] font-medium text-ink transition-colors active:bg-surface hover:bg-surface aria-[current=page]:bg-brand-50 aria-[current=page]:text-brand-700'
 
 export function MobileMenu() {
     const open = useShellUI(s => s.menuOpen)
@@ -69,6 +70,15 @@ export function MobileMenu() {
         return l.href !== '#categories' && href !== '/' && href !== '/products/'
     })
     const whatsapp = whatsappHref(settings.whatsapp_number)
+    // "You are here" across the drawer's links, query-aware (Yeni Gelenler vs Tüm ürünler)
+    const active = useActiveNavHref([
+        ...categories.map(c => c.href),
+        '/products/',
+        ...tree.flatMap(m => [m.url, ...m.children.map(ch => ch.url)]),
+        ...extraLinks.map(l => l.href),
+        ...SUPPORT_LINKS.map(l => l.href),
+    ])
+    const current = (href: string | null | undefined) => (active !== null && !!href && normalizeHref(href) === active ? 'page' as const : undefined)
 
     React.useEffect(() => {
         closeMenu()
@@ -126,7 +136,7 @@ export function MobileMenu() {
                         <ul>
                             {categories.map(c => (
                                 <li key={c.id}>
-                                    <Link href={c.href} prefetch={false} onClick={closeMenu} className={ROW}>
+                                    <Link href={c.href} prefetch={false} onClick={closeMenu} aria-current={current(c.href)} className={ROW}>
                                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600" aria-hidden="true">
                                             <CategoryIcon name={c.icon} className="h-[18px] w-[18px]" />
                                         </span>
@@ -137,7 +147,7 @@ export function MobileMenu() {
                                 </li>
                             ))}
                             <li>
-                                <Link href="/products/" prefetch={false} onClick={closeMenu} className={cn(ROW, 'font-semibold text-brand-600')}>
+                                <Link href="/products/" prefetch={false} onClick={closeMenu} aria-current={current('/products/')} className={cn(ROW, 'font-semibold text-brand-600')}>
                                     <span className="flex-1">Tüm ürünler</span>
                                     <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
                                 </Link>
@@ -154,7 +164,7 @@ export function MobileMenu() {
                                         {!m.url || m.url.trim() === '#' ? (
                                             <p className="type-micro px-4 pb-1 pt-3 text-muted">{m.title}</p>
                                         ) : (
-                                            <ShellLink href={m.url} onClick={closeMenu} className={cn(ROW, 'font-semibold')}>
+                                            <ShellLink href={m.url} onClick={closeMenu} aria-current={current(m.url)} className={cn(ROW, 'font-semibold')}>
                                                 <span className="flex-1">{m.title}</span>
                                                 <ChevronRight className="h-4 w-4 text-subtle" aria-hidden="true" />
                                             </ShellLink>
@@ -163,7 +173,7 @@ export function MobileMenu() {
                                             <ul className="pb-1">
                                                 {m.children.map(ch => (
                                                     <li key={ch.id}>
-                                                        <ShellLink href={ch.url} onClick={closeMenu} className={cn(ROW, 'min-h-11 pl-8 text-ink-2')}>
+                                                        <ShellLink href={ch.url} onClick={closeMenu} aria-current={current(ch.url)} className={cn(ROW, 'min-h-11 pl-8 text-ink-2')}>
                                                             {ch.title}
                                                         </ShellLink>
                                                     </li>
@@ -219,7 +229,7 @@ export function MobileMenu() {
                             <ul>
                                 {extraLinks.map((l, i) => (
                                     <li key={`${l.href}-${i}`}>
-                                        <ShellLink href={l.href} onClick={closeMenu} className={ROW}>
+                                        <ShellLink href={l.href} onClick={closeMenu} aria-current={current(l.href)} className={ROW}>
                                             <span className="flex-1">{l.label}</span>
                                             <ChevronRight className="h-4 w-4 text-subtle" aria-hidden="true" />
                                         </ShellLink>
@@ -237,7 +247,7 @@ export function MobileMenu() {
                         <ul>
                             {SUPPORT_LINKS.map(l => (
                                 <li key={l.href}>
-                                    <Link href={l.href} prefetch={false} onClick={closeMenu} className={cn(ROW, 'min-h-11 text-ink-2')}>
+                                    <Link href={l.href} prefetch={false} onClick={closeMenu} aria-current={current(l.href)} className={cn(ROW, 'min-h-11 text-ink-2')}>
                                         {l.label}
                                     </Link>
                                 </li>

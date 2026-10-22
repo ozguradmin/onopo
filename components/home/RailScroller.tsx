@@ -3,10 +3,14 @@
 import * as React from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { SectionHeader, type SectionHeaderProps } from '@/components/ui/SectionHeader'
 
 export interface RailScrollerProps {
-    /** Section header (server-rendered), shown left of the desktop prev/next buttons. */
-    header?: React.ReactNode
+    /**
+     * Section header. The desktop prev/next buttons go into its actions slot, next to "Tümünü gör",
+     * so link and buttons line up on the heading's line. Without a heading they sit over the list's ends.
+     */
+    heading?: Omit<SectionHeaderProps, 'actions'>
     /** Accessible name of the list (e.g. the section title). */
     label: string
     /** The <li> items (server-rendered children). */
@@ -30,7 +34,7 @@ function prefersReducedMotion(): boolean {
  * scrolling through the focusable items, never auto-scrolls. The items are server-rendered children,
  * so this island only adds the two buttons and their enabled state.
  */
-export function RailScroller({ header, label, children, className, listClassName, fitsLg = false, fitsXl = false }: RailScrollerProps) {
+export function RailScroller({ heading, label, children, className, listClassName, fitsLg = false, fitsXl = false }: RailScrollerProps) {
     const listRef = React.useRef<HTMLUListElement>(null)
     const listId = React.useId()
     // SSR state: at the start, assume more content to the right (buttons keep their space either way)
@@ -71,44 +75,60 @@ export function RailScroller({ header, label, children, className, listClassName
     }
 
     const buttonClass =
-        'inline-flex h-10 w-10 items-center justify-center rounded-full border border-line bg-white text-ink transition-colors duration-150 hover:border-ink disabled:cursor-default disabled:opacity-40 disabled:hover:border-line'
+        'h-10 w-10 items-center justify-center rounded-full border border-line bg-white text-ink transition-colors duration-150 hover:border-ink disabled:cursor-default disabled:opacity-40 disabled:hover:border-line'
+    // Desktop only, and only when the items can overflow at that width (known on the server)
+    const shown = (display: 'flex' | 'inline-flex') =>
+        cn(
+            'hidden',
+            fitsLg ? 'lg:hidden' : display === 'flex' ? 'lg:flex' : 'lg:inline-flex',
+            fitsXl ? 'xl:hidden' : display === 'flex' ? 'xl:flex' : 'xl:inline-flex',
+            !edges.overflow && 'invisible',
+        )
 
+    const prev = (className?: string) => (
+        <button
+            type="button"
+            className={cn(buttonClass, className)}
+            onClick={() => scrollPage(-1)}
+            disabled={edges.start}
+            aria-controls={listId}
+            aria-label={`${label}: önceki`}
+        >
+            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+        </button>
+    )
+    const next = (className?: string) => (
+        <button
+            type="button"
+            className={cn(buttonClass, className)}
+            onClick={() => scrollPage(1)}
+            disabled={edges.end}
+            aria-controls={listId}
+            aria-label={`${label}: sonraki`}
+        >
+            <ChevronRight className="h-5 w-5" aria-hidden="true" />
+        </button>
+    )
+
+    // With a heading: the buttons sit next to "Tümünü gör", centred on its line without making the
+    // header row taller. Without one (a compact strip): over the list's two ends, vertically centred,
+    // so they take no room of their own; a button at its end is hidden instead of greyed out.
+    const overlay = 'absolute top-1/2 z-[1] -translate-y-1/2 shadow-card disabled:invisible'
     return (
-        <div className={className}>
-            {(header || edges.overflow) && (
-                <div className="flex items-end gap-4">
-                    <div className="min-w-0 flex-1">{header}</div>
-                    <div
-                        className={cn(
-                            'mb-4 hidden shrink-0 gap-2 lg:mb-6',
-                            fitsLg ? 'lg:hidden' : 'lg:flex',
-                            fitsXl ? 'xl:hidden' : 'xl:flex',
-                            !edges.overflow && 'invisible',
-                        )}
-                    >
-                        <button
-                            type="button"
-                            className={buttonClass}
-                            onClick={() => scrollPage(-1)}
-                            disabled={edges.start}
-                            aria-controls={listId}
-                            aria-label={`${label}: önceki`}
-                        >
-                            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-                        </button>
-                        <button
-                            type="button"
-                            className={buttonClass}
-                            onClick={() => scrollPage(1)}
-                            disabled={edges.end}
-                            aria-controls={listId}
-                            aria-label={`${label}: sonraki`}
-                        >
-                            <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                        </button>
-                    </div>
-                </div>
+        <div className={cn(!heading && 'relative', className)}>
+            {heading && (
+                <SectionHeader
+                    {...heading}
+                    actions={
+                        <div className={cn(shown('flex'), 'shrink-0 gap-2', heading.href && '-my-2.5')}>
+                            {prev('inline-flex')}
+                            {next('inline-flex')}
+                        </div>
+                    }
+                />
             )}
+            {!heading && prev(cn(shown('inline-flex'), overlay, 'left-0 -translate-x-1/2'))}
+            {!heading && next(cn(shown('inline-flex'), overlay, 'right-0 translate-x-1/2'))}
             <ul
                 ref={listRef}
                 id={listId}

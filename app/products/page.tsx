@@ -10,7 +10,7 @@ import { cache } from 'react'
 import { notFound, permanentRedirect } from 'next/navigation'
 import { JsonLd } from '@/components/seo/JsonLd'
 import { ListingView } from '@/components/listing/ListingView'
-import { listingQueryString, parseListingState, type ListingState } from '@/components/listing/listing-state'
+import { activeFilterCount, listingQueryString, parseListingState, type ListingState } from '@/components/listing/listing-state'
 import { getActiveProducts } from '@/lib/catalog'
 import { catalogueIntro, loadListing } from '@/lib/listing-data'
 import { breadcrumbJsonLd, buildMetadata, itemListJsonLd, listingMetaDescription, productPath } from '@/lib/seo'
@@ -46,6 +46,15 @@ function lowestPrice(prices: number[]): number | undefined {
     return valid.length ? Math.min(...valid) : undefined
 }
 
+/**
+ * "Yeni Gelenler" (the menus' /products/?sort=newest, formerly /new/): newest first with no search, no
+ * filter and no unknown ?category=. It is named after the menu item; robots and canonical stay those
+ * of any sort variant (noindex, follow; no canonical).
+ */
+function isNewArrivals(sp: SearchParams, state: ListingState): boolean {
+    return state.sort === 'newest' && !state.q.trim() && activeFilterCount(state) === 0 && !categoryParam(sp)
+}
+
 function isNoindex(sp: SearchParams, state: ListingState, total: number, pageSize: number) {
     const ls = listingSeo(sp, { totalItems: total, pageSize })
     return { ls, noindex: ls.noindex || state.discounted || state.inStock }
@@ -59,7 +68,8 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     const { ls, noindex } = isNoindex(sp, state, data.result.total, data.pageSize)
     if (ls.outOfRange) return {}
     const q = state.q.trim()
-    const title = q ? `«${q}» için arama sonuçları` : ls.page > 1 ? `Tüm Ürünler - Sayfa ${ls.page}` : 'Tüm Ürünler'
+    const name = isNewArrivals(sp, state) ? 'Yeni Gelenler' : 'Tüm Ürünler'
+    const title = q ? `«${q}» için arama sonuçları` : ls.page > 1 ? `${name} - Sayfa ${ls.page}` : name
     const description = listingMetaDescription(
         {
             count: q ? data.result.total : all.length,
@@ -86,9 +96,12 @@ export default async function ProductsPage({ searchParams }: PageProps) {
     const q = state.q.trim()
     const unknownCategory = categoryParam(sp)
     const intro = q ? null : await catalogueIntro()
+    const newArrivals = isNewArrivals(sp, state)
     const breadcrumb = q
         ? [{ label: 'Anasayfa', href: '/' }, { label: 'Tüm Ürünler', href: BASE_PATH }, { label: 'Arama' }]
-        : [{ label: 'Anasayfa', href: '/' }, { label: 'Tüm Ürünler' }]
+        : newArrivals
+          ? [{ label: 'Anasayfa', href: '/' }, { label: 'Tüm Ürünler', href: BASE_PATH }, { label: 'Yeni Gelenler' }]
+          : [{ label: 'Anasayfa', href: '/' }, { label: 'Tüm Ürünler' }]
 
     const start = (data.result.page - 1) * data.pageSize + 1
     const jsonLd = noindex
@@ -103,7 +116,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
             {jsonLd && <JsonLd data={jsonLd} />}
             <ListingView
                 data={data}
-                h1={q ? <>Arama: “{q}”</> : 'Tüm Ürünler'}
+                h1={q ? <>Arama: “{q}”</> : newArrivals ? 'Yeni Gelenler' : 'Tüm Ürünler'}
                 intro={intro}
                 breadcrumb={breadcrumb}
                 searchPlaceholder="Ürün, model veya cihaz ara"

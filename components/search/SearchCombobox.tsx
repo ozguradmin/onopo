@@ -697,7 +697,10 @@ function SearchPopup(props: SearchPopupProps) {
                     {...common(all.i, all.opt)}
                     className={cn(
                         'mt-1 flex min-h-12 items-center justify-between gap-3 rounded-card bg-surface px-3 text-sm font-semibold text-brand-600 hover:text-brand-700 aria-selected:bg-brand-50',
-                        props.variant === 'desktop' && 'sticky bottom-0 shadow-[0_-8px_16px_-8px_rgb(11_18_32/0.12)]',
+                        // Sticky in the dropdown's scroller, pinned over its 8px bottom padding (-bottom-2) so no row shows
+                        // (or takes clicks) under the bar on 768px-tall screens; the white underlay (2nd shadow) fills
+                        // the rounded corners and the padding beside the bar.
+                        props.variant === 'desktop' && 'sticky -bottom-2 shadow-[0_-8px_16px_-8px_rgb(11_18_32/0.12),0_8px_0_8px_#fff]',
                     )}
                 >
                     <span className="min-w-0 truncate">

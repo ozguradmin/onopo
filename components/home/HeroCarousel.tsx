@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import { FallbackImage } from '@/components/ui/FallbackImage'
 import { cn } from '@/lib/utils'
+import { isNoindexListingHref } from '@/components/layout/nav-data'
 
 export interface HeroCarouselSlide {
     id: number
@@ -32,11 +33,11 @@ const SIZES = '(max-width: 1023px) calc(100vw - 32px), 800px'
 const LINK_CLASS =
     'inline-flex h-11 items-center gap-2 rounded-card bg-white px-4 text-sm font-semibold text-ink transition-colors duration-150 hover:bg-surface lg:h-12 lg:px-5 lg:text-[15px]'
 
-/** Internal targets navigate client-side; external ones stay plain anchors. */
+/** Internal targets navigate client-side (nofollow to noindex listing variants); external ones stay plain anchors. */
 function SlideLink({ href, children }: { href: string; children: React.ReactNode }) {
     if (isInternal(href)) {
         return (
-            <Link href={href} prefetch={false} className={LINK_CLASS}>
+            <Link href={href} prefetch={false} rel={isNoindexListingHref(href) ? 'nofollow' : undefined} className={LINK_CLASS}>
                 {children}
             </Link>
         )

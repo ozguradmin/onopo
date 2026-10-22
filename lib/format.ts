@@ -48,6 +48,24 @@ export function discountPercent(price: number, originalPrice: number | null | un
 
 export const MIN_DISCOUNT_BADGE_PERCENT = 5
 
+/** "500 ₺", "1.250 ₺", "79,99 ₺": whole amounts without decimals. */
+export function formatAmount(n: number): string {
+    return `${formatNumberTR(n, Number.isInteger(n) ? 0 : 2)} ₺`
+}
+
+/** Turkish dative suffix for a number read aloud: 40 → "a" (kırk'a), 20 → "ye" (yirmi'ye), 15 → "e". */
+export function dativeSuffixTr(n: number): string {
+    const i = Math.abs(Math.trunc(n))
+    if (i === 0) return 'a' // sıfır'a
+    if (i % 1000000 === 0) return 'a' // milyon'a
+    if (i % 1000 === 0) return 'e' // bin'e
+    if (i % 100 === 0) return 'e' // yüz'e
+    const ones: Record<number, string> = { 1: 'e', 2: 'ye', 3: 'e', 4: 'e', 5: 'e', 6: 'ya', 7: 'ye', 8: 'e', 9: 'a' }
+    const tens: Record<number, string> = { 1: 'a', 2: 'ye', 3: 'a', 4: 'a', 5: 'ye', 6: 'a', 7: 'e', 8: 'e', 9: 'a' }
+    if (i % 10 !== 0) return ones[i % 10]
+    return tens[Math.trunc(i / 10) % 10] ?? 'a'
+}
+
 /** "12 ürün" — Turkish does not pluralise after numbers. */
 export function formatCount(n: number, noun = 'ürün'): string {
     return `${formatNumberTR(n, 0)} ${noun}`

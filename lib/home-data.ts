@@ -26,7 +26,8 @@ import {
 import { categoryPath, DEFAULT_SITE_SEO, type SiteSeo } from '@/lib/seo'
 import { getSiteSeo } from '@/lib/seo-server'
 import { foldTr } from '@/lib/search'
-import { formatNumberTR } from '@/lib/format'
+import { dativeSuffixTr, formatAmount } from '@/lib/format'
+import { buildCampaigns, type Campaign } from '@/lib/campaigns'
 import { imageKey } from '@/lib/images'
 
 // ---------------------------------------------------------------------------------------------
@@ -62,7 +63,9 @@ export interface StoreStats {
 }
 
 export interface HomeIntroCopy {
+    /** The page H1 (one compact line at the top). */
     h1: string
+    /** Real-data sentence for the "Onopo Store hakkında" text near the bottom. */
     lead: string
 }
 
@@ -92,8 +95,8 @@ export interface HomeData {
     shipping: ShippingSettings
     /** Newest in-stock products, used when sections are missing or failed. */
     fallbackProducts: Product[]
-    /** "Çok Satanlar"-like category for the secondary hero CTA, if it has products. */
-    featuredCategory: { label: string; href: string } | null
+    /** Campaign banners for the slider at the top (lib/campaigns: only facts that are true now). */
+    campaigns: Campaign[]
     /** Names of the parts that failed to load (empty = everything loaded). */
     failed: string[]
 }
@@ -117,7 +120,7 @@ const TYPE_SHORTCUTS: Array<{ key: string; label: string; h1?: string; icon: str
     { key: 'supurge', label: 'Süpürge ve Parçaları', icon: 'brush-cleaning', q: 'süpürge' },
 ]
 
-/** Device / connector searches shown as chips under the H1. */
+/** Device / connector searches shown as "Cihazına göre" chips under the trust strip. */
 const DEVICE_SEARCHES: Array<{ label: string; q: string }> = [
     { label: 'iPhone', q: 'iphone' },
     { label: 'Samsung', q: 'samsung' },
@@ -136,27 +139,12 @@ function listingHref(params: { facet?: string; q?: string }): string {
     return `/products/?q=${encodeURIComponent(params.q ?? '')}`
 }
 
-/** Turkish dative suffix for a number read aloud: 40 → "a" (kırk'a), 20 → "ye" (yirmi'ye), 15 → "e". */
-export function dativeSuffixTr(n: number): string {
-    const i = Math.abs(Math.trunc(n))
-    if (i === 0) return 'a' // sıfır'a
-    if (i % 1000000 === 0) return 'a' // milyon'a
-    if (i % 1000 === 0) return 'e' // bin'e
-    if (i % 100 === 0) return 'e' // yüz'e
-    const ones: Record<number, string> = { 1: 'e', 2: 'ye', 3: 'e', 4: 'e', 5: 'e', 6: 'ya', 7: 'ye', 8: 'e', 9: 'a' }
-    const tens: Record<number, string> = { 1: 'a', 2: 'ye', 3: 'a', 4: 'a', 5: 'ye', 6: 'a', 7: 'e', 8: 'e', 9: 'a' }
-    if (i % 10 !== 0) return ones[i % 10]
-    return tens[Math.trunc(i / 10) % 10] ?? 'a'
-}
+// Moved to lib/format (lib/campaigns uses them too); re-exported for the existing importers
+export { dativeSuffixTr, formatAmount }
 
 function joinTr(items: string[]): string {
     if (items.length <= 1) return items[0] ?? ''
     return `${items.slice(0, -1).join(', ')} ve ${items[items.length - 1]}`
-}
-
-/** "500 ₺", "1.250 ₺", "79,99 ₺": whole amounts without decimals. */
-export function formatAmount(n: number): string {
-    return `${formatNumberTR(n, Number.isInteger(n) ? 0 : 2)} ₺`
 }
 
 /**
@@ -233,6 +221,18 @@ const loadPaytrActive = cache(async (): Promise<boolean> => {
     )
 })
 
+/** The admin "Neden Onopo?" delivery line (truck item), e.g. "Saat 18:00'ya kadar aynı gün kargo". */
+function dispatchLine(sections: HomeSection[]): string | null {
+    for (const s of sections) {
+        if (s.type !== 'features') continue
+        const items = Array.isArray(s.config?.items) ? (s.config.items as Array<{ icon?: unknown; title?: unknown; description?: unknown }>) : []
+        const item = items.find(i => i && (i.icon === 'truck' || /kargo|teslim/i.test(`${str(i.title)} ${str(i.description)}`)))
+        const text = str(item?.description).trim()
+        if (text) return text
+    }
+    return null
+}
+
 async function countListing(params: ListProductsParams): Promise<number> {
     const res = await listProducts({ ...params, pageSize: 1, page: 1 })
     return res.total
@@ -302,7 +302,7 @@ export const getHomeData = cache(async (): Promise<HomeData> => {
         }))
     shortcuts = [...shortcuts, ...categoryShortcuts]
 
-    // Store facts for the intro and the fallback banner
+    // Store facts for the intro text and the promo banner
     const stats: StoreStats | null = products
         ? {
             productCount: products.length,
@@ -363,12 +363,20 @@ export const getHomeData = cache(async (): Promise<HomeData> => {
         href: s.type === 'products' || s.type === 'new_products' ? sectionHref(s, categories) : undefined,
     }))
 
-    const featured = categories.find(c => /cok satan/.test(foldTr(c.name)) && c.product_count > 0)
-    const featuredCategory = featured ? { label: featured.name, href: categoryPath(featured.slug) } : null
-
     // Newest in-stock products when sections are missing (none active) or failed
     const needFallback = !sectionsRaw || !sections.some(s => (s.type === 'products' || s.type === 'new_products') && (s.products?.length ?? 0) > 0)
     const fallbackProducts = needFallback ? inStock.slice(0, 8) : []
+
+    const firstRow = sections.find(s => (s.type === 'products' || s.type === 'new_products') && (s.products?.length ?? 0) > 0)
+    const campaigns = products
+        ? buildCampaigns({
+            products,
+            freeShippingThreshold: shipping.freeShippingThreshold,
+            dispatchText: dispatchLine(sections),
+            maxInstallments,
+            spotlight: firstRow?.products ?? fallbackProducts,
+        })
+        : []
 
     return {
         sections,
@@ -381,7 +389,7 @@ export const getHomeData = cache(async (): Promise<HomeData> => {
         trust,
         shipping,
         fallbackProducts,
-        featuredCategory,
+        campaigns,
         failed,
     }
 })

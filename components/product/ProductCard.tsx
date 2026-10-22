@@ -60,6 +60,12 @@ export interface ProductCardProps {
     headingLevel?: 'h2' | 'h3'
     /** Desktop "Sepete Ekle" button (default true). The mobile quick-add icon is always shown. */
     showAddButton?: boolean
+    /**
+     * Compact card for the home page rows: a 5:4 image, then name, stars and price only (no eyebrow,
+     * compatibility line, spec chips or free-shipping line), and the round quick-add icon on every
+     * screen size instead of the desktop button. About 30% shorter, so two rows fit the first screen.
+     */
+    compact?: boolean
     className?: string
 }
 
@@ -95,6 +101,7 @@ export function ProductCard({
     sizes = PRODUCT_CARD_SIZES,
     headingLevel = 'h3',
     showAddButton = true,
+    compact = false,
     rating,
     className,
 }: ProductCardProps) {
@@ -133,7 +140,7 @@ export function ProductCard({
             )}
         >
             {/* Image well */}
-            <div className="relative aspect-square overflow-hidden rounded-t-card bg-white">
+            <div className={cn('relative overflow-hidden rounded-t-card bg-white', compact ? 'aspect-[5/4]' : 'aspect-square')}>
                 <ProductCardImages main={main} second={second} alt={product.name} sizes={sizes} priority={priority} eager={eager} soldOut={soldOut} />
 
                 {(soldOut || pct >= MIN_DISCOUNT_BADGE_PERCENT) && (
@@ -146,19 +153,19 @@ export function ProductCard({
                 <FavoriteButton productId={product.id} productName={product.name} className="absolute right-2 top-2" />
 
                 {!soldOut && (
-                    <QuickAddButton product={cartProduct} variant="icon" className="absolute bottom-2 right-2 lg:hidden" />
+                    <QuickAddButton product={cartProduct} variant="icon" className={cn('absolute bottom-2 right-2', !compact && 'lg:hidden')} />
                 )}
             </div>
 
             {/* Body: text on top, price block pinned to the bottom so prices line up across a row */}
-            <div className="flex flex-1 flex-col p-2.5 lg:p-3">
-                {eyebrow ? (
+            <div className={cn('flex flex-1 flex-col', compact ? 'p-2 lg:p-2.5' : 'p-2.5 lg:p-3')}>
+                {compact ? null : eyebrow ? (
                     <p className="type-micro truncate text-muted">{eyebrow}</p>
                 ) : (
                     <span className="block h-4" aria-hidden="true" />
                 )}
 
-                <Heading className={cn('type-card-title mt-1 text-ink', !compat && 'min-h-10')}>
+                <Heading className={cn('type-card-title text-ink', !compact && 'mt-1', (compact || !compat) && 'min-h-10')}>
                     <Link
                         href={href}
                         prefetch={false}
@@ -166,17 +173,17 @@ export function ProductCard({
                         aria-label={compat ? product.name : undefined}
                         className="line-clamp-2 outline-none after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:after:ring-2 focus-visible:after:ring-brand-600"
                     >
-                        {title}
+                        {compact ? displayTitle(title, compat) : title}
                     </Link>
                 </Heading>
-                {compat && (
+                {compat && !compact && (
                     // Part of the link's accessible name already (aria-label = full name)
                     <p data-card-compat="" aria-hidden="true" className="mt-0.5 truncate text-[11px] leading-4 text-muted">
                         {compat}
                     </p>
                 )}
 
-                {chips.length > 0 && (
+                {chips.length > 0 && !compact && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
                         {chips.map(c => (
                             <Badge key={c} variant="neutral">{c}</Badge>
@@ -184,18 +191,18 @@ export function ProductCard({
                     </div>
                 )}
 
-                <div className="mt-auto flex flex-col gap-1.5 pt-2">
+                <div className={cn('mt-auto flex flex-col', compact ? 'gap-1 pt-1.5' : 'gap-1.5 pt-2')}>
                     {rating !== undefined && <RatingStars rating={rating} />}
 
                     <Price price={product.price} originalPrice={product.original_price ?? null} size="card" />
 
-                    {freeShipping && !soldOut && (
+                    {freeShipping && !soldOut && !compact && (
                         <p className="flex items-center gap-1 text-xs font-semibold leading-4 text-success">
                             <Check className="h-3.5 w-3.5" aria-hidden="true" /> Kargo bedava
                         </p>
                     )}
 
-                    {showAddButton && (
+                    {showAddButton && !compact && (
                         <div className="hidden pt-1 lg:block">
                             <QuickAddButton product={cartProduct} variant="full" />
                         </div>
@@ -204,6 +211,15 @@ export function ProductCard({
             </div>
         </article>
     )
+}
+
+/**
+ * Compact cards have no muted compatibility line, so a title that splitDisplayName shortened gets
+ * its compatibility phrase back in front ("iPhone 15 uyumlu …"): on a screen protector or a cable
+ * the device is the most important word. line-clamp trims the rest.
+ */
+function displayTitle(title: string, compat: string | null | undefined): string {
+    return compat ? `${compat} ${title}` : title
 }
 
 /** One star in a 20×20 box, relative commands only (drawn from its top point). */

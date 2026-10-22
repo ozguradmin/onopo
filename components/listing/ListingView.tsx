@@ -229,7 +229,9 @@ export async function ListingView({ data, h1, intro, breadcrumb, searchPlacehold
                     <div className="mt-3 flex flex-col gap-4 lg:mt-4 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
                         <div className="min-w-0">
                             <h1 className="type-h1 break-words text-ink">{h1}</h1>
-                            <ListingIntro expandable={!!intro} className="mt-1.5 max-w-3xl text-sm leading-6 text-muted lg:text-[15px]">
+                            {/* Without an intro sentence (search results) this line is only the count, which the desktop
+                                toolbar shows next to the sort: one count per screen, so desktop hides this one */}
+                            <ListingIntro expandable={!!intro} className={cn('mt-1.5 max-w-3xl text-sm leading-6 text-muted lg:text-[15px]', !intro && 'lg:hidden')}>
                                 <span className="font-semibold tabular-nums text-ink-2">
                                     {formatNumberTR(result.total, 0)} {countLabel}
                                 </span>
