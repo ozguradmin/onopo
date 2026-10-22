@@ -811,7 +811,8 @@ export const getHomepageSections = cache(async (): Promise<HomeSection[]> => {
             } else if (cfg.selection_type === 'most_viewed') {
                 list = rankMostViewed(pool, await recentViews(), limit)
             }
-            list = orderSectionProducts(list, manual ? cfg.product_ids : undefined, cfg.order === 'random')
+            // 'most_viewed' is a ranking: a leftover "karıştır" choice from another selection never shuffles it
+            list = orderSectionProducts(list, manual ? cfg.product_ids : undefined, cfg.order === 'random' && cfg.selection_type !== 'most_viewed')
             s.products = list.slice(0, limit)
             const viewAllCategory = cfg.selection_type === 'category' && cfg.category ? await findCategory(String(cfg.category)) : null
             s.viewAllHref = viewAllCategory
