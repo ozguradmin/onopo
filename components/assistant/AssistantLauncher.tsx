@@ -10,8 +10,7 @@
  *
  * It gets out of the way (fades, pointer-events none, inert) while a toast is up (CSS, app/globals.css),
  * the cart, menu or search is open, the panel is open, a text field outside the panel has focus (the phone
- * keyboard is up) and while the visitor scrolls down; it comes back on scroll up or 600 ms after scrolling
- * stops. Its bottom offset (above the bottom nav or the PDP buy bar) also lives in app/globals.css.
+ * keyboard is up). It does NOT hide while the page scrolls (that flicker looked broken). Its bottom offset (above the bottom nav or the PDP buy bar) also lives in app/globals.css.
  *
  * The one nudge of v1: on a product page after 25 s without an add to cart, a small bubble offers help with
  * compatibility. At most once per session and 3 times per 7 days, never after 2 closes in 30 days and never
@@ -56,6 +55,9 @@ export function AssistantIcon({ className, variant = 'line' }: { className?: str
     )
 }
 
+/** The product-page nudge; tapping it sends this exact question. */
+const NUDGE_QUESTION = 'Bu ürün telefonuma uyar mı?'
+
 const INTRO_KEY = 'onopo:assistant:intro'
 const NUDGE_KEY = 'onopo:assistant:nudge'
 const NUDGE_SESSION_KEY = 'onopo:assistant:nudged'
@@ -65,7 +67,7 @@ const DAY = 24 * 60 * 60 * 1000
  * A product page ("/<slug>/"): the same rule as page-context.ts isProductPath, repeated here so the shell does
  * not carry the whole page-context module (it is only needed once the chat chunk loads).
  */
-const PRODUCT_PATH = /^\/(?!(?:admin|api|categories|kategori|login|maintenance|odeme|orders|page|product|products|profile|register|siparis-basarili|siparis-hata|help|policy|shipping|terms)\/?$)[a-z0-9-]{1,120}\/?$/
+const PRODUCT_PATH = /^\/(?!(?:admin|api|categories|kategori|kategoriler|login|maintenance|odeme|orders|page|product|products|profile|register|siparis-basarili|siparis-hata|help|policy|shipping|terms)\/?$)[a-z0-9-]{1,120}\/?$/
 
 function isTextField(el: EventTarget | null): boolean {
     if (!(el instanceof HTMLElement)) return false
@@ -91,34 +93,10 @@ export function AssistantLauncher() {
     const cartOpen = useCartStore(s => s.isOpen)
     const menuOpen = useShellUI(s => s.menuOpen)
     const searchOpen = useShellUI(s => s.searchOpen)
-    const [scrolling, setScrolling] = React.useState(false)
     const [typing, setTyping] = React.useState(false)
     const [intro, setIntro] = React.useState(false)
 
-    // Scrolling down hides it (it would cover the cards' round quick-add buttons); up or a pause brings it back
-    React.useEffect(() => {
-        let last = window.scrollY
-        let raf = 0
-        let timer: ReturnType<typeof setTimeout> | undefined
-        const onScroll = () => {
-            if (raf) return
-            raf = requestAnimationFrame(() => {
-                raf = 0
-                const y = window.scrollY
-                if (y > last + 4) setScrolling(true)
-                else if (y < last - 4) setScrolling(false)
-                last = y
-                clearTimeout(timer)
-                timer = setTimeout(() => setScrolling(false), 600)
-            })
-        }
-        window.addEventListener('scroll', onScroll, { passive: true })
-        return () => {
-            window.removeEventListener('scroll', onScroll)
-            cancelAnimationFrame(raf)
-            clearTimeout(timer)
-        }
-    }, [])
+    // It stays put while the page scrolls (owner: hiding on scroll and popping back looked broken)
 
     // A text field outside the panel has focus: the phone keyboard is up
     React.useEffect(() => {
@@ -148,7 +126,7 @@ export function AssistantLauncher() {
         return () => clearTimeout(t)
     }, [])
 
-    const hidden = visible || cartOpen || menuOpen || searchOpen || scrolling || typing
+    const hidden = visible || cartOpen || menuOpen || searchOpen || typing
     const nudge = useNudge(path, used)
     const label = hasConversation ? 'Sohbete devam et' : 'Asistana sor'
 
@@ -162,16 +140,30 @@ export function AssistantLauncher() {
             )}
         >
             {nudge.show && !hidden && (
+                // Tapping the bubble asks the question right away (owner): the panel opens and sends it, and the
+                // assistant answers for this product (or first asks which phone, when it does not know yet)
                 <div
                     aria-hidden="true"
                     onClick={() => {
                         nudge.hide()
-                        openAssistant({ source: 'nudge' })
+                        openAssistant({ source: 'nudge', prompt: NUDGE_QUESTION })
                     }}
                     onPointerDown={preloadAssistant}
-                    className="absolute bottom-full right-0 mb-2 flex w-max max-w-[240px] cursor-pointer items-start gap-1 rounded-card border border-line bg-white py-2.5 pl-3 pr-1 text-[13px] leading-5 text-ink-2 shadow-overlay"
+                    className="animate-ai-launcher-in absolute bottom-full right-0 mb-3 flex w-[min(272px,calc(100vw-32px))] cursor-pointer items-start gap-2.5 rounded-2xl bg-white p-3 pr-1.5 shadow-[0_14px_34px_-10px_rgb(11_18_32/0.32),0_2px_6px_rgb(11_18_32/0.08)] ring-1 ring-line/80"
                 >
-                    <span className="py-0.5">Bu ürün telefonuna uyar mı? Sor, hemen söyleyeyim.</span>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+                        <AssistantIcon className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                        <span className="block text-[14px] font-bold leading-5 text-ink">{NUDGE_QUESTION}</span>
+                        <span className="mt-0.5 block text-xs leading-4 text-muted">Dokun, hemen bakayım.</span>
+                        <span className="mt-2 inline-flex h-8 items-center gap-1 rounded-full bg-brand-600 px-3 text-xs font-semibold text-white">
+                            Asistana sor
+                            <span aria-hidden="true">→</span>
+                        </span>
+                    </span>
+                    {/* tail pointing at the launcher */}
+                    <span aria-hidden="true" className="absolute -bottom-1.5 right-6 h-3 w-3 rotate-45 bg-white shadow-[2px_2px_3px_-1px_rgb(11_18_32/0.08)]" />
                     <button
                         type="button"
                         tabIndex={-1}

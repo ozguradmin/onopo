@@ -4,7 +4,7 @@
  * Mobile bottom navigation (<768), spec §7: Ana sayfa · Kategoriler · Ara · Sepet · Hesabım.
  * Rendered once by the root shell (`fromShell`) and present in the server HTML, so its space is
  * reserved from the first paint (body has pb-16 on mobile). Only the cart badge fills in after mount.
- * - "Kategoriler" opens the menu drawer, "Ara" the full-screen search sheet, "Sepet" the cart drawer.
+ * - "Kategoriler" goes to /kategoriler/, "Ara" opens the full-screen search sheet, "Sepet" the cart drawer.
  * - Not rendered on /odeme, /siparis-basarili and /siparis-hata (LayoutProvider, and by pathname here).
  *   Slid away while a drawer, the search sheet or the assistant's phone sheet is open. display: none
  *   (so out of the tab order and the accessibility tree) on pages that render an element with
@@ -39,7 +39,6 @@ function MobileNavInner() {
     const openCart = useCartStore(s => s.openCart)
     const menuOpen = useShellUI(s => s.menuOpen)
     const searchOpen = useShellUI(s => s.searchOpen)
-    const openMenu = useShellUI(s => s.openMenu)
     // The assistant's phone sheet (< 768 px; the panel sets isSheet) covers the page like a drawer
     const assistantSheetOpen = useAssistantStore(s => s.open && !s.minimized && s.isSheet)
     const count = items.reduce((n, i) => n + (Number(i.quantity) || 0), 0)
@@ -68,17 +67,11 @@ function MobileNavInner() {
                         </Link>
                     </li>
                     <li className="flex flex-1">
-                        <button
-                            type="button"
-                            onClick={openMenu}
-                            aria-haspopup="dialog"
-                            aria-expanded={menuOpen}
-                            aria-controls="mobile-menu"
-                            className={cn(ITEM, tone(menuOpen))}
-                        >
-                            <LayoutGrid className="h-[22px] w-[22px]" aria-hidden="true" strokeWidth={1.75} />
+                        {/* The categories page (owner: the tab opened the side menu, which already has its own button) */}
+                        <Link href="/kategoriler/" prefetch={false} aria-current={path === '/kategoriler' ? 'page' : undefined} className={cn(ITEM, tone(path === '/kategoriler'))}>
+                            <LayoutGrid className="h-[22px] w-[22px]" aria-hidden="true" strokeWidth={path === '/kategoriler' ? 2.25 : 1.75} />
                             Kategoriler
-                        </button>
+                        </Link>
                     </li>
                     <li className="flex flex-1">
                         <button

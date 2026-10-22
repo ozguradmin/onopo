@@ -10,13 +10,15 @@ import * as React from 'react'
 import { CreditCard, Headset, Lock, RotateCcw, ShieldCheck, Truck, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useShellFacts, useStoreData } from '@/components/layout/store-data'
-import { formatAmountShort } from '@/components/layout/nav-data'
+import { formatAmountShort, telHref, whatsappHref } from '@/components/layout/nav-data'
 
 export interface TrustItem {
     key: string
     icon: LucideIcon
     title: string
     text: string
+    /** The text is a link (the support line: WhatsApp when the store has a mobile number, else the phone). */
+    href?: string | null
 }
 
 /** Short announcement-bar messages (or the admin override site_settings.topbar_messages). */
@@ -48,6 +50,8 @@ export function useTrustItems(): TrustItem[] {
                 ? 'Tüm siparişlerde kargo bedava'
                 : `Kargo ücreti ${formatAmountShort(shipping.shippingCost)}`
     const contact = settings.footer_phone || settings.footer_email
+    const wa = whatsappHref(settings.whatsapp_number)
+    const helpHref = wa ?? (settings.footer_phone ? telHref(settings.footer_phone) : settings.footer_email ? `mailto:${settings.footer_email}` : null)
     return [
         { key: 'ship', icon: Truck, title: 'Hızlı kargo', text: shipText },
         {
@@ -57,7 +61,13 @@ export function useTrustItems(): TrustItem[] {
             text: maxInstallments ? `256-bit SSL, PayTR altyapısı, ${maxInstallments} taksit` : '256-bit SSL ile PayTR altyapısı',
         },
         { key: 'ret', icon: RotateCcw, title: `${returnDays} gün kolay iade`, text: `Teslimattan sonra ${returnDays} gün içinde iade hakkı` },
-        { key: 'help', icon: Headset, title: 'Müşteri desteği', text: contact ? `Sorularınız için ${contact}` : 'Sipariş ve ürün sorularınız için' },
+        {
+            key: 'help',
+            icon: Headset,
+            title: 'Müşteri desteği',
+            text: wa ? "WhatsApp'tan yazın" : contact ? `Sorularınız için ${contact}` : 'Sipariş ve ürün sorularınız için',
+            href: helpHref,
+        },
     ]
 }
 
@@ -67,14 +77,24 @@ export function TrustBand({ className }: { className?: string }) {
     return (
         <section aria-label="Alışveriş güvenceleri" className={cn('border-t border-line bg-surface', className)}>
             <ul className="container-store grid grid-cols-2 gap-x-4 gap-y-5 py-6 lg:grid-cols-4 lg:gap-8 lg:py-8">
-                {items.map(({ key, icon: Icon, title, text }) => (
+                {items.map(({ key, icon: Icon, title, text, href }) => (
                     <li key={key} className="flex items-start gap-3">
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600 lg:h-11 lg:w-11" aria-hidden="true">
                             <Icon className="h-5 w-5" strokeWidth={1.75} />
                         </span>
                         <span className="min-w-0">
                             <span className="block text-sm font-semibold leading-5 text-ink">{title}</span>
-                            <span className="mt-0.5 block break-words text-[13px] leading-5 text-muted">{text}</span>
+                            {href ? (
+                                <a
+                                    href={href}
+                                    {...(href.startsWith('https://') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                                    className="mt-0.5 block break-words text-[13px] font-semibold leading-5 text-brand-600 underline-offset-2 hover:underline"
+                                >
+                                    {text}
+                                </a>
+                            ) : (
+                                <span className="mt-0.5 block break-words text-[13px] leading-5 text-muted">{text}</span>
+                            )}
                         </span>
                     </li>
                 ))}

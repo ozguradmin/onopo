@@ -39,6 +39,7 @@ const FIELD_FOR_ERROR: Record<string, string> = {
     'Telefon numarası zorunlu': 'phone',
     'Teslimat adresi için il zorunlu': 'city',
     'Teslimat adresi için ilçe zorunlu': 'district',
+    'Teslimat adresi zorunlu': 'address',
     'Fatura ili zorunlu': 'billingCity',
     'Fatura ilçesi zorunlu': 'billingDistrict',
     'Fatura adresi zorunlu': 'billingAddress',
@@ -278,6 +279,7 @@ export default function CheckoutPage() {
             if (!isValidTurkishPhone(formData.phone)) throw new Error(PHONE_INVALID)
             if (!formData.city.trim()) throw new Error('Teslimat adresi için il zorunlu')
             if (!formData.district.trim()) throw new Error('Teslimat adresi için ilçe zorunlu')
+            if (!formData.address.trim()) throw new Error('Teslimat adresi zorunlu')
             if (formData.wantsDifferentBillingAddress) {
                 if (!formData.billingCity.trim()) throw new Error('Fatura ili zorunlu')
                 if (!formData.billingDistrict.trim()) throw new Error('Fatura ilçesi zorunlu')
@@ -741,7 +743,7 @@ export default function CheckoutPage() {
                                                     placeholder="örn. Kadıköy"
                                                 />
                                             </Field>
-                                            <Field id="checkout-address" label="Adres" className="col-span-2">
+                                            <Field id="checkout-address" label="Adres" required error={fieldError('address')} className="col-span-2">
                                                 <textarea
                                                     name="address"
                                                     value={formData.address}

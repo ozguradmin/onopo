@@ -6,7 +6,6 @@ import { HomeAbout, QuickSearchChips } from '@/components/home/HomeHero'
 import { HomeProductSection, HomeSections, isProductSection, SECTION_GAP } from '@/components/home/HomeSections'
 import { ProductRail } from '@/components/home/ProductRail'
 import { ShortcutTiles } from '@/components/home/ShortcutTiles'
-import { TrustStrip } from '@/components/home/TrustStrip'
 import { SectionHeader } from '@/components/ui/SectionHeader'
 import { getActiveProducts } from '@/lib/catalog'
 import { getHomeData } from '@/lib/home-data'
@@ -119,12 +118,10 @@ export default async function Home() {
 
             {rowShortcuts.length > 0 && (
                 <section aria-labelledby="home-categories-title" className={`container-store ${SECTION_GAP}`}>
-                    <SectionHeader id="home-categories-title" title="Kategoriler" href="/products/" linkLabel="Tüm ürünler" className="mb-3 lg:mb-4" />
+                    <SectionHeader id="home-categories-title" title="Kategoriler" href="/kategoriler/" linkLabel="Tüm kategoriler" className="mb-3 lg:mb-4" />
                     <ShortcutTiles items={rowShortcuts} label="Kategoriler" />
                 </section>
             )}
-
-            <TrustStrip items={data.trust} className="mt-6 lg:mt-8" />
 
             <QuickSearchChips
                 items={data.quickSearches}
