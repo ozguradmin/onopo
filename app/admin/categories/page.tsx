@@ -134,11 +134,20 @@ export default function AdminCategoriesPage() {
 
     const handleUpdateCategory = async (id: number) => {
         try {
-            await fetch(`/api/categories/${id}`, {
+            const res = await fetch(`/api/categories/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: editName, icon: editIcon })
             })
+            if (!res.ok) {
+                // The editor stays open so the name can be corrected
+                alert(res.status === 409
+                    ? 'Bu adla bir kategori zaten var.'
+                    : res.status === 400
+                        ? 'Kategori adı boş olamaz.'
+                        : 'Kategori güncellenemedi.')
+                return
+            }
             setEditingId(null)
             fetchCategories()
         } catch (err) {
@@ -149,7 +158,8 @@ export default function AdminCategoriesPage() {
     const handleDeleteCategory = async (id: number) => {
         if (!confirm('Bu kategoriyi silmek istediğinize emin misiniz?')) return
         try {
-            await fetch(`/api/categories/${id}`, { method: 'DELETE' })
+            const res = await fetch(`/api/categories/${id}`, { method: 'DELETE' })
+            if (!res.ok) alert('Kategori silinemedi.')
             fetchCategories()
         } catch (err) {
             console.error(err)
