@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { createPasswordResetToken } from '@/lib/auth'
 import { sendAdminPasswordReset } from '@/lib/email'
-import { ADMIN_ACCOUNT_EMAIL, isLoginAlias, normalizeEmail } from '@/lib/login-alias'
+import { ADMIN_ACCOUNT_EMAIL, adminMailRecipient, isLoginAlias, normalizeEmail } from '@/lib/login-alias'
 
 // Resets the admin account (ADMIN_ACCOUNT_EMAIL). Accepted e-mails: the login alias (lib/login-alias.ts)
 // and the admin account's own e-mail. The link goes to the login alias address; when that can't be known,
-// to the ADMIN_RESET_EMAIL Worker secret or else site_settings.admin_email. It is never sent to
-// ADMIN_ACCOUNT_EMAIL itself (admin@onopo.com: that domain's mail is not the store's), so with none of
-// these set nothing is sent. The answer is always the same generic message.
+// to the ADMIN_RESET_EMAIL Worker secret or else site_settings.admin_email (adminMailRecipient, the same
+// order as the 2FA code). It is never sent to ADMIN_ACCOUNT_EMAIL itself (admin@onopo.com: that domain's
+// mail is not the store's), so with none of these set nothing is sent. The answer is always the same
+// generic message.
 
 const RESET_EXPIRES_MINUTES = 30
 // Ignore repeated requests within this window so the endpoint can't be used to flood the inbox
@@ -26,15 +27,6 @@ async function findAliasAddress(db: any, userId: number): Promise<string | null>
         if (await isLoginAlias(row.email_sent_to)) return normalizeEmail(row.email_sent_to)
     }
     return null
-}
-
-// A configured reset address, unless it is empty, malformed or the admin account's own e-mail
-function usableRecipient(value: unknown): string | null {
-    if (typeof value !== 'string') return null
-    const address = value.trim()
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) return null
-    if (normalizeEmail(address) === ADMIN_ACCOUNT_EMAIL) return null
-    return address
 }
 
 // Sends a time-limited, single-use reset link. The password itself is not changed here.
@@ -73,14 +65,7 @@ export async function POST(req: NextRequest) {
         // the ADMIN_RESET_EMAIL secret, else admin_email from site settings. Never the admin account's own
         // e-mail: with no usable address nothing is sent (the answer stays the generic one).
         const aliasAddress = typedAlias ? typedEmail : await findAliasAddress(db, user.id)
-        let recipient: string | null = aliasAddress
-        if (!recipient) recipient = usableRecipient(process.env.ADMIN_RESET_EMAIL)
-        if (!recipient) {
-            const adminEmailRow = await db.prepare(
-                "SELECT value FROM site_settings WHERE key = 'admin_email'"
-            ).first() as any
-            recipient = usableRecipient(adminEmailRow?.value)
-        }
+        const recipient = await adminMailRecipient(db, aliasAddress)
         if (!recipient) {
             console.warn('Forgot password: no reset recipient configured (ADMIN_RESET_EMAIL / admin_email), nothing sent')
             return NextResponse.json({ success: true, message: GENERIC_MESSAGE })

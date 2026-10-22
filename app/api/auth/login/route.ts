@@ -3,22 +3,13 @@ import { getDB } from '@/lib/db'
 import { comparePassword, signJWT } from '@/lib/auth'
 import { send2FACode } from '@/lib/email'
 import { readJsonBody } from '@/lib/api-request'
-import { ADMIN_ACCOUNT_EMAIL, isLoginAlias, normalizeEmail } from '@/lib/login-alias'
+import { ADMIN_ACCOUNT_EMAIL, adminMailRecipient, isLoginAlias, normalizeEmail } from '@/lib/login-alias'
 import { TWO_FACTOR_TTL_MS, ensureChallengeTable, newChallengeId, setChallengeCookie, setSessionCookies } from '../two-factor'
 
 // Generate 6-digit code (crypto RNG)
 function generate2FACode(): string {
     const [n] = crypto.getRandomValues(new Uint32Array(1))
     return (100000 + (n % 900000)).toString()
-}
-
-// A configured 2FA address, unless it is empty, malformed or the admin account's own e-mail
-function usableCodeRecipient(value: unknown): string | null {
-    if (typeof value !== 'string') return null
-    const address = value.trim()
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) return null
-    if (normalizeEmail(address) === ADMIN_ACCOUNT_EMAIL) return null
-    return address
 }
 
 export async function POST(req: NextRequest) {
@@ -56,22 +47,12 @@ export async function POST(req: NextRequest) {
             // Calculate expiry (TWO_FACTOR_TTL_MS from now)
             const expiresAt = new Date(Date.now() + TWO_FACTOR_TTL_MS).toISOString()
 
-            // Login alias: the code goes to the alias address that was typed. Otherwise it goes to admin_email
-            // from site settings (Site Ayarları), else to the ADMIN_RESET_EMAIL secret. Never to the admin
-            // account's own e-mail (admin@onopo.com: that domain's mail is not the store's); with no usable
-            // address the login stops here (the alias login still works).
-            let targetEmail: string | null = null
-            if (loginAlias) {
-                targetEmail = normalizeEmail(email)
-            } else {
-                try {
-                    const settingRow = await db.prepare("SELECT value FROM site_settings WHERE key = 'admin_email'").first() as any
-                    targetEmail = usableCodeRecipient(settingRow?.value)
-                } catch (e) {
-                    console.error('[Login] admin_email setting could not be read')
-                }
-                if (!targetEmail) targetEmail = usableCodeRecipient(process.env.ADMIN_RESET_EMAIL)
-            }
+            // Login alias: the code goes to the alias address that was typed. Otherwise to the ADMIN_RESET_EMAIL
+            // secret, else to admin_email from site settings (Site Ayarları), in the same order as the reset
+            // link (lib/login-alias.ts adminMailRecipient). Never to the admin account's own e-mail
+            // (admin@onopo.com: that domain's mail is not the store's); with no usable address the login stops
+            // here (the alias login still works).
+            const targetEmail = await adminMailRecipient(db, loginAlias ? normalizeEmail(email) : null)
             if (!targetEmail) {
                 console.warn('[Login] no 2FA recipient configured (admin_email / ADMIN_RESET_EMAIL), code not sent')
                 return NextResponse.json(
