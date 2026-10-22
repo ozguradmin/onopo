@@ -2,12 +2,20 @@ import * as React from 'react'
 import { Skeleton } from '@/components/ui/Skeleton'
 
 /**
+ * Minimum height of the short checkout views (this skeleton, the empty cart): the viewport minus the
+ * checkout header (h-14 / lg:h-[72px] + 1px border). The footer then starts at the bottom of the
+ * screen in both views, so it never jumps when the skeleton is replaced, and tall screens show no
+ * white band under the footer. svh: stable while mobile toolbars collapse.
+ */
+export const CHECKOUT_MIN_HEIGHT = 'min-h-[calc(100svh-57px)] lg:min-h-[calc(100svh-73px)]'
+
+/**
  * Placeholder with the geometry of the checkout (/odeme/): page title, mobile summary bar, form cards
  * on the left, summary card on the right. Used by app/odeme/loading.tsx and while the saved cart loads.
  */
 export function CheckoutSkeleton() {
     return (
-        <div className="min-h-[70vh] bg-surface pb-16 pt-5 lg:pt-8" role="status" aria-label="Ödeme sayfası yükleniyor">
+        <div className={`${CHECKOUT_MIN_HEIGHT} bg-surface pb-16 pt-5 lg:pt-8`} role="status" aria-label="Ödeme sayfası yükleniyor">
             <div className="container-store">
                 <div>
                     <Skeleton className="h-4 w-28" />
