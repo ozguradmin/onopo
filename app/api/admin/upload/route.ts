@@ -29,7 +29,10 @@ export async function POST(req: NextRequest) {
         }
 
         const buffer = await file.arrayBuffer()
-        const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`
+        // Timestamp + random part: two uploads in the same millisecond whose names sanitize to the same
+        // string ('ç.png' and 'ş.png' both become '.png') must not overwrite each other. Every upload gets
+        // its own key, which is what makes the immutable Cache-Control below safe.
+        const filename = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`
 
         // Get bucket via OpenNext
         const { getCloudflareContext } = await import('@opennextjs/cloudflare')
@@ -63,6 +66,8 @@ export async function POST(req: NextRequest) {
         await bucket.put(filename, buffer, {
             httpMetadata: {
                 contentType: file.type,
+                // Served as-is by images.onopostore.com; the key is never reused (see filename above)
+                cacheControl: 'public, max-age=31536000, immutable',
             }
         })
 
