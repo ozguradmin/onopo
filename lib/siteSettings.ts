@@ -10,6 +10,8 @@ export const ADMIN_ONLY_KEYS = new Set([
     'admin_email', 'admin_reset_last_sent',
     'ai_daily_budget_usd', 'ai_ship_days', 'ai_ship_cutoff', 'ai_support_hours', 'ai_campaigns',
     'ai_popular_questions_meta',
+    // Review-request e-mails on/off (Admin › Yorumlar, lib/order-reviews.ts)
+    'review_requests_enabled',
 ])
 
 // Internal bookkeeping rows that no client needs (cache_version is the edge-cache version, see worker.ts)

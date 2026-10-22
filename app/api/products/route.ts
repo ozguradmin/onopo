@@ -6,6 +6,7 @@ import { getActiveProducts, listProducts, type Product } from '@/lib/catalog'
 import { prepareQuery, searchItems } from '@/lib/search'
 import { runInBackground } from '@/lib/automation/background'
 import { refreshFactsForProducts } from '@/lib/assistant/data'
+import { GTIN_NOT_SAVED_WARNING, gtinError, normalizeGtin, writeProductGtin } from '@/lib/gtin'
 
 export const dynamic = 'force-dynamic'
 
@@ -271,6 +272,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid price value' }, { status: 400 })
         }
 
+        let gtinWarning: string | null = null
+        // Barcode (optional): 8/12/13/14 digits with a valid GS1 check digit (lib/gtin.ts)
+        const gtinProblem = gtinError(body.gtin)
+        if (gtinProblem) return NextResponse.json({ error: gtinProblem }, { status: 400 })
+
         // Generate slug from name (CRITICAL - slug column is NOT NULL)
         // Strip brand name from start and handle Turkish characters
         let nameForSlug = name
@@ -320,6 +326,10 @@ export async function POST(req: NextRequest) {
 
             // Try to update optional columns (separate for compatibility if cols missing)
             const productId = result.meta?.last_row_id
+            // Separate statement: products.gtin may not exist yet (migrations/2026-10-22-product-gtin.sql)
+            if (productId && normalizeGtin(body.gtin)) {
+                gtinWarning = (await writeProductGtin(db, Number(productId), body.gtin)) === 'no_column' ? GTIN_NOT_SAVED_WARNING : null
+            }
             // The assistant learns the new product right away (lib/assistant/facts-auto.ts), after the answer
             if (productId) await runInBackground('facts', env => refreshFactsForProducts(env, [Number(productId)]))
             if (productId && (warranty_info || delivery_info || installment_info)) {
@@ -345,7 +355,7 @@ export async function POST(req: NextRequest) {
             }, { status: 500 })
         }
 
-        return NextResponse.json({ success: true })
+        return NextResponse.json(gtinWarning ? { success: true, warning: gtinWarning } : { success: true })
 
     } catch (error: any) {
         console.error('PRODUCT POST ERROR:', error)

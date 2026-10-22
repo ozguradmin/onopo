@@ -45,6 +45,7 @@ export default function robots(): MetadataRoute.Robots {
                     '/register/',
                     '/siparis-basarili/',
                     '/siparis-hata/',
+                    '/degerlendir/',
                     '/maintenance/',
                     '/*?q=',
                     '/*&q=',

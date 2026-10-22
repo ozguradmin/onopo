@@ -3,33 +3,29 @@ import { readJsonBody } from '@/lib/api-request'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
-import { maskReviewerName } from '@/lib/product-data'
+import { listProductReviews, type ReviewsDb } from '@/lib/order-reviews'
 
 // GET: Get reviews for a product. Public: the reviewer's name is masked like on the product page
-// ("Ayşe K.") and user_id is not sent.
+// ("Ayşe K.") and user_id is not sent. Reviews written through an order's review link (no account) carry their
+// stored display name and `verified: true` (lib/order-reviews.ts).
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { id } = await params
+        const productId = parseInt(id, 10)
+        if (!Number.isSafeInteger(productId) || productId <= 0) return NextResponse.json([])
         const db = await getDB()
 
-        const { results } = await db.prepare(`
-            SELECT r.id, r.product_id, r.rating, r.comment, r.created_at, u.full_name
-            FROM reviews r 
-            LEFT JOIN users u ON r.user_id = u.id 
-            WHERE r.product_id = ? 
-            ORDER BY r.created_at DESC
-        `).bind(id).all()
-
-        const reviews = ((results || []) as any[]).map(r => ({
+        const reviews = (await listProductReviews(db as unknown as ReviewsDb, productId)).map(r => ({
             id: r.id,
             product_id: r.product_id,
             rating: r.rating,
             comment: r.comment,
             created_at: r.created_at,
-            user_name: maskReviewerName(r.full_name),
+            user_name: r.author,
+            verified: r.verified,
         }))
 
         return NextResponse.json(reviews, {

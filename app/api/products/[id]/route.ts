@@ -4,6 +4,7 @@ import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import { runInBackground } from '@/lib/automation/background'
 import { refreshFactsForProducts } from '@/lib/assistant/data'
+import { GTIN_NOT_SAVED_WARNING, gtinError, normalizeGtin, writeProductGtin } from '@/lib/gtin'
 
 // Columns only the admin product editor needs (purchase/source prices); never sent to anyone else
 const ADMIN_ONLY_COLUMNS = ['price_usd', 'cost', 'cost_price', 'purchase_price', 'buy_price']
@@ -79,6 +80,12 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             whatsapp_number,
             free_shipping
         } = body
+
+        // Barcode: only when the form sends the field (quick edits and other callers leave it untouched);
+        // empty clears it, anything else must be a valid GTIN-8/12/13/14 (lib/gtin.ts)
+        const hasGtin = Object.prototype.hasOwnProperty.call(body, 'gtin')
+        const gtinProblem = hasGtin ? gtinError(body.gtin) : null
+        if (gtinProblem) return NextResponse.json({ error: gtinProblem }, { status: 400 })
 
         // Handle USD price - if provided, it takes priority
         const safePriceUsd = price_usd !== undefined && price_usd !== null && price_usd !== ''
@@ -171,11 +178,18 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             }
         }
 
+        // Separate statement: products.gtin may not exist yet (migrations/2026-10-22-product-gtin.sql)
+        let gtinWarning: string | null = null
+        if (hasGtin && Number.isInteger(intId) && intId > 0) {
+            const stored = await writeProductGtin(db, intId, body.gtin)
+            if (stored === 'no_column' && normalizeGtin(body.gtin)) gtinWarning = GTIN_NOT_SAVED_WARNING
+        }
+
         // A changed name or description is re-learned by the assistant right away; other edits cost nothing
         // (the facts line is keyed by a hash of name + description; lib/assistant/facts-auto.ts)
         if (Number.isInteger(intId) && intId > 0) await runInBackground('facts', env => refreshFactsForProducts(env, [intId]))
 
-        return NextResponse.json({ success: true })
+        return NextResponse.json(gtinWarning ? { success: true, warning: gtinWarning } : { success: true })
 
     } catch (error: any) {
         console.error('Product update error:', error)

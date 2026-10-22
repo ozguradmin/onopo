@@ -189,7 +189,8 @@ Render with `<JsonLd data={…} />` from `components/seo/JsonLd.tsx`, on the ser
 - brand: always `"ONOPO"`. Akakçe has matched on that exact value for every product since launch, so it stays
   until Akakçe confirms a change. `productBrand()` gives the real brand ("Onopo", a spec-table brand such as
   "Ally", or none) where a page needs it.
-- `gtin8`/`gtin12`/`gtin13`/`gtin14` (by length) only for a barcode in the spec table with a valid check digit
+- `gtin8`/`gtin12`/`gtin13`/`gtin14` (by length): `products.gtin` (Admin › Ürünler "Barkod (GTIN/EAN)") when it
+  has a valid GS1 check digit, else a valid barcode from the description's spec table, else none (`lib/gtin.ts`)
 - offers:
   - `price` = `roundPrice(price).toFixed(2)`, the exact amount checkout charges
   - `priceCurrency` TRY
@@ -203,6 +204,8 @@ Render with `<JsonLd data={…} />` from `components/seo/JsonLd.tsx`, on the ser
   "shipping" page and is left out if that text no longer states a return window.
 - `aggregateRating` only when the product has reviews (pass `{ count, average }` from the `reviews` table). Never
   invent ratings.
+- `review`: up to 5 of those real reviews (newest first; author = the shown name "Ayşe K.", rating, date, text when
+  there is one), only together with `aggregateRating` (`reviewItems` on `ProductMachineData`).
 
 Validate with Google's Rich Results Test after deploy.
 
@@ -312,7 +315,7 @@ return buildMetadata({ title, description, path: '/products/', query: ls.canonic
   are never indexed.
 - Disallowed:
   - `/admin/`, `/odeme/`, `/profile/`, `/orders/`, `/login/`, `/register/`, `/siparis-basarili/`,
-    `/siparis-hata/`, `/maintenance/`
+    `/siparis-hata/`, `/degerlendir/` (personal review links), `/maintenance/`
   - `/cart?`, `/cart/`, `/checkout?`, `/checkout/`. These are the legacy links inside the hidden Akakçe block;
     the routes do not exist.
   - search, filter and sort parameters (`/*?q=`, `/*&q=`, `/*?f=`, …)
@@ -422,7 +425,7 @@ Contract details:
     reads `src` from the server HTML, so lazy loading does not affect it.
   - JSON-LD: `brand.name` stays `"ONOPO"`. New keys come after the existing ones: `offers.itemCondition`,
     `offers.shippingDetails`, `offers.hasMerchantReturnPolicy` (inside `offers`, after `seller`), then `mpn`,
-    `gtin*` and `aggregateRating` (only from real reviews) after `category`.
+    `gtin*`, `aggregateRating` and `review` (only from real reviews) after `category`.
   - Every existing key keeps its value, order and format.
 - Also part of the contract:
   - product URLs `/<slug>/` with the trailing slash, answering 200 without a redirect
@@ -461,3 +464,17 @@ Contract details:
 - Cloudflare (owner): the www/http → apex redirect is done in `worker.ts` (§1), so no Redirect Rule is needed.
   If one is ever added, it runs before the Worker and needs the same exclusions. Always Use HTTPS (the Worker
   leaves `/api/*` on http alone), and HSTS later, without includeSubDomains.
+
+## 11. Google Merchant feed (`/api/feeds/google`, items in `lib/google-feed.ts`)
+
+- Every **active** product, sold-out ones too with `g:availability` `out_of_stock` (they used to be left out).
+- `g:image_link` = first image, `g:additional_image_link` = up to 10 more; all original, absolute URLs.
+- `g:gtin` only for a valid GS1 barcode (`products.gtin`), `g:mpn` = `product_code`, `g:identifier_exists no` only
+  when there is neither.
+- `g:product_type` = category > product type ("Cep Telefonu Aksesuarları > Şarj ve Data Kablosu"); a selection
+  category ("Çok Satanlar") is dropped. `g:google_product_category` = numeric id from Google's taxonomy (version
+  2021-09-21) for unambiguous types only (screen protectors 5468, chargers/car chargers/power banks 505295, cables 259,
+  aux cables 1867, headphones 543626, vacuums 619, vacuum parts 618, printers 500106, game controllers 301, game
+  adapters 8008); left out otherwise. Rules: `classifyProduct()`; tests: `node --test scripts/feeds.test.mjs`.
+- No `g:product_highlight`/`g:product_detail`: `ai_product_facts` is AI-written free text, not reliable enough.
+- Akakçe's XML feed (`/api/feeds/akakce`) fills `<barkod>` from `products.gtin` first, then the spec table.

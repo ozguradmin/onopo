@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { preload } from 'react-dom'
 import Link from 'next/link'
-import { ArrowDown, PenLine, RotateCcw, ShieldCheck, Truck } from 'lucide-react'
+import { ArrowDown, BadgeCheck, PenLine, RotateCcw, ShieldCheck, Truck } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { Badge } from '@/components/ui/badge'
@@ -129,7 +129,7 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
     return (
         <>
             {/* Akakçe / Google contract: Product JSON-LD + hidden #product-info, once, server-rendered */}
-            <ProductMachineData product={product} site={site} reviews={reviewStats.count > 0 ? reviewStats : null} />
+            <ProductMachineData product={product} site={site} reviews={reviewStats.count > 0 ? reviewStats : null} reviewItems={reviews} />
             <JsonLd data={crumbLd} />
             {data.partial && <div hidden data-onopo-nocache="" />}
 
@@ -351,7 +351,15 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                                                         {r.author.charAt(0).toLocaleUpperCase('tr-TR')}
                                                     </span>
                                                     <div>
-                                                        <p className="text-sm font-semibold text-ink">{r.author}</p>
+                                                        <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-semibold text-ink">
+                                                            {r.author}
+                                                            {r.verified && (
+                                                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-success">
+                                                                    <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                                                                    Doğrulanmış alıcı
+                                                                </span>
+                                                            )}
+                                                        </p>
                                                         {r.created_at && <p className="text-xs text-muted">{formatDateTR(r.created_at)}</p>}
                                                     </div>
                                                 </div>

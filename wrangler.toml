@@ -49,6 +49,12 @@ name = "CHAT_RL_MODEL"
 namespace_id = "3103"
 simple = { limit = 18, period = 60 }
 
+# Review link POSTs (/api/reviews/order/, key "review:<ip>"); the signed token is the real gate
+[[ratelimits]]
+name = "REVIEW_RL"
+namespace_id = "3104"
+simple = { limit = 10, period = 60 }
+
 # Environment Variables
 [vars]
 NEXT_PUBLIC_BASE_URL = "https://onopostore.com"
