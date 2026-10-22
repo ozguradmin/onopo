@@ -96,8 +96,8 @@ export function WhatsAppCard({ card, beaconShown = true }: { card: WhatsappEvent
 }
 
 /**
- * The compact row: a small WhatsApp pill. It sits under every answer since w7 (owner decision), so it is
- * deliberately quiet (no border, one line). Also used under error rows and the "stuck" notice with a label.
+ * The compact row: a small WhatsApp pill. Every answer carries it since w7 (owner decision), but only the
+ * latest answer shows it (MessageList, visibleWhatsapp); it is deliberately quiet (no border, one line). Also used under error rows and the "stuck" notice with a label.
  */
 export function WhatsAppRow({ href, onClick, label = "Ekibimize WhatsApp'tan sor" }: { href: string; onClick?: () => void; label?: string }) {
     return (

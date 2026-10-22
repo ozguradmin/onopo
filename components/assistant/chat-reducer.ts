@@ -228,6 +228,22 @@ export function toHistory(messages: UiMessage[], max: number = LIMITS.historyMax
     return out.slice(-max)
 }
 
+/** Index of the last assistant message, or -1. */
+export function lastAssistantIndex(messages: readonly UiMessage[]): number {
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].role === 'assistant') return i
+    return -1
+}
+
+/**
+ * The WhatsApp card a message shows. A full hand-off card stays where it was sent; the compact "Ekibimize
+ * WhatsApp'tan sor" row (the server adds it to every answer) shows only under the latest assistant message,
+ * also in a restored chat, so a long chat does not collect one under every answer.
+ */
+export function visibleWhatsapp(m: UiMessage, isLatestAssistant: boolean): WhatsappEvent | null {
+    if (!m.whatsapp) return null
+    return m.whatsapp.variant === 'compact' && !isLatestAssistant ? null : m.whatsapp
+}
+
 /** Text of the visitor's last message (the summary of a WhatsApp card the UI builds itself). */
 export function lastUserText(messages: UiMessage[]): string {
     for (let i = messages.length - 1; i >= 0; i--) if (messages[i].role === 'user') return messages[i].text
