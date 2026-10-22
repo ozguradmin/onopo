@@ -62,7 +62,7 @@ export const hizliSarjGuide: Guide = {
                 {
                     type: 'ul',
                     items: [
-                        'Telefon için 60W\'lık bir USB-C to USB-C kablo fazlasıyla yeterlidir.',
+                        'Çoğu telefon için 60W\'lık (3 amper) bir USB-C to USB-C kablo yeterlidir.',
                         'Dizüstü bilgisayar için 100W veya üzeri yazan bir kablo seçin.',
                         'Lightning girişli iPhone\'lar için USB-C to Lightning kablo gerekir; USB-A to Lightning kablolarla PD hızlı şarj olmaz.',
                         'Samsung\'un 45W hızlı şarjı için 5 amper destekli bir USB-C kablo gerekir.',

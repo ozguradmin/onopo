@@ -1,7 +1,7 @@
 
 import { Resend } from 'resend'
 import { getDB } from './db'
-import type { ReviewMailResult, ReviewRequestMail } from './order-reviews'
+import { isPermanentMailError, type ReviewMailResult, type ReviewRequestMail } from './order-reviews'
 
 // Initialize Resend with API key from environment
 const resend = new Resend(process.env.RESEND_API_KEY || 're_123456789')
@@ -492,10 +492,8 @@ export const reviewRequestTemplate = (mail: ReviewRequestMail, settings: any) =>
     }
 }
 
-// Errors that are about this one address: recorded as failed and never retried. Anything else (key, quota,
-// rate limit, outage) is reported as transient so the order is tried again on another day.
-const PERMANENT_RESEND_ERRORS = new Set(['validation_error', 'invalid_to_address'])
-
+// Errors about this one address are recorded as failed and never retried (isPermanentMailError). Anything else
+// (key, sender domain, quota, rate limit, outage) is transient: the order is tried again on another day.
 export async function sendReviewRequestEmail(toEmail: string, mail: ReviewRequestMail): Promise<ReviewMailResult> {
     try {
         const settings = await getEmailSettings()
@@ -508,7 +506,8 @@ export async function sendReviewRequestEmail(toEmail: string, mail: ReviewReques
         })
         if (error) {
             const name = String((error as { name?: unknown }).name ?? '')
-            return { ok: false, permanent: PERMANENT_RESEND_ERRORS.has(name), error: `${name || 'error'}: ${String((error as { message?: unknown }).message ?? '')}` }
+            const message = String((error as { message?: unknown }).message ?? '')
+            return { ok: false, permanent: isPermanentMailError(name, message), error: `${name || 'error'}: ${message}` }
         }
         // No address in the log
         console.log(`Review request email sent for order ${mail.orderId}`)

@@ -415,3 +415,42 @@ test('names: masked display name and e-mail errors without addresses', () => {
     assert.equal(or.firstNameFromShipping(null), '')
     assert.equal(or.sanitizeMailError('Invalid `to` field: someone@example.com is bad'), 'Invalid `to` field: <e-posta> is bad')
 })
+
+test('mail errors: only a rejected recipient is permanent; sender, key and quota problems are retried', () => {
+    assert.equal(or.isPermanentMailError('validation_error', 'Invalid `to` field. The email address needs to follow the `email@example.com` format.'), true)
+    assert.equal(or.isPermanentMailError('invalid_to_address', ''), true)
+    assert.equal(or.isPermanentMailError('validation_error', 'The onopostore.com domain is not verified. Please, add and verify your domain.'), false)
+    assert.equal(or.isPermanentMailError('validation_error', 'You can only send testing emails to your own email address. To send emails to other recipients, please verify a domain.'), false)
+    assert.equal(or.isPermanentMailError('validation_error', 'Invalid `from` field.'), false)
+    assert.equal(or.isPermanentMailError('validation_error', 'API key is invalid'), false)
+    assert.equal(or.isPermanentMailError('rate_limit_exceeded', 'Too many requests'), false)
+    assert.equal(or.isPermanentMailError('daily_quota_exceeded', 'to field'), false)
+    assert.equal(or.isPermanentMailError('', ''), false)
+})
+
+test('job: three rejected addresses in a row stop the run (our sender setup, not the customers)', async () => {
+    const db = oldSchemaDb()
+    migrate(db)
+    const ids = [40, 35, 30, 25, 20].map(days => addOrder(db, { days }))
+    const logs = []
+    let calls = 0
+    const r = await or.sendReviewRequests(db, {
+        now: NOW,
+        sleep: async () => {},
+        linkFor: async id => `https://onopostore.com/degerlendir/?t=${id}`,
+        send: async () => { calls++; return { ok: false, permanent: true, error: 'validation_error: Invalid `to` field' } },
+        log: async e => { logs.push(e) },
+    })
+    assert.equal(r.stopped, 'send_failed')
+    assert.equal(calls, or.REVIEW_REQUEST_MAX_REJECTED_IN_A_ROW)
+    assert.equal(r.failed, or.REVIEW_REQUEST_MAX_REJECTED_IN_A_ROW)
+    assert.ok(logs.some(l => l.level === 'error'))
+    // The orders that were not tried stay candidates
+    const c = await or.selectReviewRequestCandidates(db, NOW)
+    assert.deepEqual(c.map(x => x.id), ids.slice(or.REVIEW_REQUEST_MAX_REJECTED_IN_A_ROW))
+})
+
+test('comments: control, zero-width and bidi override characters are removed, line breaks kept', () => {
+    const dirty = 'İyi​ ürün‮ tersine⁦⁩\u0007\r\nikinci satır\n\n\n\nson'
+    assert.equal(or.cleanReviewComment(dirty), 'İyi ürün tersine\nikinci satır\n\nson')
+})

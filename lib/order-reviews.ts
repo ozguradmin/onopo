@@ -36,6 +36,8 @@ export const REVIEW_REQUEST_SHIPPED_MIN_AGE_DAYS = 7
 /** Pause between two e-mails (Resend allows 2 requests per second). */
 export const REVIEW_REQUEST_GAP_MS = 600
 export const REVIEW_REQUESTS_SETTING = 'review_requests_enabled'
+/** This many rejected addresses in a row stop the run: the cause is then the sender, not the addresses. */
+export const REVIEW_REQUEST_MAX_REJECTED_IN_A_ROW = 3
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -274,7 +276,7 @@ export function cleanReviewComment(value: unknown): string {
     return String(value ?? '')
         .replace(/\r\n?/g, '\n')
         // eslint-disable-next-line no-control-regex
-        .replace(/[\u0000-\u0009\u000B-\u001F\u007F​-‏‪-‮⁦-⁩]/g, '')
+        .replace(/[\u0000-\u0009\u000B-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g, '')
         .replace(/\n{3,}/g, '\n\n')
         .trim()
 }
@@ -455,6 +457,21 @@ export interface ReviewRequestRun {
     failed: number
 }
 
+/**
+ * Whether a Resend error is about this one recipient (the order is recorded as failed and never retried) and not
+ * about the account, the sender domain or the service (the order is released and tried again another day).
+ * Resend answers validation_error for both kinds ("Invalid `to` field" and "The domain is not verified"), so
+ * the message decides; when in doubt it is not permanent, so no order is given up because of our own setup.
+ */
+export function isPermanentMailError(name: unknown, message: unknown): boolean {
+    const n = String(name ?? '').trim()
+    const m = String(message ?? '')
+    if (n === 'invalid_to_address') return true
+    if (n !== 'validation_error') return false
+    if (/from|domain|api[ _-]?key|testing emails|own email|quota|rate/i.test(m)) return false
+    return /`to`|to field|recipient|e-?mail address/i.test(m)
+}
+
 /** No e-mail address (or anything that looks like one) in a stored error text. */
 export function sanitizeMailError(text: unknown): string {
     return String(text ?? 'error')
@@ -491,6 +508,7 @@ export async function sendReviewRequests(db: ReviewsDb, deps: ReviewRequestDeps)
     run.candidates = candidates.length
     const sleep = deps.sleep ?? (ms => new Promise<void>(resolve => setTimeout(resolve, ms)))
     let first = true
+    let rejectedInARow = 0
     for (const c of candidates) {
         if (deps.deadline && Date.now() > deps.deadline) {
             run.stopped = 'deadline'
@@ -517,10 +535,17 @@ export async function sendReviewRequests(db: ReviewsDb, deps: ReviewRequestDeps)
         if (result.ok) {
             await db.prepare("UPDATE review_requests SET status = 'sent', sent_at = ?, error = NULL WHERE order_id = ?").bind(new Date().toISOString(), c.id).run()
             run.sent++
+            rejectedInARow = 0
         } else if (result.permanent) {
             await db.prepare("UPDATE review_requests SET status = 'failed', error = ? WHERE order_id = ?").bind(sanitizeMailError(result.error), c.id).run()
             run.failed++
             await deps.log({ source: 'reviews', level: 'warn', message: 'Bir siparişin değerlendirme e-postası gönderilemedi (adres reddedildi).', detail: sanitizeMailError(result.error), ref: `order:${c.id}` })
+            // Several rejected addresses in a row point at our sending setup: stop before more orders are given up
+            if (++rejectedInARow >= REVIEW_REQUEST_MAX_REJECTED_IN_A_ROW) {
+                await deps.log({ source: 'reviews', level: 'error', message: `Art arda ${rejectedInARow} değerlendirme e-postası reddedildi; iş durduruldu. Resend ayarlarını (gönderen alan adı) kontrol edin.`, detail: sanitizeMailError(result.error) })
+                run.stopped = 'send_failed'
+                break
+            }
         } else {
             // Not this customer's fault: give the order back and try again on another day
             await db.prepare("DELETE FROM review_requests WHERE order_id = ? AND status = 'sending'").bind(c.id).run()

@@ -184,16 +184,17 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   2. `/api/cron/update-prices/`: USD fiyatlı ürünleri ve `site_settings.last_exchange_rate/last_exchange_update`
      günceller; başarıda `cache_version` artırılır. Hata sistem kaydına yazılır, aşağıdakiler yine çalışır, çağrı en
      sonda hata fırlatır (Cloudflare panelinde "failed" görünsün).
-  3. `/api/cron/automation/?job=images` (en çok 4 dk): eksik görsel varyantları.
-  4. `/api/cron/automation/?job=facts` (kalan süre, en çok 9 dk): asistanın eksik/eski ürün bilgisi satırları,
+  3. `/api/cron/automation/?job=reviews` (en çok 2 dk): değerlendirme e-postaları (aşağıda).
+  4. `/api/cron/automation/?job=images` (en çok 4 dk): eksik görsel varyantları.
+  5. `/api/cron/automation/?job=facts` (kalan süre, en çok 9 dk): asistanın eksik/eski ürün bilgisi satırları,
      4 sn'de bir DeepSeek çağrısı (hesap sınırı 20/dk, canlı sohbetlere yer kalsın), en çok 120 ürün/gün.
-  `images`'tan önce `?job=reviews` (en çok 2 dk): değerlendirme e-postaları (aşağıda).
 
 ## Değerlendirme e-postaları ve misafir yorumları
 - `lib/order-reviews.ts`, `lib/review-link.ts`, `lib/review-requests-server.ts`. Günlük iş: durumu `completed` (ya da
   7 günden eski `shipped`), 5–45 gün önce verilmiş, e-postası olan, `review_requests` satırı olmayan siparişler; en
-  çok 20/gün, sipariş başına **bir kez** (satır önce alınır; Resend kesintisinde geri bırakılır, adres reddinde
-  `failed`). `review_requests`'te e-posta adresi tutulmaz. Admin › Yorumlar'da aç/kapa (`site_settings.review_requests_enabled`,
+  çok 20/gün, sipariş başına **bir kez** (satır önce alınır; Resend kesintisinde ya da gönderen/anahtar hatasında geri
+  bırakılır; yalnızca alıcı adresi reddedilirse `failed` (`isPermanentMailError`); art arda 3 red işi durdurur).
+  Gönderim sırasında süreç ölürse satır `sending` kalır ve o sipariş bir daha sorulmaz (iki kez göndermemek için). `review_requests`'te e-posta adresi tutulmaz. Admin › Yorumlar'da aç/kapa (`site_settings.review_requests_enabled`,
   yoksa açık) ve son 30 günün sayıları.
 - Bağlantı `https://onopostore.com/degerlendir/?t=<order>.<exp>.<HMAC>`: anahtar `JWT_SECRET + ":review-link"`,
   amaç etiketi verinin içinde, 60 gün. Secret yoksa (ya da açık kaynaktaki yedek değerse) hiç imzalanmaz/kabul edilmez.

@@ -20,7 +20,7 @@ export const aracSarjGuide: Guide = {
             id: 'toplam-guc',
             heading: 'Toplam güç ve port gücü aynı şey değil',
             blocks: [
-                { type: 'p', text: 'Ürün adındaki 40W ya da 55W gibi değerler çoğu zaman cihazın tüm portlarından aynı anda verebileceği toplam güçtür. Her portun ayrıca kendi sınırı vardır: örneğin USB-C PD port 20W, USB-A port 5 voltta 15-18W verebilir.' },
+                { type: 'p', text: 'Ürün adındaki 40W ya da 55W gibi değerler çoğu zaman cihazın tüm portlarından aynı anda verebileceği toplam güçtür. Her portun ayrıca kendi sınırı vardır: örneğin USB-C PD port 20W, USB-A port 5 voltta 12W (Quick Charge destekliyorsa 18W) verebilir.' },
                 { type: 'p', text: 'Bu yüzden teknik bilgilerde port bazındaki değerlere bakın. Tek bir telefonu ne kadar hızlı şarj edeceğini, telefonun takılı olduğu portun gücü belirler. Toplam güç ise aynı anda iki ya da üç cihaz şarj ettiğinizde önem kazanır.' },
                 { type: 'tip', text: 'Teknik bilgilerde "PD: 9V/2A" gibi bir satır görürseniz o portun gücünü kendiniz hesaplayabilirsiniz: 9 × 2 = 18W.' },
             ],
