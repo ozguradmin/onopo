@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import {
     ANONYMOUS_HTML_CACHE_CONTROL,
+    blocksRscDuringMaintenance,
     cacheKeyUrl,
     canonicalRedirect,
     isCacheablePath,
@@ -12,6 +13,7 @@ import {
     isCookieRemoval,
     isMaintenanceBody,
     isProductSlugPath,
+    isRscRequest,
     isStorableBody,
     isStorableResponse,
     isTrackingParam,
@@ -288,6 +290,25 @@ test('maintenance: the rendered marker is detected in HTML only, and only page p
         assert.equal(mayRenderMaintenance(p), false, p)
     }
     assert.deepEqual(maintenanceHeaders(), { 'Retry-After': '3600', 'X-Robots-Tag': 'noindex', 'Cache-Control': 'no-store' })
+})
+
+test('maintenance: client-side (RSC) navigations of store pages are answered 503 (worker.ts), the rest is untouched', () => {
+    const u = (p) => new URL(`https://onopostore.com${p}`)
+    assert.equal(isRscRequest(headers({ RSC: '1' }), u('/onopo-t67/')), true)
+    assert.equal(isRscRequest(headers({ rsc: '1', 'next-router-prefetch': '1' }), u('/products/')), true)
+    assert.equal(isRscRequest(headers(), u('/onopo-t67/?_rsc=1x2y3')), true)
+    assert.equal(isRscRequest(headers({ accept: 'text/html' }), u('/onopo-t67/')), false)
+    assert.equal(isRscRequest(headers(), u('/products/?page=2&rsc=1')), false)
+    for (const p of ['/', '/products/', '/onopo-t67/', '/kategori/x/', '/odeme/', '/page/help/', '/orders/', '/profile/', '/siparis-basarili/', '/product/12/']) {
+        assert.equal(blocksRscDuringMaintenance(p), true, p)
+    }
+    // admin, APIs, crawler files, Next assets and the pages LayoutProvider keeps open (login, register, maintenance)
+    for (const p of ['/admin/', '/admin', '/admin/orders/', '/api/products/', '/api/payment/callback/paytr/result', '/api/birfatura/api/orders/',
+        '/api/feeds/google', '/sitemap.xml', '/robots.txt', '/_next/static/chunks/a.js', '/login/', '/login', '/register/', '/maintenance/', '/maintenance']) {
+        assert.equal(blocksRscDuringMaintenance(p), false, p)
+    }
+    // product slugs that only start like an exempt page are store pages
+    for (const p of ['/login-sayfasi/', '/registerx/', '/maintenance-kiti/']) assert.equal(blocksRscDuringMaintenance(p), true, p)
 })
 
 test('ANONYMOUS_HTML_CACHE_CONTROL: revalidated by the browser but bfcache-eligible (no no-store)', () => {

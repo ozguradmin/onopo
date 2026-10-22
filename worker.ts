@@ -5,7 +5,8 @@
 //     its address) and put back on the Location of Next's same-origin redirects,
 //   - a conservative edge cache for anonymous public GETs (rules in lib/edge-cache.ts); anonymous cached
 //     HTML goes to the browser as 'private, no-cache' so it can use the back/forward cache,
-//   - the maintenance render answered as 503 + Retry-After + X-Robots-Tag: noindex,
+//   - the maintenance render answered as 503 + Retry-After + X-Robots-Tag: noindex (client-side navigations of
+//     tabs opened before maintenance get a plain 503, so the router loads that page),
 //   - the readable session hint cookie (lib/session-hint.ts) kept in sync with auth_token,
 //   - the cron (scheduled) handler.
 // See https://opennext.js.org/cloudflare/howtos/custom-worker
@@ -20,11 +21,13 @@ import {
     CACHE_HEADER,
     CACHE_VERSION_MEMO_MS,
     EDGE_CACHE_TTL_SECONDS,
+    blocksRscDuringMaintenance,
     cacheKeyUrl,
     canonicalRedirect,
     hasAuthCookie,
     isCacheableRequest,
     isMaintenanceBody,
+    isRscRequest,
     isStorableBody,
     isStorableResponse,
     maintenanceHeaders,
@@ -151,6 +154,15 @@ function maintenanceResponse(body: string, origin: Response): Response {
     headers.set(CACHE_HEADER, 'BYPASS')
     headers.delete('content-length')
     return new Response(body, { status: 503, statusText: 'Service Unavailable', headers })
+}
+
+// Client-side (RSC) navigation of a store page while maintenance is on (lib/edge-cache.ts
+// blocksRscDuringMaintenance): not a Flight payload, so the Next router does a full page load instead
+function maintenanceRscResponse(): Response {
+    const headers = new Headers(maintenanceHeaders())
+    headers.set('Content-Type', 'text/plain; charset=utf-8')
+    headers.set(CACHE_HEADER, 'BYPASS')
+    return new Response('Site kısa bir bakımda.', { status: 503, statusText: 'Service Unavailable', headers })
 }
 
 // Responses that are not served from or stored in the edge cache. While maintenance is on, store-page HTML
@@ -299,6 +311,11 @@ const worker = {
             handler.fetch(target, env, ctx) as Promise<Response>,
             method === 'GET' && mayRenderMaintenance(targetUrl.pathname) ? getEdgeSettings(env) : null,
         ])
+        // A client-side navigation during maintenance: the router falls back to a full page load (the 503 page)
+        if (settings?.maintenance && isRscRequest(target.headers, targetUrl) && blocksRscDuringMaintenance(targetUrl.pathname)) {
+            await response.body?.cancel().catch(() => {})
+            return finish(maintenanceRscResponse())
+        }
         return finish(await passThrough(response, targetUrl, method, settings))
     },
 

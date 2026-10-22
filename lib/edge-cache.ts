@@ -298,6 +298,24 @@ export function mayRenderMaintenance(pathname: string): boolean {
     return !CRAWLER_FILES.has(pathname)
 }
 
+// Store pages that render normally during maintenance (MAINTENANCE_EXEMPT in components/layout/LayoutProvider.tsx)
+const MAINTENANCE_EXEMPT_PAGES = /^\/(maintenance|login|register)\/?$/
+
+/** A request of the Next.js client router (navigation or prefetch): the RSC header or the _rsc parameter. */
+export function isRscRequest(headers: { has(name: string): boolean }, url: URL): boolean {
+    return headers.has('rsc') || url.searchParams.has('_rsc')
+}
+
+/**
+ * RSC requests that worker.ts answers with a plain 503 while maintenance is on. A tab opened before maintenance
+ * never re-renders the root layout on client navigations, so its RSC payloads would keep showing the store. The
+ * Next router turns a non-OK answer into a full page load (fetchServerResponse → MPA navigation), and that load
+ * gets the 503 maintenance page. /admin, APIs, crawler files and the exempt pages are left alone.
+ */
+export function blocksRscDuringMaintenance(pathname: string): boolean {
+    return mayRenderMaintenance(pathname) && !MAINTENANCE_EXEMPT_PAGES.test(pathname)
+}
+
 /** Headers of the 503 maintenance answer (the body is the maintenance render itself). */
 export function maintenanceHeaders(): Record<string, string> {
     return {
