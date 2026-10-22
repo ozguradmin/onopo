@@ -2,6 +2,7 @@
 // Run: node --test scripts/edge-cache.test.mjs   (Node 23.6+ strips the TypeScript types itself)
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readdirSync, readFileSync } from 'node:fs'
 import {
     ANONYMOUS_HTML_CACHE_CONTROL,
     cacheKeyUrl,
@@ -17,6 +18,7 @@ import {
     maintenanceHeaders,
     mayRenderMaintenance,
     needsBodyCheck,
+    restoreTrackingParams,
     sessionHintSetCookie,
     shouldBumpCacheVersion,
     stripTrackingParams,
@@ -133,14 +135,33 @@ test('cacheKeyUrl: tracking parameters dropped, the rest sorted, build and versi
 
 const TRACKING = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id', 'utm_source_platform',
     'fbclid', 'gclid', 'gclsrc', 'gbraid', 'wbraid', 'dclid', 'srsltid', '_gl', '_ga', 'msclkid', 'yclid', 'ttclid', 'twclid',
-    'igshid', 'igsh', 'mc_cid', 'mc_eid', 'li_fat_id', 'UTM_SOURCE', 'GCLID']
+    'igshid', 'igsh', 'mc_cid', 'mc_eid', 'li_fat_id', 'UTM_SOURCE', 'GCLID',
+    'gad_source', 'gad_campaignid', '_kx', 'hsa_acc', 'hsa_cam', 'hsa_grp', 'hsa_ad', 'hsa_src', 'hsa_tgt', 'hsa_kw', 'hsa_mt',
+    'hsa_net', 'hsa_ver', '_hsenc', '_hsmi', 'epik', 'rdt_cid', 'sc_cid', 'ScCid', 'irclickid', 'ysclid', 'mkt_tok']
+
+// Parameters the store itself reads (they change the output), plus near misses of the tracking names
+const STORE_PARAMS = ['q', 'f', 'sort', 'page', 'minPrice', 'maxPrice', 'discounted', 'inStock', 'category', 'cat', 'index',
+    'includeAll', 'includeInactive', 'hideEmpty', 'redirect', 'returnQ', 'returnPage', 'returnCat', 'returnSize', 'size', 'slug',
+    'search_slug', 'variationId', 'range', 'limit', 'exact', '_rsc', 'id', 'token']
+const NEAR_MISSES = ['utm', 'gl', 'ga', 'srsltid2', 'xgclid', 'gad', 'gadsource', 'hsa', 'kx', '_kxx', 'sc', 'cid', 'epikx', 'rdt', 'hsenc']
 
 test('isTrackingParam: ad/analytics click ids yes, store parameters no', () => {
     for (const p of TRACKING) assert.equal(isTrackingParam(p), true, p)
-    for (const p of ['q', 'f', 'sort', 'page', 'minPrice', 'maxPrice', 'discounted', 'inStock', 'category', 'index', 'includeAll',
-        '_rsc', 'id', 'token', 'utm', 'gl', 'ga', 'srsltid2', 'xgclid']) {
-        assert.equal(isTrackingParam(p), false, p)
+    for (const p of [...STORE_PARAMS, ...NEAR_MISSES]) assert.equal(isTrackingParam(p), false, p)
+})
+
+test('isTrackingParam: no query parameter the code reads is ever stripped', () => {
+    const root = new URL('..', import.meta.url)
+    const read = new Set()
+    for (const dir of ['app', 'components', 'lib']) {
+        for (const file of readdirSync(new URL(`${dir}/`, root), { recursive: true })) {
+            if (!/\.(tsx?|mjs)$/.test(file)) continue
+            const source = readFileSync(new URL(`${dir}/${file.replaceAll('\\', '/')}`, root), 'utf8')
+            for (const m of source.matchAll(/(?:searchParams|params)\??\.(?:get|getAll|has)\(\s*['"]([\w-]+)['"]/g)) read.add(m[1])
+        }
     }
+    assert.ok(read.has('page') && read.has('q') && read.has('redirect'), 'the scan finds the store parameters')
+    for (const p of read) assert.equal(isTrackingParam(p), false, p)
 })
 
 test('cacheKeyUrl: every tracking parameter is ignored (one key for all ad/organic landings)', () => {
@@ -165,6 +186,60 @@ test('stripTrackingParams: the URL Next renders has no tracking parameters; othe
     assert.equal(stripped?.search, '')
     // the stripped request stays cacheable exactly like the clean one
     assert.equal(isCacheableRequest(req(stripped.href)), true)
+})
+
+// Location a redirect gets when Next answered the stripped URL with `location` (worker.ts withTrackingParams)
+const restore = (href, status, location) => {
+    const url = new URL(href)
+    return restoreTrackingParams(status, location, url, stripTrackingParams(url) ?? url)
+}
+
+test('restoreTrackingParams: the trailing-slash redirect keeps the visitor query as sent', () => {
+    assert.equal(restore('https://onopostore.com/products?utm_source=nl&gclid=abc&page=2', 308, '/products/?page=2'),
+        '/products/?utm_source=nl&gclid=abc&page=2')
+    assert.equal(restore('https://onopostore.com/kategori/ok-satanlar?utm_campaign=x', 308, '/kategori/ok-satanlar/'),
+        '/kategori/ok-satanlar/?utm_campaign=x')
+    assert.equal(restore('http://127.0.0.1:8865/onopo-t67?gad_source=1&gad_campaignid=2207&gclid=z', 308, '/onopo-t67/'),
+        '/onopo-t67/?gad_source=1&gad_campaignid=2207&gclid=z')
+    assert.equal(restore('https://onopostore.com/products?q=şarj aleti&fbclid=1', 308, '/products/?q=%C5%9Farj+aleti'),
+        '/products/?q=%C5%9Farj%20aleti&fbclid=1')
+    for (const status of [301, 302, 303, 307]) {
+        assert.equal(restore('https://onopostore.com/help?utm_source=x', status, '/help/'), '/help/?utm_source=x', String(status))
+    }
+    // an absolute same-origin Location stays absolute
+    assert.equal(restore('https://onopostore.com/products?srsltid=AfmB', 308, 'https://onopostore.com/products/'),
+        'https://onopostore.com/products/?srsltid=AfmB')
+    assert.equal(restore('https://onopostore.com/products?srsltid=AfmB', 308, '//onopostore.com/products/'),
+        'https://onopostore.com/products/?srsltid=AfmB')
+})
+
+test('restoreTrackingParams: other same-origin redirects get the removed parameters appended', () => {
+    assert.equal(restore('https://onopostore.com/product/1058/?gclid=g1&utm_source=s', 301, '/onopo-t67/'),
+        '/onopo-t67/?gclid=g1&utm_source=s')
+    assert.equal(restore('https://onopostore.com/product/1058/?page=2&gclid=g1', 308, '/onopo-t67/?ref=x#yorumlar'),
+        '/onopo-t67/?ref=x&gclid=g1#yorumlar')
+    assert.equal(restore('https://onopostore.com/profile/?utm_source=nl', 307, '/login/?redirect=%2Fprofile%2F'),
+        '/login/?redirect=%2Fprofile%2F&utm_source=nl')
+})
+
+test('restoreTrackingParams: everything else is left alone', () => {
+    // nothing was stripped
+    assert.equal(restore('https://onopostore.com/products?page=2', 308, '/products/?page=2'), null)
+    // not a redirect, or no Location
+    for (const status of [200, 304, 404, 500, 503]) {
+        assert.equal(restore('https://onopostore.com/x?gclid=1', status, '/x/'), null, String(status))
+    }
+    assert.equal(restore('https://onopostore.com/x?gclid=1', 308, null), null)
+    assert.equal(restore('https://onopostore.com/x?gclid=1', 308, ''), null)
+    // other origins never receive the visitor's click ids
+    assert.equal(restore('https://onopostore.com/odeme?gclid=1', 302, 'https://www.paytr.com/odeme/guvenli/x'), null)
+    assert.equal(restore('https://onopostore.com/x?gclid=1', 302, 'https://www.onopostore.com/x/'), null)
+    assert.equal(restore('https://onopostore.com/x?gclid=1', 302, 'http://onopostore.com/x/'), null)
+    assert.equal(restore('https://onopostore.com/x?gclid=1', 302, '//evil.example/x/'), null)
+    // a target with its own tracking parameters, or the rendered URL itself (a loop), is not touched
+    assert.equal(restore('https://onopostore.com/x?gclid=1', 302, '/y/?utm_source=site'), null)
+    assert.equal(restore('https://onopostore.com/x/?gclid=1&page=2', 302, '/x/?page=2'), null)
+    assert.equal(restore('https://onopostore.com/x?gclid=1', 302, 'http://[bad'), null)
 })
 
 test('shouldBumpCacheVersion: successful content writes with a session', () => {

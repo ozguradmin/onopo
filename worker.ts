@@ -2,7 +2,7 @@
 //   - the canonical-host redirect (http -> https, www -> apex) for page GETs (not for /sitemap.xml and
 //     /robots.txt on www, which Akakçe reads there),
 //   - tracking parameters (utm_*, gclid, srsltid, ...) removed from the URL Next renders (the browser keeps
-//     its address),
+//     its address) and put back on the Location of Next's same-origin redirects,
 //   - a conservative edge cache for anonymous public GETs (rules in lib/edge-cache.ts); anonymous cached
 //     HTML goes to the browser as 'private, no-cache' so it can use the back/forward cache,
 //   - the maintenance render answered as 503 + Retry-After + X-Robots-Tag: noindex,
@@ -30,6 +30,7 @@ import {
     maintenanceHeaders,
     mayRenderMaintenance,
     needsBodyCheck,
+    restoreTrackingParams,
     sessionHintSetCookie,
     shouldBumpCacheVersion,
     stripTrackingParams,
@@ -186,6 +187,16 @@ function withSessionHint(request: Request, url: URL, response: Response): Respon
     return out
 }
 
+// A same-origin redirect of a request whose tracking parameters were stripped gets them back in its Location
+// (lib/edge-cache.ts restoreTrackingParams), e.g. Next's trailing-slash 308
+function withTrackingParams(response: Response, requestUrl: URL, renderedUrl: URL): Response {
+    const location = restoreTrackingParams(response.status, response.headers.get('location'), requestUrl, renderedUrl)
+    if (!location) return response
+    const out = new Response(response.body, response)
+    out.headers.set('Location', location)
+    return out
+}
+
 function edgeCache(): Cache | null {
     try {
         return (globalThis as any).caches?.default ?? null
@@ -264,13 +275,16 @@ const worker = {
         }
 
         // Next renders the page as if tracking parameters weren't there (the cache key ignores them too), so a
-        // stored page never carries the first visitor's click ids
+        // stored page never carries the first visitor's click ids; a redirect Next answers gets them back
+        // (withTrackingParams)
         const clean = stripTrackingParams(url)
         const target = clean ? new Request(clean.href, request) : request
         const targetUrl = clean ?? url
+        const finish = (response: Response) =>
+            withSessionHint(request, targetUrl, clean ? withTrackingParams(response, url, clean) : response)
 
         if (isCacheableRequest({ method, url: targetUrl, headers: target.headers })) {
-            return withSessionHint(request, targetUrl, await serveFromEdgeCache(target, targetUrl, env, ctx))
+            return finish(await serveFromEdgeCache(target, targetUrl, env, ctx))
         }
         // HEAD of a store page during maintenance: rendered as a GET so the 503 status and headers match
         if (method === 'HEAD' && mayRenderMaintenance(targetUrl.pathname)) {
@@ -278,14 +292,14 @@ const worker = {
             if (settings?.maintenance) {
                 const get = new Request(targetUrl.href, { method: 'GET', headers: target.headers })
                 const full = await passThrough(await handler.fetch(get, env, ctx), targetUrl, 'GET', settings)
-                return withSessionHint(request, targetUrl, new Response(null, full))
+                return finish(new Response(null, full))
             }
         }
         const [response, settings] = await Promise.all([
             handler.fetch(target, env, ctx) as Promise<Response>,
             method === 'GET' && mayRenderMaintenance(targetUrl.pathname) ? getEdgeSettings(env) : null,
         ])
-        return withSessionHint(request, targetUrl, await passThrough(response, targetUrl, method, settings))
+        return finish(await passThrough(response, targetUrl, method, settings))
     },
 
     // Triggered by [triggers] crons in wrangler.toml (0 7 * * * = 10:00 Turkey time)
