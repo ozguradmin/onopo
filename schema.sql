@@ -311,3 +311,22 @@ CREATE TABLE IF NOT EXISTS not_found_log (
 );
 CREATE INDEX IF NOT EXISTS idx_not_found_log_hits ON not_found_log(ignored, hits);
 CREATE INDEX IF NOT EXISTS idx_not_found_log_seen ON not_found_log(last_seen);
+
+-- System log, "Sistem kayıtları" in the admin (lib/system-log.ts; also created lazily there). What the automatic
+-- jobs (assistant product facts, image variants, the daily cron) could not do. The same source + message + ref
+-- within 24 h is one row (count, last_at). resolved_at = "Çözüldü" (cleared when it happens again). Rows whose
+-- last_at is older than 90 days are deleted. No customer data.
+CREATE TABLE IF NOT EXISTS system_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    source TEXT NOT NULL,                    -- redirects | facts | images | cron | assistant | other
+    level TEXT NOT NULL,                     -- error | warn | info
+    message TEXT NOT NULL,
+    detail TEXT,
+    ref TEXT,
+    count INTEGER NOT NULL DEFAULT 1,
+    last_at TEXT NOT NULL,
+    resolved_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_system_logs_last ON system_logs(last_at);
+CREATE INDEX IF NOT EXISTS idx_system_logs_key ON system_logs(source, message, last_at);

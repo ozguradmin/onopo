@@ -4,6 +4,8 @@ import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import { getActiveProducts, listProducts, type Product } from '@/lib/catalog'
 import { prepareQuery, searchItems } from '@/lib/search'
+import { runInBackground } from '@/lib/automation/background'
+import { refreshFactsForProducts } from '@/lib/assistant/data'
 
 export const dynamic = 'force-dynamic'
 
@@ -318,6 +320,8 @@ export async function POST(req: NextRequest) {
 
             // Try to update optional columns (separate for compatibility if cols missing)
             const productId = result.meta?.last_row_id
+            // The assistant learns the new product right away (lib/assistant/facts-auto.ts), after the answer
+            if (productId) await runInBackground('facts', env => refreshFactsForProducts(env, [Number(productId)]))
             if (productId && (warranty_info || delivery_info || installment_info)) {
                 try {
                     await db.prepare(

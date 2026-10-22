@@ -1,5 +1,6 @@
 import { requireAdmin } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
+import { scheduleUploadVariants } from '@/lib/image-variants-server'
 
 export async function POST(req: NextRequest) {
     const denied = await requireAdmin()
@@ -31,11 +32,14 @@ export async function POST(req: NextRequest) {
 
         // Upload to R2
         const buffer = await file.arrayBuffer()
+        const variantSource = buffer.slice(0)
         await bucket.put(key, buffer, {
             httpMetadata: {
                 contentType: file.type,
             },
         })
+        // Resized WebP copies on the server (Cloudflare Images binding); otherwise the browser makes them
+        const serverVariants = await scheduleUploadVariants(key, variantSource, file.type)
 
         // Return public R2 URL directly (to bypass /api/images/ proxy)
         // Hardcoded for now based on lib/utils.ts, ideally env var
@@ -45,7 +49,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
             success: true,
             url: url,
-            key: key
+            key: key,
+            variants: serverVariants ? 'server' : 'browser',
         })
 
     } catch (error: any) {

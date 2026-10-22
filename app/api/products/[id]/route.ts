@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
+import { runInBackground } from '@/lib/automation/background'
+import { refreshFactsForProducts } from '@/lib/assistant/data'
 
 // Columns only the admin product editor needs (purchase/source prices); never sent to anyone else
 const ADMIN_ONLY_COLUMNS = ['price_usd', 'cost', 'cost_price', 'purchase_price', 'buy_price']
@@ -168,6 +170,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
                 throw err
             }
         }
+
+        // A changed name or description is re-learned by the assistant right away; other edits cost nothing
+        // (the facts line is keyed by a hash of name + description; lib/assistant/facts-auto.ts)
+        if (Number.isInteger(intId) && intId > 0) await runInBackground('facts', env => refreshFactsForProducts(env, [intId]))
 
         return NextResponse.json({ success: true })
 

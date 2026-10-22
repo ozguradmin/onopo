@@ -3,6 +3,8 @@ import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import { slugifyTr } from '@/lib/seo'
+import { runInBackground } from '@/lib/automation/background'
+import { refreshFactsForProducts } from '@/lib/assistant/data'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,6 +52,7 @@ export async function POST(req: NextRequest) {
         let successCount = 0
         let errorCount = 0
         let errors: any[] = []
+        const insertedIds: number[] = []
 
         // Transaction-like approach (loop)
         for (const product of products) {
@@ -72,7 +75,7 @@ export async function POST(req: NextRequest) {
 
                 const numericPrice = typeof product.price === 'number' ? product.price : parseFloat(String(product.price))
 
-                await db.prepare(
+                const inserted = await db.prepare(
                     `INSERT INTO products (
                         name, slug, description, price, original_price, stock, images, category, 
                         is_active, product_code, delivery_info, whatsapp_order_enabled, whatsapp_number
@@ -92,6 +95,8 @@ export async function POST(req: NextRequest) {
                     product.whatsapp_number || '905058217547'
                 ).run()
 
+                const newId = Number(inserted.meta?.last_row_id)
+                if (Number.isInteger(newId) && newId > 0) insertedIds.push(newId)
                 successCount++
             } catch (err: any) {
                 console.error('Bulk import item error:', err)
@@ -99,6 +104,10 @@ export async function POST(req: NextRequest) {
                 errors.push({ product: product.name, error: err.message })
             }
         }
+
+        // The assistant learns the first few new products right away (what fits in waitUntil's ~30 s); the
+        // daily cron sweep writes the rest (lib/assistant/facts-auto.ts)
+        if (insertedIds.length) await runInBackground('facts', env => refreshFactsForProducts(env, insertedIds))
 
         return NextResponse.json({
             success: true,
