@@ -62,6 +62,8 @@ export function useSheetDrag({ enabled, visible, frameRef, backdropRef, scrollRe
     const gesture = React.useRef<Gesture | null>(null)
     const timer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
     const suppressClick = React.useRef(false)
+    /** sheet height, measured once when a drag starts (no layout read per pointer move) */
+    const sheetHeight = React.useRef(0)
     const onCloseRef = React.useRef(onClose)
     onCloseRef.current = onClose
 
@@ -97,13 +99,14 @@ export function useSheetDrag({ enabled, visible, frameRef, backdropRef, scrollRe
         const offset = dragOffset(dy)
         el.style.transform = `translateY(${offset}px)`
         const bd = backdropRef.current
-        if (bd) bd.style.opacity = String(backdropOpacity(offset, el.getBoundingClientRect().height))
+        if (bd) bd.style.opacity = String(backdropOpacity(offset, sheetHeight.current))
     }, [frameRef, backdropRef])
 
     const beginDrag = React.useCallback(() => {
         clearTimeout(timer.current)
         const el = frameRef.current
         if (!el) return
+        sheetHeight.current = el.getBoundingClientRect().height
         el.style.transition = 'none'
         el.style.willChange = 'transform'
         const bd = backdropRef.current
