@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { readJsonBody } from '@/lib/api-request'
 import { getDB } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth'
+import { addDays, istanbulDay, istanbulDayStartUtc } from '@/lib/analytics'
 
 // GET: Get analytics summary (admin only)
 export async function GET(req: NextRequest) {
@@ -14,14 +15,11 @@ export async function GET(req: NextRequest) {
         const url = new URL(req.url)
         const range = url.searchParams.get('range') || 'week' // day, week, month
 
-        let dateFilter = ''
-        if (range === 'day') {
-            dateFilter = "AND created_at >= datetime('now', '-1 day')"
-        } else if (range === 'week') {
-            dateFilter = "AND created_at >= datetime('now', '-7 days')"
-        } else if (range === 'month') {
-            dateFilter = "AND created_at >= datetime('now', '-30 days')"
-        }
+        // Istanbul calendar days (today = since local midnight, not the last 24 hours), the same days as the
+        // Admin › İstatistikler page (lib/analytics.ts). `since` is computed here, never taken from the request.
+        const today = istanbulDay(new Date())
+        const since = istanbulDayStartUtc(range === 'day' ? today : addDays(today, range === 'week' ? -6 : -29))
+        const dateFilter = `AND created_at >= '${since}'`
 
         // Total page views
         const totalViews = await db.prepare(
@@ -38,7 +36,7 @@ export async function GET(req: NextRequest) {
             `SELECT a.product_id, p.name, COUNT(*) as count 
              FROM analytics a 
              LEFT JOIN products p ON a.product_id = p.id 
-             WHERE a.product_id IS NOT NULL AND a.created_at >= datetime('now', '-${range === 'day' ? '1 day' : range === 'week' ? '7 days' : '30 days'}')
+             WHERE a.product_id IS NOT NULL ${dateFilter.replace('created_at', 'a.created_at')}
              GROUP BY a.product_id 
              ORDER BY count DESC 
              LIMIT 10`
@@ -46,10 +44,10 @@ export async function GET(req: NextRequest) {
 
         // Daily breakdown
         const dailyViews = await db.prepare(
-            `SELECT strftime('%Y-%m-%d', created_at) as date, COUNT(*) as count 
+            `SELECT date(created_at, '+3 hours') as date, COUNT(*) as count 
              FROM analytics 
              WHERE 1=1 ${dateFilter}
-             GROUP BY strftime('%Y-%m-%d', created_at) 
+             GROUP BY date(created_at, '+3 hours') 
              ORDER BY date DESC 
              LIMIT 30`
         ).all()

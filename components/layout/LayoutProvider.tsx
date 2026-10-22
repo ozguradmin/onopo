@@ -19,7 +19,7 @@
  *   /api/shipping-settings, so the totals always equal what the order API charges). Afterwards it follows
  *   the saved cart, except on /odeme: other tabs' changes and back/forward cache restores (watchSavedCart).
  * - Analytics: one POST /api/analytics/track per store page view, also on client-side navigations
- *   (same body as before: { page: pathname }).
+ *   ({ page: pathname }; the first one of a page load adds landing: true and document.referrer).
  * - Optional `returnDays` (CMS return window from getSiteSeo) feeds the trust badges; default 14.
  * - Onopo Asistan: the launcher (components/assistant/AssistantRoot) only while the public setting
  *   ai_assistant_enabled is on, and never on checkout. Off, nothing of it renders or loads.
@@ -39,6 +39,9 @@ import { syncSavedCart, useCartStore, watchSavedCart } from "@/store/cart-store"
 import type { PublicSiteSettings, StorefrontData } from '@/lib/catalog'
 
 const MAINTENANCE_EXEMPT = ['/maintenance', '/login', '/register']
+
+/** The first tracked page view of this page load was sent (later ones are in-site navigations). */
+let landingTracked = false
 
 /** Tells the edge cache in worker.ts not to store this response (error and fallback renders). */
 function NoEdgeCache() {
@@ -113,9 +116,12 @@ export function LayoutProvider({
     React.useEffect(() => {
         if (!showChrome) return
         try {
+            // Only the first view of a page load carries the referrer (traffic sources, lib/analytics.ts)
+            const landing = !landingTracked
+            landingTracked = true
             fetch('/api/analytics/track', {
                 method: 'POST',
-                body: JSON.stringify({ page: window.location.pathname }),
+                body: JSON.stringify(landing ? { page: window.location.pathname, landing: true, ref: document.referrer || '' } : { page: window.location.pathname }),
                 keepalive: true,
             }).catch(() => { })
         } catch {

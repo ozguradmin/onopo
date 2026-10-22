@@ -23,7 +23,8 @@ import {
     Share2,
     Mail,
     Truck,
-    Sparkles
+    Sparkles,
+    MessagesSquare
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -45,6 +46,7 @@ const navItems = [
     { href: '/admin/email', label: 'E-posta', icon: Mail },
     { href: '/admin/settings', label: 'Site Ayarları', icon: Settings },
     { href: '/admin/assistant', label: 'AI Asistan', icon: Sparkles },
+    { href: '/admin/assistant/sohbetler', label: 'Sohbetler', icon: MessagesSquare },
     { href: '/admin/image-optimization', label: 'Görsel Optimizasyonu', icon: ImageIcon },
 ]
 
@@ -86,6 +88,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const isPublicPage = PUBLIC_ADMIN_PATHS.includes(pathname.replace(/\/$/, ''))
     const router = useRouter()
     const [sidebarOpen, setSidebarOpen] = React.useState(false)
+    const currentPath = pathname.replace(/\/$/, '') || '/'
+    const activeHref = navItems
+        .filter(item => currentPath === item.href || (item.href !== '/admin' && currentPath.startsWith(`${item.href}/`)))
+        .reduce<string | null>((best, item) => (best == null || item.href.length > best.length ? item.href : best), null)
     const [user, setUser] = React.useState<any>(null)
     // Set when /api/auth/me can't be reached; the admin stays on the page and can retry
     const [authError, setAuthError] = React.useState(false)
@@ -177,8 +183,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         of all ~17 sidebar pages (each a Worker run with an auth check) */}
                     <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
                         {navItems.map(item => {
-                            const isActive = pathname === item.href ||
-                                (item.href !== '/admin' && pathname.startsWith(item.href))
+                            // The longest matching item wins, so /admin/assistant/sohbetler/ lights up
+                            // "Sohbetler" and not also "AI Asistan"
+                            const isActive = item.href === activeHref
                             return (
                                 <Link
                                     key={item.href}

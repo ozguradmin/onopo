@@ -257,3 +257,30 @@ CREATE TABLE IF NOT EXISTS ai_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_ai_messages_conv ON ai_messages(conv_id, id);
 CREATE INDEX IF NOT EXISTS idx_ai_messages_created ON ai_messages(created_at);
+
+-- Store statistics (lib/analytics.ts, lib/analytics-db.ts; also created lazily there). Additive only: the old
+-- analytics table is still written, so older code keeps working. No IP and no user agent is stored: visitor is
+-- HMAC-SHA256(salt of the month, IP + user agent), 16 hex chars; a month's salt is deleted once the month is over.
+-- day is the Europe/Istanbul day. is_bot = 1 rows (no Accept-Language) are kept out of every count.
+CREATE TABLE IF NOT EXISTS page_views (
+    id INTEGER PRIMARY KEY,
+    day TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    path TEXT NOT NULL,
+    product_id INTEGER,
+    visitor TEXT NOT NULL,
+    device_type TEXT NOT NULL,               -- phone | tablet | desktop
+    referrer_type TEXT NOT NULL,             -- internal | direct | google | social | other (first view of a visit)
+    is_bot INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_page_views_day ON page_views(day, is_bot, visitor);
+CREATE INDEX IF NOT EXISTS idx_page_views_product ON page_views(product_id, day);
+
+CREATE TABLE IF NOT EXISTS analytics_salts (
+    month TEXT PRIMARY KEY,                  -- 'YYYY-MM' (Istanbul)
+    salt TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- The admin statistics read the old table by date
+CREATE INDEX IF NOT EXISTS idx_analytics_created_at ON analytics(created_at);
