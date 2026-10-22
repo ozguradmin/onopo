@@ -57,7 +57,8 @@ const nextConfig: NextConfig = {
     const noIndexNoFollow = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }]
     return [
       { source: '/:path*', headers: securityHeaders },
-      { source: '/api/:path((?!images(?:/|$)|feeds(?:/|$)).*)', headers: noIndex },
+      // og-image redirects to the product image that link previews and Google use: no noindex on it
+      { source: '/api/:path((?!images(?:/|$)|feeds(?:/|$)|og-image(?:/|$)).*)', headers: noIndex },
       { source: `/api/:area(${privateApis})`, headers: noStore },
       { source: `/api/:area(${privateApis})/:rest*`, headers: noStore },
       // Answers admins with admin_email on the same URL: never cacheable (public subset: /api/site-settings/public)

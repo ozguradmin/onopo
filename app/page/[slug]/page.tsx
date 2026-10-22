@@ -67,7 +67,7 @@ export default async function CmsPage({ params }: { params: Params }) {
     const hasContact = !!(settings.footer_email || settings.footer_phone || whatsapp)
 
     return (
-        <div className="bg-canvas pb-14 pt-4 lg:pb-20 lg:pt-6">
+        <div className="bg-canvas pb-14 pt-4 lg:pb-16 lg:pt-6">
             <div className="container-store">
                 <Breadcrumb jsonLd items={[{ label: 'Anasayfa', href: '/' }, { label: page.title }]} />
 
