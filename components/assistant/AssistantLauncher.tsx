@@ -26,8 +26,11 @@ import { useShellUI } from '@/components/layout/shell-ui'
 import { useAssistantStore } from './assistant-store'
 import { preloadAssistant } from './preload'
 
-const BUBBLE = 'M12 4C7.03 4 3 7.25 3 11.25c0 2.05 1.05 3.9 2.77 5.21L5.2 19.6l3.53-1.6c1.03.33 2.13.5 3.27.5 4.97 0 9-3.25 9-7.25S16.97 4 12 4Z'
-const SPARKLE = 'M12 7.6c.35 2.05 1.6 3.3 3.65 3.65-2.05.35-3.3 1.6-3.65 3.65-.35-2.05-1.6-3.3-3.65-3.65 2.05-.35 3.3-1.6 3.65-3.65Z'
+/** Rounded speech bubble filling the 24 px grid (2.5…21.5 × 3…21), tail at the bottom left. */
+const BUBBLE = 'M6.5 3h11a4 4 0 0 1 4 4v7a4 4 0 0 1-4 4h-5.6l-4.25 3.2c-.53.4-1.29.02-1.29-.64V18H6.5a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4Z'
+/** Big four-point sparkle in the bubble's centre, and a small one up right: "AI" at a glance. */
+const SPARKLE = 'M11.2 5.6c.5 2.75 1.95 4.2 4.7 4.7-2.75.5-4.2 1.95-4.7 4.7-.5-2.75-1.95-4.2-4.7-4.7 2.75-.5 4.2-1.95 4.7-4.7Z'
+const SPARKLE_SMALL = 'M17.1 5.2c.2 1.05.75 1.6 1.8 1.8-1.05.2-1.6.75-1.8 1.8-.2-1.05-.75-1.6-1.8-1.8 1.05-.2 1.6-.75 1.8-1.8Z'
 
 /**
  * Chat bubble with a four-point sparkle, drawn on a 24 px grid. "line" (panel header, on a light chip): the
@@ -40,13 +43,15 @@ export function AssistantIcon({ className, variant = 'line' }: { className?: str
             <svg viewBox="0 0 24 24" className={className} aria-hidden="true" focusable="false">
                 <path d={BUBBLE} fill="currentColor" />
                 <path d={SPARKLE} className="fill-brand-600" />
+                <path d={SPARKLE_SMALL} className="fill-brand-500" />
             </svg>
         )
     }
     return (
         <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true" focusable="false">
-            <path d={BUBBLE} stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" />
+            <path d={BUBBLE} stroke="currentColor" strokeWidth={1.7} strokeLinejoin="round" />
             <path d={SPARKLE} fill="currentColor" />
+            <path d={SPARKLE_SMALL} fill="currentColor" />
         </svg>
     )
 }
@@ -194,14 +199,16 @@ export function AssistantLauncher() {
                 onPointerEnter={preloadAssistant}
                 onFocus={preloadAssistant}
                 className={cn(
-                    'animate-ai-launcher-in relative flex h-[52px] items-center justify-center gap-2 rounded-full text-white',
-                    'bg-[linear-gradient(135deg,#0090C8_0%,#0077A8_100%)] shadow-[0_8px_22px_-6px_rgb(0_119_168/0.55),0_2px_6px_rgb(11_18_32/0.12)] ring-1 ring-inset ring-white/15',
+                    'animate-ai-launcher-in relative flex h-14 items-center justify-center gap-2 rounded-full text-white',
+                    // Brand gradient with a soft top highlight, a thin white rim and a blue glow underneath
+                    'bg-[radial-gradient(120%_90%_at_30%_15%,rgb(255_255_255/0.28),transparent_55%),linear-gradient(140deg,#14A6DB_0%,#0090C8_45%,#00658F_100%)]',
+                    'shadow-[0_10px_26px_-6px_rgb(0_119_168/0.6),0_2px_6px_rgb(11_18_32/0.14)] ring-2 ring-white',
                     'transition-[scale,filter] duration-150 hover:brightness-110 active:scale-[0.96] motion-reduce:transition-none',
-                    'md:h-12 md:w-auto md:pl-3.5 md:pr-[18px]',
-                    intro ? 'px-4' : 'w-[52px]',
+                    'md:h-[52px] md:w-auto md:pl-3 md:pr-5',
+                    intro ? 'pl-3 pr-5' : 'w-14',
                 )}
             >
-                <AssistantIcon variant="solid" className="h-6 w-6 shrink-0 md:h-[22px] md:w-[22px]" />
+                <AssistantIcon variant="solid" className="h-[30px] w-[30px] shrink-0 drop-shadow-[0_1px_1px_rgb(0_60_90/0.35)] md:h-7 md:w-7" />
                 <span className={intro ? 'text-[15px] font-semibold md:hidden' : 'hidden'}>Asistan</span>
                 <span className="hidden text-[15px] font-semibold tracking-[-0.01em] md:inline">{label}</span>
                 {unread && <span aria-hidden="true" className="absolute right-0.5 top-0.5 h-3 w-3 rounded-full bg-sale ring-2 ring-white" />}
