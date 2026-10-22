@@ -8,7 +8,7 @@
  * suggestions or a WhatsApp summary.
  */
 import type { ChatRequest, ChipAction, ErrorCode, HandoffReason, HistoryMessage, PageContext, UiEventBody, UiEventType } from './contract'
-import { LIMITS } from './contract'
+import { LIMITS, maskPII } from './contract'
 
 /** Zero-width and bidi controls (U+200B–200F, U+202A–202E, U+2060–2064, U+FEFF), built from code points so the source stays ASCII. */
 const INVISIBLE = new RegExp(`[${[[0x200b, 0x200f], [0x202a, 0x202e], [0x2060, 0x2064], [0xfeff, 0xfeff]].map(([a, b]) => `${String.fromCharCode(a)}-${String.fromCharCode(b)}`).join('')}]`, 'g')
@@ -55,7 +55,8 @@ function parsePage(v: unknown): PageContext {
         case 'listing': {
             const out: { type: 'listing'; query?: string; facets?: string[] } = { type: 'listing' }
             if (typeof v.query === 'string') {
-                const q = sanitize(v.query).replace(/\s+/g, ' ').slice(0, 100)
+                // Masked like the message: the query reaches the router and the model's turn context
+                const q = maskPII(sanitize(v.query).replace(/\s+/g, ' ').slice(0, 100))
                 if (q) out.query = q
             }
             if (Array.isArray(v.facets)) {
@@ -129,7 +130,8 @@ export function parseChatRequest(body: unknown): ParseResult {
         if (typeof ctx.device !== 'string') return bad
         const d = sanitize(ctx.device).replace(/\s+/g, ' ')
         if (d.length > 40) return bad
-        device = d || null
+        // A tampered client could put anything here; it reaches the model, so it is masked like the message
+        device = maskPII(d) || null
     }
 
     return {

@@ -977,6 +977,24 @@ test('parseChatRequest: every rule of SPEC 8.1 (2)', () => {
     assert.deepEqual(ctx({ page: { type: 'weird' } }).req.context.page, { type: 'other' })
 })
 
+test('parseChatRequest masks personal data in the listing query and the device (they reach the model)', () => {
+    const ctx = over => request.parseChatRequest({ ...request0(), context: { ...request0().context, ...over } })
+    assert.deepEqual(ctx({ page: { type: 'listing', query: 'kablo 0500 000 00 11' } }).req.context.page, { type: 'listing', query: 'kablo [telefon]' })
+    assert.equal(ctx({ device: 'a@b.co' }).req.context.device, '[e-posta]')
+    assert.equal(ctx({ device: 'iPhone 15 Pro Max' }).req.context.device, 'iPhone 15 Pro Max')
+    assert.deepEqual(ctx({ page: { type: 'listing', query: 'iphone 15 type-c 1.499,99' } }).req.context.page, { type: 'listing', query: 'iphone 15 type-c 1.499,99' })
+})
+
+test('site settings: the assistant WhatsApp number is public, the other ai_* keys are admin-only', async () => {
+    const { settingsObject } = await import('../lib/siteSettings.ts')
+    const rows = [
+        { key: 'ai_whatsapp_number', value: '0500 000 00 11' }, { key: 'ai_campaigns', value: 'x' },
+        { key: 'ai_daily_budget_usd', value: '3' }, { key: 'ai_assistant_enabled', value: 'true' },
+    ]
+    assert.deepEqual(settingsObject(rows, false), { ai_whatsapp_number: '0500 000 00 11', ai_assistant_enabled: 'true' })
+    assert.equal(Object.keys(settingsObject(rows, true)).length, 4)
+})
+
 test('sanitize strips zero-width/bidi/control characters and extra newlines', () => {
     const zw = String.fromCharCode(0x200b)
     const rlo = String.fromCharCode(0x202e)
