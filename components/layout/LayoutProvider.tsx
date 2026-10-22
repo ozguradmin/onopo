@@ -161,6 +161,19 @@ export function LayoutProvider({
         return watchSavedCart()
     }, [isCheckout])
 
+    // html[data-interacted] on the first scroll, tap or key: the top bar starts rotating (app/globals.css)
+    React.useEffect(() => {
+        const root = document.documentElement
+        if (root.hasAttribute('data-interacted')) return
+        const events = ['pointerdown', 'scroll', 'keydown', 'touchstart', 'wheel'] as const
+        const mark = () => {
+            root.setAttribute('data-interacted', '')
+            events.forEach(e => window.removeEventListener(e, mark))
+        }
+        events.forEach(e => window.addEventListener(e, mark, { passive: true }))
+        return () => events.forEach(e => window.removeEventListener(e, mark))
+    }, [])
+
     // Page-view tracking (was in Footer on mount; now also counts client-side navigations)
     React.useEffect(() => {
         if (!showChrome) return

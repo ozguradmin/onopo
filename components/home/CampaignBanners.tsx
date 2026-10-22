@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { preload } from 'react-dom'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { FallbackImage } from '@/components/ui/FallbackImage'
@@ -98,7 +99,7 @@ function fromCampaign(c: Campaign): BannerSlide {
         image: photo
             ? {
                 src: `/kampanya/${photo.name}-1600.webp`,
-                srcSet: `/kampanya/${photo.name}-800.webp 800w, /kampanya/${photo.name}-1600.webp 1600w`,
+                srcSet: `/kampanya/${photo.name}-640.webp 640w, /kampanya/${photo.name}-800.webp 800w, /kampanya/${photo.name}-1200.webp 1200w, /kampanya/${photo.name}-1600.webp 1600w`,
                 focusX: photo.focusX,
                 hasText: !!photo.text,
             }
@@ -126,7 +127,8 @@ function fromHeroSlide(s: HeroSlide): BannerSlide {
  * the products still start high; the 16:9 photos keep their printed text inside the middle 70% (safe for both).
  */
 const SLIDE_CLASS = 'relative w-full shrink-0 snap-start'
-const IMAGE_SIZES = '(min-width: 1280px) 1216px, 100vw'
+// Inside container-store's 16 px gutters on phones (24 px from md: a few px over, never under)
+const IMAGE_SIZES = '(min-width: 1280px) 1216px, calc(100vw - 32px)'
 
 /** Product photos on white tiles, fanned out on the right half (until the campaign has its own photo). */
 function Artwork({ images, glow, eager }: { images: string[]; glow: string; eager: boolean }) {
@@ -228,7 +230,7 @@ function Slide({ slide, index, count }: { slide: BannerSlide; index: number; cou
     const first = index === 0
     const img = slide.image
     return (
-        <li className={SLIDE_CLASS} role="group" aria-roledescription="slayt" aria-label={`${index + 1} / ${count}`}>
+        <div className={SLIDE_CLASS} role="group" aria-roledescription="slayt" aria-label={`${index + 1} / ${count}`}>
             <Link
                 href={slide.href}
                 prefetch={false}
@@ -264,7 +266,7 @@ function Slide({ slide, index, count }: { slide: BannerSlide; index: number; cou
                 )}
                 {!img && <ArtworkText slide={slide} t={t} />}
             </Link>
-        </li>
+        </div>
     )
 }
 
@@ -276,9 +278,12 @@ function Slide({ slide, index, count }: { slide: BannerSlide; index: number; cou
 export function CampaignBanners({ campaigns, heroSlides = [], className }: { campaigns: Campaign[]; heroSlides?: HeroSlide[]; className?: string }) {
     const slides = [...heroSlides.map(fromHeroSlide), ...campaigns.map(fromCampaign)].slice(0, 6)
     if (!slides.length) return null
+    // The first slide is the LCP element on phones: ask for it from <head>, before the header and CSS are parsed
+    const lcp = slides[0].image
+    if (lcp) preload(lcp.src, { as: 'image', imageSrcSet: lcp.srcSet, imageSizes: lcp.srcSet ? IMAGE_SIZES : undefined, fetchPriority: 'high' })
     return (
-        <section aria-roledescription="carousel" aria-label="Kampanyalar" className={cn('container-store', className)}>
-            <CampaignCarousel count={slides.length} label="Kampanyalar">
+        <section aria-roledescription="karusel" aria-label="Kampanyalar" className={cn('container-store', className)}>
+            <CampaignCarousel count={slides.length}>
                 {slides.map((s, i) => (
                     <Slide key={s.key} slide={s} index={i} count={slides.length} />
                 ))}

@@ -13,14 +13,18 @@ const AUTOPLAY_MS = 5000
 
 /**
  * Swipe slider for the campaign banners at the top of the home page (components/home/CampaignBanners).
- * The slides are server-rendered <li> children; this island adds the dots, the desktop arrows and a
- * gentle autoplay. Autoplay never runs with prefers-reduced-motion, while the slider is off screen or
- * the tab is hidden, or while the pointer or focus is on it. A swipe or a control does NOT stop it (owner):
+ * The slides are server-rendered role="group" children (the section around this is the labelled carousel,
+ * the ARIA carousel pattern); this island adds the dots, the desktop arrows and a gentle autoplay. Autoplay starts
+ * with the visitor's first scroll, touch, click or key: a page that is only loaded and watched (a speed test)
+ * keeps its first slide, otherwise its last frame differs from every earlier one and Speed Index counts the
+ * page as still drawing until the slide moved (~20 s on Lighthouse's phone run). It never runs
+ * with prefers-reduced-motion, while the slider is off screen or the tab is hidden, or while the pointer
+ * or focus is on it. A swipe or a control does NOT stop it (owner):
  * it only restarts the 5 s countdown, so the next slide comes a full interval later. The pause button keeps
  * it under the visitor's control (WCAG 2.2.2).
  */
-export function CampaignCarousel({ count, label, children }: { count: number; label: string; children: React.ReactNode }) {
-    const listRef = React.useRef<HTMLUListElement>(null)
+export function CampaignCarousel({ count, children }: { count: number; children: React.ReactNode }) {
+    const listRef = React.useRef<HTMLDivElement>(null)
     const [active, setActive] = React.useState(0)
     const [edges, setEdges] = React.useState({ start: true, end: count < 2 })
     const [playing, setPlaying] = React.useState(false)
@@ -30,7 +34,7 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
     /** When the slide last changed (by autoplay or by the visitor): the countdown runs from here. */
     const lastMove = React.useRef(0)
 
-    const slideAt = (el: HTMLUListElement, i: number) => el.children[i] as HTMLElement | undefined
+    const slideAt = (el: HTMLDivElement, i: number) => el.children[i] as HTMLElement | undefined
 
     const scrollToSlide = React.useCallback((i: number, smooth = true) => {
         const el = listRef.current
@@ -74,9 +78,23 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
         }
     }, [count])
 
-    // Autoplay: on once mounted (unless reduced motion), off for good after the visitor takes over
+    // Autoplay: on at the first interaction with the page, unless reduced motion
     React.useEffect(() => {
-        if (count > 1 && !prefersReducedMotion()) setPlaying(true)
+        if (count < 2 || prefersReducedMotion()) return
+        const events = ['pointerdown', 'scroll', 'keydown', 'touchstart', 'wheel'] as const
+        let started = false
+        const start = () => {
+            if (started) return
+            started = true
+            lastMove.current = Date.now()
+            setPlaying(true)
+            cleanup()
+        }
+        const cleanup = () => {
+            events.forEach(e => window.removeEventListener(e, start))
+        }
+        events.forEach(e => window.addEventListener(e, start, { passive: true, once: true }))
+        return cleanup
     }, [count])
 
     React.useEffect(() => {
@@ -135,9 +153,8 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
             }}
             onBlurCapture={hold(false)}
         >
-            <ul
+            <div
                 ref={listRef}
-                aria-label={label}
                 // Inside the gutter, one slide per view: the neighbours are only seen while swiping
                 className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain rounded-sheet"
                 // A real swipe (not our own smooth scroll) hands control to the visitor
@@ -147,7 +164,7 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
                 }}
             >
                 {children}
-            </ul>
+            </div>
 
             {count > 1 && (
                 <>
@@ -191,7 +208,7 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
                             >
                                 <span
                                     aria-hidden="true"
-                                    className={cn('h-1.5 rounded-full transition-all duration-200', i === active ? 'w-5 bg-brand-600' : 'w-1.5 bg-line-strong')}
+                                    className={cn('h-1.5 rounded-full transition-colors duration-200', i === active ? 'w-5 bg-brand-600' : 'w-1.5 bg-line-strong')}
                                 />
                             </button>
                         ))}
