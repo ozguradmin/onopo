@@ -21,6 +21,9 @@ import { ShoppingBag, Check, CreditCard, Lock, ChevronDown, Ticket, X, Truck, Re
  * Totals come from the cart store, which uses lib/pricing.ts (exactly what the order API charges).
  */
 
+// The order API's lenient phone check answers with the same text (no-break spaces keep the example on one line)
+const PHONE_INVALID = 'Geçerli bir telefon numarası gir (örn. 0532\u00a0123\u00a045\u00a067)'
+
 // Validation messages (client and /api/orders use the same texts) → the field they belong to,
 // so the message can also be shown under that field. Display only.
 const FIELD_FOR_ERROR: Record<string, string> = {
@@ -34,6 +37,16 @@ const FIELD_FOR_ERROR: Record<string, string> = {
     'Fatura ili zorunlu': 'billingCity',
     'Fatura ilçesi zorunlu': 'billingDistrict',
     'Fatura adresi zorunlu': 'billingAddress',
+    [PHONE_INVALID]: 'phone',
+}
+
+/**
+ * Turkish phone number, checked before the order is sent (the value itself is sent exactly as typed).
+ * After removing spaces, dashes, dots and parentheses: 10 digits starting with 5 (mobile) or 2–4
+ * (landline), or the same number after a leading 0 or +90.
+ */
+function isValidTurkishPhone(value: string): boolean {
+    return /^(?:\+90|0)?[2-5]\d{9}$/.test(value.replace(/[\s().-]/g, ''))
 }
 
 /** 500 → "500 ₺", 499.9 → "499,90 ₺" */
@@ -262,6 +275,7 @@ export default function CheckoutPage() {
             if (!formData.fullName.trim()) throw new Error('Ad soyad zorunlu')
             if (!formData.email.trim()) throw new Error('E-posta zorunlu')
             if (!formData.phone.trim()) throw new Error('Telefon zorunlu')
+            if (!isValidTurkishPhone(formData.phone)) throw new Error(PHONE_INVALID)
             if (!formData.city.trim()) throw new Error('Teslimat adresi için il zorunlu')
             if (!formData.district.trim()) throw new Error('Teslimat adresi için ilçe zorunlu')
             if (formData.wantsDifferentBillingAddress) {
@@ -320,6 +334,19 @@ export default function CheckoutPage() {
     const providerName = paymentSettings?.provider === 'paytr' ? 'PayTR' : 'iyzico'
     const errorField = Object.prototype.hasOwnProperty.call(FIELD_FOR_ERROR, error) ? FIELD_FOR_ERROR[error] : undefined
     const fieldError = (name: string) => (errorField === name ? error : undefined)
+    // Phone format feedback as soon as the field is left (submit runs the same check again)
+    const [phoneBlurError, setPhoneBlurError] = React.useState('')
+    const handlePhoneBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        const value = e.target.value
+        setPhoneBlurError(value.trim() && !isValidTurkishPhone(value) ? PHONE_INVALID : '')
+    }
+    const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        handleInputChange(e)
+        if (isValidTurkishPhone(e.target.value)) {
+            setPhoneBlurError('')
+            if (error === PHONE_INVALID) setError('')
+        }
+    }
 
     // The confirmation replaces the (tall) payment view: show it from the top, also when the
     // payment was confirmed by the status polling rather than by the form submit
@@ -657,12 +684,13 @@ export default function CheckoutPage() {
                                                 placeholder="ornek@eposta.com"
                                             />
                                         </Field>
-                                        <Field id="checkout-phone" label="Telefon" required error={fieldError('phone')} hint="Kargo ve sipariş bilgilendirmesi için.">
+                                        <Field id="checkout-phone" label="Telefon" required error={fieldError('phone') || phoneBlurError || undefined} hint="Kargo ve sipariş bilgilendirmesi için.">
                                             <input
                                                 type="tel"
                                                 name="phone"
                                                 value={formData.phone}
-                                                onChange={handleInputChange}
+                                                onChange={handlePhoneChange}
+                                                onBlur={handlePhoneBlur}
                                                 required
                                                 autoComplete="tel"
                                                 className={inputClass}
