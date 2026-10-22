@@ -6,8 +6,8 @@
  * result. While a navigation is in flight the controls show the requested state (optimistic), so quick
  * taps build on each other instead of on the stale page.
  *
- * Also measures the sticky store header so the listing's own sticky parts (mobile toolbar, desktop
- * sidebar) sit right under it, whatever the header does (it may hide on scroll on mobile).
+ * The listing's own sticky parts (mobile toolbar, desktop sidebar) sit under the store header through
+ * `--header-offset`, which the header sets on <html> from its open/collapsed state (Header.tsx).
  */
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
@@ -53,7 +53,6 @@ export function ListingProvider({ basePath, state, children }: { basePath: strin
     const [kind, setKind] = React.useState<PendingKind>(null)
     const latest = React.useRef(state)
     const scrollAfter = React.useRef(false)
-    const rootRef = React.useRef<HTMLDivElement>(null)
     const committedKey = filterSignature(state) + '#' + state.page
 
     // A navigation finished (ours or someone else's, e.g. the header search): the server state wins
@@ -66,7 +65,8 @@ export function ListingProvider({ basePath, state, children }: { basePath: strin
             scrollAfter.current = false
             const el = document.getElementById(RESULTS_ID)
             if (el) {
-                const offset = parseFloat(getComputedStyle(rootRef.current ?? document.documentElement).getPropertyValue('--listing-top')) || 0
+                // Scrolling up re-opens a collapsed header: leave room for its full (layout) height
+                const offset = document.querySelector<HTMLElement>('header[data-site-header]')?.offsetHeight ?? 0
                 const top = el.getBoundingClientRect().top - offset - 64
                 if (top < 0) window.scrollBy({ top, behavior: 'auto' })
             }
@@ -97,38 +97,6 @@ export function ListingProvider({ basePath, state, children }: { basePath: strin
 
     const href = React.useCallback((next: ListingState) => listingHref(basePath, next), [basePath])
 
-    // Sticky offset: bottom edge of the store's sticky header (0 when it scrolled away or is hidden)
-    React.useEffect(() => {
-        const root = rootRef.current
-        if (!root) return
-        let frame = 0
-        let last = -1
-        const measure = () => {
-            frame = 0
-            const header = document.querySelector('body header')
-            let bottom = 0
-            if (header) {
-                const pos = getComputedStyle(header).position
-                if (pos === 'sticky' || pos === 'fixed') bottom = Math.max(0, Math.round(header.getBoundingClientRect().bottom))
-            }
-            if (bottom !== last) {
-                last = bottom
-                root.style.setProperty('--listing-top', `${bottom}px`)
-            }
-        }
-        const schedule = () => {
-            if (!frame) frame = requestAnimationFrame(measure)
-        }
-        measure()
-        window.addEventListener('scroll', schedule, { passive: true })
-        window.addEventListener('resize', schedule)
-        return () => {
-            window.removeEventListener('scroll', schedule)
-            window.removeEventListener('resize', schedule)
-            if (frame) cancelAnimationFrame(frame)
-        }
-    }, [])
-
     const value = React.useMemo<ListingContextValue>(
         () => ({
             basePath,
@@ -144,7 +112,7 @@ export function ListingProvider({ basePath, state, children }: { basePath: strin
 
     return (
         <ListingContext.Provider value={value}>
-            <div ref={rootRef} className="[--listing-top:0px]" data-listing-root="">
+            <div data-listing-root="">
                 {children}
             </div>
         </ListingContext.Provider>

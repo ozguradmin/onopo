@@ -108,6 +108,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                 breadcrumb={breadcrumb}
                 searchPlaceholder="Ürün, model veya cihaz ara"
                 searchLabel="Ürünlerde ara"
+                searchInHeader
                 notice={
                     unknownCategory ? (
                         <p className="mb-4 rounded-card bg-surface px-4 py-3 text-sm text-ink-2">

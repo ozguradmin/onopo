@@ -22,7 +22,8 @@ export function QuickChips({ facets, className }: { facets: FacetCount[]; classN
         <div className={cn('-mx-4 md:-mx-6 lg:mx-0', className)}>
             <ul
                 aria-label="Hızlı filtreler"
-                className="no-scrollbar flex snap-x gap-2 overflow-x-auto px-4 pb-0.5 md:px-6 lg:flex-wrap lg:overflow-visible lg:px-0"
+                // scroll-padding = the gutter, so snapping keeps the first chip off the screen edge
+                className="no-scrollbar flex snap-x scroll-px-4 gap-2 overflow-x-auto px-4 pb-0.5 md:scroll-px-6 md:px-6 lg:flex-wrap lg:overflow-visible lg:scroll-px-0 lg:px-0"
             >
                 {chips.map(f => {
                     const on = state.f.includes(f.key)

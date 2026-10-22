@@ -344,7 +344,7 @@ function capitalizeTr(s: string): string {
 
 /**
  * The sentence after "N ürün" under the H1, from the same facts as categoryMetaDescription (real
- * prices and the product types actually listed): "79,99 TL'den başlayan fiyatlarla şarj ve data
+ * prices and the product types actually listed): "79,99 ₺'den başlayan fiyatlarla şarj ve data
  * kabloları, hızlı şarj aletleri ve ekran koruyucular." Empty when there is nothing to say.
  */
 function introFor(products: Product[], more: boolean): string {
@@ -354,7 +354,7 @@ function introFor(products: Product[], more: boolean): string {
     const types = detectProductTypes(products.map(p => p.name)).map(t => t.plural)
     const shown = types.slice(0, 3)
     const list = more && types.length > 3 ? `${shown.join(', ')} ve daha fazlası` : joinTr(shown)
-    const price = min > 0 ? `${formatNumberTR(min)} TL'den başlayan fiyatlarla` : ''
+    const price = min > 0 ? `${formatNumberTR(min)} ₺'den başlayan fiyatlarla` : ''
     let text = [price, list].filter(Boolean).join(' ')
     if (!text) return ''
     text = capitalizeTr(text) + '.'

@@ -24,6 +24,7 @@ export function BottomSheet({ open, onClose, title, children, footer, className 
     // The content is mounted on first open (not in the server HTML) and kept for the close animation
     const [mounted, setMounted] = React.useState(false)
     if (open && !mounted) setMounted(true)
+    const SheetTitle = mounted ? 'h2' : 'p'
     const onCloseRef = React.useRef(onClose)
     React.useEffect(() => {
         onCloseRef.current = onClose
@@ -71,9 +72,11 @@ export function BottomSheet({ open, onClose, title, children, footer, className 
             <div className="flex max-h-[85dvh] flex-col">
                 <div className="relative flex shrink-0 items-center justify-between border-b border-line pt-2 pb-1 pl-4 pr-1.5">
                     <span className="absolute left-1/2 top-1.5 h-1 w-10 -translate-x-1/2 rounded-full bg-line-strong" aria-hidden="true" />
-                    <h2 id={titleId} className="type-h3 pt-1 text-ink">
+                    {/* A heading only once opened: closed sheets are in the server HTML, and "Sırala" /
+                        "Filtrele" are UI controls, not sections of the page */}
+                    <SheetTitle id={titleId} className="type-h3 pt-1 text-ink">
                         {title}
-                    </h2>
+                    </SheetTitle>
                     <button
                         type="button"
                         onClick={onClose}

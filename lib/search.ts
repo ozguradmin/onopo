@@ -243,8 +243,22 @@ export interface SearchOptions<T> {
     limit?: number
     /** Put sold-out items after in-stock ones (default true when items have a numeric `stock`). */
     soldOutLast?: boolean
-    /** Custom tie-breaker after score (default: shorter name, then higher id). */
+    /** Custom tie-breaker after score (default: compareSearchTies). */
     tieBreak?: (a: T, b: T) => number
+}
+
+/**
+ * Order of results with the same score: shorter name first (the query is a larger part of the title,
+ * so "iphone 15" lists "iPhone 15" before "iPhone 15 Pro Max"), then the newer product (higher id).
+ * The one rule for every search surface: the instant-search dropdown, /api/products?q= and the
+ * "Önerilen" order of the /products/?q= listing (lib/catalog listProducts) all use it, so pressing
+ * Enter shows the dropdown's products in the same order.
+ */
+export function compareSearchTies(a: { name?: string | null; id?: number | string | null }, b: { name?: string | null; id?: number | string | null }): number {
+    const la = a.name?.length ?? 0
+    const lb = b.name?.length ?? 0
+    if (la !== lb) return la - lb
+    return Number(b.id ?? 0) - Number(a.id ?? 0)
 }
 
 /**
@@ -271,11 +285,7 @@ export function searchItems<T extends SearchableFields & { id?: number | string;
             if (sa !== sb) return sa - sb
         }
         if (b.score !== a.score) return b.score - a.score
-        if (options.tieBreak) return options.tieBreak(a.item, b.item)
-        const la = a.item.name?.length ?? 0
-        const lb = b.item.name?.length ?? 0
-        if (la !== lb) return la - lb
-        return Number(b.item.id ?? 0) - Number(a.item.id ?? 0)
+        return (options.tieBreak ?? compareSearchTies)(a.item, b.item)
     })
     const out = scored.map(s => s.item)
     return options.limit != null ? out.slice(0, options.limit) : out
@@ -358,6 +368,47 @@ export function displayName(name: string): string {
     const trimmed = (name || '').trim()
     const stripped = trimmed.replace(/^onopo(?:\s*[-|:·]\s*|\s+)/i, '')
     return stripped.length > 0 ? stripped : trimmed
+}
+
+/** Folded last words of a leading compatibility phrase ("… Uyumlu", "… İçin") and its joiner words. */
+const COMPAT_END = new Set(['uyumlu', 'icin'])
+const COMPAT_LOWER = new Set(['ve', 'ile', 'uyumlu', 'icin'])
+/** At most this many words before "Uyumlu"/"İçin" ("Android Xiaomi Ve Samsung Uyumlu" has 4). */
+const MAX_COMPAT_WORDS = 6
+
+/**
+ * Card title split (display only; the full name stays in alt/title/aria-label, SEO and feeds).
+ * Many names start with the same compatibility phrase ("Android Xiaomi Ve Samsung Uyumlu …",
+ * "İphone Apple Uyumlu …"), so in a 2-line clamp neighbouring cards look identical and the product
+ * type is cut off. A short, generic leading phrase that ends in "Uyumlu"/"İçin" moves to its own line:
+ *   "onopo Android Xiaomi Ve Samsung Uyumlu Micro Usb Hızlı Şarj ve Data Kablosu 3.0A / 1MT - D6"
+ *   → title "Micro Usb Hızlı Şarj ve Data Kablosu 3.0A / 1MT - D6", compat "Android Xiaomi ve Samsung uyumlu"
+ * A phrase that names a model ("Iphone 15 Pro Uyumlu …", it has a number) is what tells the variants
+ * apart, so it stays at the start of the title. Names without such a phrase (or where "Uyumlu" comes
+ * late, after model lists) keep displayName().
+ */
+export function splitDisplayName(name: string): { title: string; compat: string | null } {
+    const title = displayName(name)
+    const words = title.split(/\s+/).filter(Boolean)
+    // Keep at least two words after the phrase
+    const last = Math.min(MAX_COMPAT_WORDS, words.length - 3)
+    for (let i = 1; i <= last; i++) {
+        const before = words[i - 1]
+        // A separator or a clause end before the keyword: this is not a leading phrase
+        if (/^[-–|·:]$/.test(before) || /[,;:|]$/.test(before)) break
+        if (!COMPAT_END.has(foldTr(words[i]))) continue
+        if (words.slice(0, i).some(w => /\d/.test(w))) break
+        const rest = words.slice(i + 1).join(' ').replace(/^[-–|·:,\s]+/, '')
+        if (rest.split(' ').length < 2) break
+        const compat = words
+            .slice(0, i + 1)
+            .map((w, k) => (k > 0 && COMPAT_LOWER.has(foldTr(w)) ? w.toLocaleLowerCase('tr-TR') : w))
+            .join(' ')
+        const first = rest.charAt(0)
+        const head = /\p{Ll}/u.test(first) && /\p{Ll}/u.test(rest.charAt(1)) ? first.toLocaleUpperCase('tr-TR') : first
+        return { title: head + rest.slice(1), compat }
+    }
+    return { title, compat: null }
 }
 
 /** "ONOPO" when the product is our own brand (name starts with onopo), else null. */

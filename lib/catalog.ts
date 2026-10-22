@@ -20,6 +20,7 @@ import { getDB } from '@/lib/db'
 import { roundPrice } from '@/lib/roundPrice'
 import { discountPercent } from '@/lib/format'
 import {
+    compareSearchTies,
     FACETS,
     foldTr,
     normalizeText,
@@ -693,8 +694,9 @@ export async function listProducts(params: ListProductsParams = {}): Promise<Lis
     // Sort (stable; base order is id DESC)
     const sorted = [...filtered]
     const bySort: Record<ProductSort, (a: Product, b: Product) => number> = {
+        // With a query: relevance, then the same tie rule as the instant-search dropdown
         recommended: prepared && prepared.tokens.length
-            ? (a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0) || b.id - a.id
+            ? (a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0) || compareSearchTies(a, b)
             : (a, b) => b.id - a.id,
         newest: (a, b) => b.id - a.id,
         price_asc: (a, b) => a.display_price - b.display_price || b.id - a.id,

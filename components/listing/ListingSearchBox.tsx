@@ -73,7 +73,8 @@ export function ListingSearchBox({ placeholder = 'Ürünlerde ara', label = 'Ür
     const busy = pending === 'search'
 
     return (
-        <form role="search" onSubmit={onSubmit} className={cn('relative', className)} action="" noValidate>
+        // Named so it differs from the header's search landmark
+        <form role="search" aria-label="Ürünlerde ara" onSubmit={onSubmit} className={cn('relative', className)} action="" noValidate>
             <label htmlFor={inputId} className="sr-only">
                 {label}
             </label>

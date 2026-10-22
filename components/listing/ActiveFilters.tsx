@@ -1,8 +1,12 @@
 'use client'
 
-/** Active filter chips with a remove button each, plus "Tümünü temizle" (spec §10). */
+/**
+ * Active filter chips with a remove button each, plus "Tümünü temizle" (spec §10).
+ * `queryInH1`: the page H1 already shows the search query, so phones (< lg) skip the query chip.
+ */
 import * as React from 'react'
 import { X } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useListing } from './ListingProvider'
 import { activeFilterCount, facetLabel, priceLabel, type ListingState } from './listing-state'
 
@@ -14,7 +18,7 @@ interface Chip {
     action?: string
 }
 
-export function ActiveFilters({ className }: { className?: string }) {
+export function ActiveFilters({ className, queryInH1 = false }: { className?: string; queryInH1?: boolean }) {
     const { state, update } = useListing()
     const chips: Chip[] = []
     if (state.q.trim()) chips.push({ key: 'q', label: `“${state.q.trim()}”`, remove: { q: '' }, action: `Aramayı kaldır: ${state.q.trim()}` })
@@ -27,12 +31,13 @@ export function ActiveFilters({ className }: { className?: string }) {
     if (!chips.length) return null
 
     const filters = activeFilterCount(state)
+    const hideQueryOnPhones = queryInH1 && chips[0].key === 'q'
 
     return (
-        <div className={className}>
+        <div className={cn(className, hideQueryOnPhones && chips.length === 1 && 'max-lg:hidden')}>
             <ul aria-label="Uygulanan filtreler" className="flex flex-wrap items-center gap-2">
                 {chips.map(c => (
-                    <li key={c.key}>
+                    <li key={c.key} className={c.key === 'q' && hideQueryOnPhones ? 'max-lg:hidden' : undefined}>
                         <button
                             type="button"
                             onClick={() => update(c.remove, { scrollToResults: true })}

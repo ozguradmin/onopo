@@ -19,7 +19,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { ArrowRight, ChevronRight, History, MessageCircle, RotateCcw, Search, SearchX, TrendingUp, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { displayName, matchesSearch, prepareQuery, searchItems, type PreparedQuery } from '@/lib/search'
+import { matchesSearch, prepareQuery, searchItems, splitDisplayName, type PreparedQuery } from '@/lib/search'
 import { displayPrice, formatTL } from '@/lib/format'
 import { originalImageUrl, productImageUrl } from '@/lib/images'
 import { productPath } from '@/lib/seo'
@@ -618,6 +618,8 @@ function SearchPopup(props: SearchPopupProps) {
                         const price = displayPrice(p.price)
                         const old = p.original_price ? displayPrice(p.original_price) : 0
                         const soldOut = p.stock <= 0
+                        // Same title as the product cards: a generic "… uyumlu" lead goes to its own line
+                        const name = splitDisplayName(p.name)
                         return (
                             <Link
                                 key={p.id}
@@ -640,8 +642,13 @@ function SearchPopup(props: SearchPopupProps) {
                                 </span>
                                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                                     <span className="line-clamp-2 text-sm leading-5 text-ink-2">
-                                        <Highlight text={displayName(p.name)} tokens={tokens} />
+                                        <Highlight text={name.title} tokens={tokens} />
                                     </span>
+                                    {name.compat && (
+                                        <span className="truncate text-xs leading-4 text-muted">
+                                            <Highlight text={name.compat} tokens={tokens} />
+                                        </span>
+                                    )}
                                     <span className="flex flex-wrap items-baseline gap-x-2 tabular-nums">
                                         <span className="text-sm font-bold text-ink">{formatTL(price)}</span>
                                         {old > price && <del className="text-xs text-muted">{formatTL(old)}</del>}
