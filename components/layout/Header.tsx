@@ -17,10 +17,12 @@
  */
 import * as React from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { ChevronLeft, Heart, Lock, Menu, ShoppingBag, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatTL } from "@/lib/format"
 import { originalImageUrl } from "@/lib/images"
+import { hasSessionHint } from "@/lib/session-hint"
 import { itemsTotal } from "@/lib/pricing"
 import { useCartStore } from "@/store/cart-store"
 import { useShellChrome, useSiteSettings } from "@/components/layout/store-data"
@@ -250,11 +252,29 @@ function Logo({ className }: { className?: string }) {
 const ICON_BTN =
     'relative inline-flex h-11 min-w-11 items-center justify-center gap-2 rounded-card px-2.5 text-ink transition-colors duration-150 hover:bg-surface-2'
 
+/**
+ * "Giriş yap" (/login/) in the server HTML, which the edge cache shares between all anonymous visitors.
+ * After hydration, and again after each navigation (logout is a client navigation), the readable session
+ * hint (lib/session-hint) switches it to "Hesabım" (/profile/). Decided in an effect, so the server and
+ * the first client render match. The label box always reserves the width of the longer label (the
+ * other one sits in an invisible ::after), so the swap never moves the header.
+ */
 function AccountLink() {
+    const pathname = usePathname()
+    const [signedIn, setSignedIn] = React.useState(false)
+    React.useEffect(() => {
+        setSignedIn(hasSessionHint())
+    }, [pathname])
+    const label = signedIn ? 'Hesabım' : 'Giriş yap'
     return (
-        <Link href="/profile/" prefetch={false} aria-label="Hesabım" className={ICON_BTN}>
+        <Link href={signedIn ? '/profile/' : '/login/'} prefetch={false} aria-label={label} className={ICON_BTN}>
             <User className="h-[22px] w-[22px]" aria-hidden="true" strokeWidth={1.75} />
-            <span className="hidden text-sm font-semibold xl:inline">Hesabım</span>
+            <span
+                data-alt={signedIn ? 'Giriş yap' : 'Hesabım'}
+                className="hidden text-sm font-semibold after:invisible after:col-start-1 after:row-start-1 after:h-0 after:content-[attr(data-alt)] xl:inline-grid"
+            >
+                <span className="col-start-1 row-start-1">{label}</span>
+            </span>
         </Link>
     )
 }
