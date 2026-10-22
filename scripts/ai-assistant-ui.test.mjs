@@ -1,5 +1,5 @@
 // Unit tests for the Onopo Asistan chat UI's pure modules (SPEC §13.2): components/assistant/chat-reducer.ts,
-// persist.ts, page-context.ts, starters.ts and mini-markdown.ts. No React, no npm packages.
+// persist.ts, page-context.ts, starters.ts, mini-markdown.ts, cart-ops.ts and sheet-drag.ts. No React, no npm packages.
 // Run: node --test scripts/ai-assistant-ui.test.mjs   (Node 23.6+ strips the TypeScript types itself)
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -26,6 +26,8 @@ const persist = await import('../components/assistant/persist.ts')
 const page = await import('../components/assistant/page-context.ts')
 const start = await import('../components/assistant/starters.ts')
 const md = await import('../components/assistant/mini-markdown.ts')
+const ops = await import('../components/assistant/cart-ops.ts')
+const drag = await import('../components/assistant/sheet-drag.ts')
 
 // Synthetic card product (no real product data)
 const card = (id, over = {}) => ({
@@ -259,9 +261,35 @@ const WED_1800 = new Date('2026-10-21T15:00:00Z')
 const SAT_1000 = new Date('2026-10-24T07:00:00Z')
 const base = { cartTotal: 0, cartHasFreeShipping: false, freeThreshold: 500, now: WED_1759 }
 
-test('starters: product page chips', () => {
+test('starters: product page chips come after the fixed free-shipping chip', () => {
     const chips = start.starters({ ...base, page: { type: 'product', slug: 'x' } })
-    assert.deepEqual(chips.map(c => c.label), ['Telefonuma uyar mı?', 'Kutuda neler var?', 'Benzerleriyle karşılaştır', 'Yanına ne alınır?'])
+    assert.deepEqual(chips.map(c => c.label), ['Kargo bedava için ne eklesem?', 'Telefonuma uyar mı?', 'Kutuda neler var?', 'Benzerleriyle karşılaştır'])
+    // a cart that already ships free: page chips only
+    const free = start.starters({ ...base, page: { type: 'product', slug: 'x' }, cartTotal: 600 })
+    assert.deepEqual(free.map(c => c.label), ['Telefonuma uyar mı?', 'Kutuda neler var?', 'Benzerleriyle karşılaştır', 'Yanına ne alınır?'])
+})
+
+test('starters: popular questions follow the fixed chip, at most 3, at most 4 chips in all', () => {
+    const popular = JSON.stringify(['Sepetimde neler var?', 'Kablo önerir misin?', 'iPad için şarj aleti', 'Dördüncü soru'])
+    const chips = start.starters({ ...base, page: { type: 'home' }, popular })
+    assert.deepEqual(chips.map(c => c.label), ['Kargo bedava için ne eklesem?', 'Sepetimde neler var?', 'Kablo önerir misin?', 'iPad için şarj aleti'])
+    // an already parsed array works too; one popular question leaves room for page chips
+    const one = start.starters({ ...base, page: { type: 'home' }, popular: ['Kablo önerir misin?'] })
+    assert.deepEqual(one.map(c => c.label), ['Kargo bedava için ne eklesem?', 'Kablo önerir misin?', 'iPhone 15 için şarj aleti', 'Ekran koruyucu öner'])
+    // a popular question equal to a page chip is not shown twice
+    const dup = start.starters({ ...base, page: { type: 'home' }, popular: ['ekran koruyucu öner'] })
+    assert.equal(dup.filter(c => c.label.toLocaleLowerCase('tr') === 'ekran koruyucu öner').length, 1)
+})
+
+test('starters: invalid popular questions are ignored', () => {
+    for (const bad of [undefined, null, '', 'not json', '{"a":1}', 42, '[1,2]', JSON.stringify({ q: 'x' })]) {
+        assert.deepEqual(start.popularQuestions(bad), [], String(bad))
+    }
+    const mixed = start.popularQuestions(JSON.stringify([
+        'ok soru mu?', 'a', 'x'.repeat(81), 'https://evil.test bak', '<b>kalın</b>', 'Numaram 0532 000 00 00', 7,
+        'OK SORU MU?', '  boşluklu   soru  ',
+    ]))
+    assert.deepEqual(mixed, ['ok soru mu?', 'boşluklu soru'])
 })
 
 test('starters: a cart under the free-shipping threshold puts the free-shipping chip first', () => {
@@ -278,7 +306,7 @@ test('starters: the shipping chip switches at the cut-off in Istanbul time', () 
     assert.equal(label(WED_1800), 'Ne zaman kargoya verilir?')
     assert.equal(label(SAT_1000), 'Ne zaman kargoya verilir?')
     assert.equal(start.beforeCutoff(SAT_1000, 'hafta-ici-cumartesi', '18:00'), true)
-    assert.equal(start.starters({ ...base, page: { type: 'listing' } }).at(-1).chip, 'faq_cutoff')
+    assert.equal(start.starters({ ...base, page: { type: 'listing' }, cartTotal: 600 }).at(-1).chip, 'faq_cutoff')
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -310,6 +338,150 @@ test('mini-markdown: HTML stays literal text', () => {
 test('mini-markdown: an unclosed ** at the end renders as bold until the end', () => {
     assert.deepEqual(md.parseInline('Fiyatı **129,99 T'), [{ t: 'text', v: 'Fiyatı ' }, { t: 'bold', v: '129,99 T' }])
     assert.deepEqual(md.parseInline('**'), [])
+})
+
+// ---------------------------------------------------------------------------------------------
+// cart card and cart changes (contract v2)
+// ---------------------------------------------------------------------------------------------
+
+// Synthetic cart lines (store shape: raw price, quantity)
+const line = (id, quantity = 1, over = {}) => ({ id, name: `Test Ürün ${id}`, price: 100, image: '', quantity, ...over })
+const cartEvent = products => ({
+    t: 'cart', lines: products.map(p => ({ product: p, qty: 1, lineTotal: p.displayPrice })),
+    count: products.length, total: 0, threshold: 500, freeShippingRemaining: 0,
+})
+
+test('chat-reducer: a cart card is a card, and cart_ops become a pending receipt', () => {
+    const m = fold([
+        { t: 'text', v: 'Sepetinde 2 ürün var.' },
+        cartEvent([card(1), card(2)]),
+        { t: 'cart_ops', ops: [{ id: 1, qty: 0 }], note: '  Test Ürün 1   sepetten çıkarıldı ' },
+        { t: 'done', finish: 'cards', productIds: [], wa: false },
+    ])
+    assert.deepEqual(m.cards.map(c => c.t), ['cart'])
+    assert.equal(m.receipts.length, 1)
+    assert.deepEqual(m.receipts[0], { note: 'Test Ürün 1 sepetten çıkarıldı', ops: [{ id: 1, qty: 0 }], state: 'pending', touched: [], before: [] })
+    const settled = reducer.settleReceipt(m, { touched: [1], before: [line(1, 2)] })
+    assert.equal(settled.receipts[0].state, 'applied')
+    assert.deepEqual(settled.receipts[0].before, [line(1, 2)])
+    assert.equal(reducer.settleReceipt(m, { touched: [], before: [] }).receipts[0].state, 'none')
+    const undone = reducer.markUndone(settled, 0)
+    assert.equal(undone.receipts[0].state, 'undone')
+    // only an applied receipt can be undone
+    assert.equal(reducer.markUndone(undone, 0), undone)
+    // cards of the cart count as shown products (a later cart_ops may add them back)
+    assert.deepEqual([...reducer.shownProducts([settled]).keys()], [1, 2])
+})
+
+test('persist: applied receipts survive a reload, pending ones do not', () => {
+    const store = memoryStorage()
+    const m = { ...reducer.assistantMessage(1), status: 'done', text: 'Tamam.' }
+    m.receipts = [
+        { note: 'a', ops: [], state: 'applied', touched: [1], before: [line(1)] },
+        { note: 'b', ops: [], state: 'pending', touched: [], before: [] },
+    ]
+    persist.saveChat(store, { conversationId: 'conv-1234-abcd', device: null, messages: [m] }, 1000)
+    const back = persist.loadChat(store, 2000)
+    assert.deepEqual(back.messages[0].receipts.map(r => r.note), ['a'])
+})
+
+test('cart-ops: product ids come from the leading digits of the cart line id', () => {
+    assert.equal(ops.productIdOf(12), 12)
+    assert.equal(ops.productIdOf('12-kirmizi'), 12)
+    assert.equal(ops.productIdOf('x'), 0)
+    assert.equal(ops.inCartQty([line(5, 2), line('5-mavi', 1), line(6, 3)], 5), 3)
+})
+
+test('cart-ops: qty 0 removes every line of the product, another qty sets the first line', () => {
+    const items = [line(1, 1), line('2-a', 2), line('2-b', 1), line(3, 1)]
+    const plan = ops.planCartOps(items, [{ id: 2, qty: 0 }, { id: 3, qty: 4 }], () => null)
+    assert.deepEqual(plan.touched, [2, 3])
+    assert.deepEqual(plan.steps, [{ do: 'remove', itemId: '2-a' }, { do: 'remove', itemId: '2-b' }, { do: 'qty', itemId: 3, qty: 4 }])
+    assert.deepEqual(plan.before.map(l => l.id), ['2-a', '2-b', 3])
+    const after = ops.applyCartSteps(items, plan.steps)
+    assert.deepEqual(after.map(l => [l.id, l.quantity]), [[1, 1], [3, 4]])
+    // a product with options keeps its other lines when only the quantity changes
+    const one = ops.planCartOps(items, [{ id: 2, qty: 5 }], () => null)
+    assert.deepEqual(ops.applyCartSteps(items, one.steps).map(l => [l.id, l.quantity]), [[1, 1], ['2-a', 5], ['2-b', 1], [3, 1]])
+})
+
+test('cart-ops: unknown products are added only when shown and addable; bad ops are ignored', () => {
+    const items = [line(1, 1)]
+    const addable = id => (id === 9 ? { id: 9, name: 'Test Ürün 9', price: 50, image: '' } : null)
+    const plan = ops.planCartOps(items, [
+        { id: 9, qty: 2 },      // shown: added with 2
+        { id: 8, qty: 1 },      // not shown: ignored
+        { id: 7, qty: 0 },      // not in the cart, removing: nothing to do
+        { id: 1, qty: 1 },      // already 1: nothing to do
+        { id: -3, qty: 1 }, { id: 'x', qty: 1 }, { id: 4, qty: -1 },
+    ], addable)
+    assert.deepEqual(plan.touched, [9])
+    assert.deepEqual(plan.steps, [{ do: 'add', item: { id: 9, name: 'Test Ürün 9', price: 50, image: '' }, qty: 2 }])
+    assert.deepEqual(ops.applyCartSteps(items, plan.steps).map(l => [l.id, l.quantity]), [[1, 1], [9, 2]])
+    // the last op for a product wins, and quantities are capped at 99
+    assert.deepEqual(ops.planCartOps(items, [{ id: 1, qty: 3 }, { id: 1, qty: 500 }], () => null).steps, [{ do: 'qty', itemId: 1, qty: 99 }])
+    assert.deepEqual(ops.planCartOps(items, 'nonsense', () => null).steps, [])
+})
+
+test('cart-ops: Geri al puts the earlier lines back and takes added products out', () => {
+    const items = [line(1, 1), line('2-a', 2), line('2-b', 1)]
+    const addable = id => (id === 9 ? { id: 9, name: 'Test Ürün 9', price: 50, image: '' } : null)
+    const plan = ops.planCartOps(items, [{ id: 2, qty: 0 }, { id: 1, qty: 3 }, { id: 9, qty: 1 }], addable)
+    const after = ops.applyCartSteps(items, plan.steps)
+    assert.deepEqual(after.map(l => [l.id, l.quantity]), [[1, 3], [9, 1]])
+    // the visitor added something else meanwhile: it stays
+    const later = [...after, line(4, 1)]
+    const restored = ops.applyCartSteps(later, ops.planUndo(later, plan.before, plan.touched))
+    const byId = Object.fromEntries(restored.map(l => [l.id, l.quantity]))
+    assert.deepEqual(byId, { 4: 1, 1: 1, '2-a': 2, '2-b': 1 })
+    assert.equal(restored.find(l => l.id === '2-a').name, 'Test Ürün 2-a')
+})
+
+test('cart-ops: free-shipping state follows the cart store rule', () => {
+    assert.deepEqual(ops.freeShippingState(320, 500, false), { free: false, left: 180, progress: 64 })
+    assert.deepEqual(ops.freeShippingState(500, 500, false), { free: true, left: 0, progress: 100 })
+    assert.deepEqual(ops.freeShippingState(100, 500, true), { free: true, left: 0, progress: 100 })
+    assert.equal(ops.freeShippingState(449.97, 500, false).left, 50.03)
+})
+
+// ---------------------------------------------------------------------------------------------
+// sheet drag (phone)
+// ---------------------------------------------------------------------------------------------
+
+test('sheet-drag: follows the finger down, resists up', () => {
+    assert.equal(drag.dragOffset(120), 120)
+    assert.equal(drag.dragOffset(0), 0)
+    const up = drag.dragOffset(-400)
+    assert.ok(up < 0 && up > -drag.RUBBER_MAX_PX)
+    assert.ok(Math.abs(drag.dragOffset(-10)) < 10)
+    assert.equal(drag.dragOffset(NaN), 0)
+})
+
+test('sheet-drag: a press becomes a drag only when it moves mostly vertically', () => {
+    assert.equal(drag.dragIntent(2, 3), null)
+    assert.equal(drag.dragIntent(1, 10), 'drag')
+    assert.equal(drag.dragIntent(1, -10), 'drag')
+    assert.equal(drag.dragIntent(20, 10), 'other')
+    // the transcript: only a pull down
+    assert.equal(drag.dragIntent(1, -10, true), 'other')
+    assert.equal(drag.dragIntent(1, 10, true), 'drag')
+})
+
+test('sheet-drag: closes past 30% of the height or on a fast flick, otherwise springs back', () => {
+    const height = 700
+    assert.equal(drag.shouldClose({ dy: 211, height, velocity: 0 }), true)
+    assert.equal(drag.shouldClose({ dy: 150, height, velocity: 0.1 }), false)
+    assert.equal(drag.shouldClose({ dy: 60, height, velocity: 0.8 }), true)
+    assert.equal(drag.shouldClose({ dy: 10, height, velocity: 2 }), false)
+    assert.equal(drag.shouldClose({ dy: -40, height, velocity: 2 }), false)
+    // velocity from the last 100 ms of samples; a pause before release counts as slow
+    const fast = [{ y: 0, t: 0 }, { y: 30, t: 40 }, { y: 80, t: 80 }]
+    assert.equal(drag.releaseVelocity(fast), 1)
+    const paused = [{ y: 0, t: 0 }, { y: 80, t: 80 }, { y: 80, t: 400 }]
+    assert.equal(drag.releaseVelocity(paused), 0)
+    assert.equal(drag.releaseVelocity([{ y: 5, t: 1 }]), 0)
+    assert.equal(drag.backdropOpacity(350, 700), 0.5)
+    assert.equal(drag.backdropOpacity(-10, 700), 1)
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -352,4 +524,28 @@ test('launcher: 52 px circle on phones, pill on desktop, one entrance that reduc
     // The hide rules (toast, bottom nav, PDP buy bar) are still there
     assert.match(css, /body:has\(\[data-sonner-toast\]\) \[data-assistant-launcher\]/)
     assert.match(css, /body:has\(\[data-hide-bottom-nav\]\[aria-hidden="true"\]\) \[data-assistant-launcher\]/)
+})
+
+test('panel: the phone sheet is dragged by the handle, the header and the transcript top', () => {
+    const panel = src('components/assistant/AssistantPanel.tsx')
+    const hook = src('components/assistant/useSheetDrag.ts')
+    assert.match(panel, /useSheetDrag\(\{ enabled: isSheet, visible, frameRef, backdropRef, scrollRef, onClose: minimize \}\)/)
+    assert.match(panel, /<DragHandle handlers=\{drag\.handle\} \/>/)
+    assert.match(panel, /\{\.\.\.\(isSheet \? drag\.header : \{\}\)\}/)
+    assert.ok(!panel.includes('SWIPE_CLOSE_PX'))
+    // no transition while dragging, a non-passive touchmove for the transcript, reduced motion skips the animation
+    assert.match(hook, /el\.style\.transition = 'none'/)
+    assert.match(hook, /addEventListener\('touchmove', onMove, \{ passive: false \}\)/)
+    assert.match(hook, /prefers-reduced-motion: reduce/)
+})
+
+test('cards: in-cart products show the stepper, sold-out products have no add button', () => {
+    const cards = src('components/assistant/parts/ProductCards.tsx')
+    assert.match(cards, /Sepette · \{qty\}/)
+    assert.ok(!cards.includes('Stokta yok'))
+    assert.match(cards, /if \(!p\.inStock\) return <SoldOutAction/)
+    assert.match(cards, /<Badge variant="soldout">Tükendi<\/Badge>/)
+    const list = src('components/assistant/parts/MessageList.tsx')
+    assert.match(list, /case 'cart':\s*return <CartCard card=\{card\} \/>/)
+    assert.match(list, /<CartReceiptRow receipt=\{r\} messageId=\{m\.id\} index=\{i\} \/>/)
 })

@@ -67,8 +67,19 @@ function validMessage(m: unknown): m is UiMessage {
         && (x.status === 'done' || x.status === 'stopped' || x.status === 'error')
 }
 
+/** A cart receipt worth showing again: a known state and the arrays "Geri al" needs. */
+function validReceipt(r: unknown): boolean {
+    if (!r || typeof r !== 'object') return false
+    const x = r as Record<string, unknown>
+    return typeof x.note === 'string'
+        && (x.state === 'applied' || x.state === 'none' || x.state === 'undone')
+        && Array.isArray(x.touched)
+        && Array.isArray(x.before)
+}
+
 /** Rebuilds the arrays a damaged or older value may lack, so the UI can map over them safely. */
 function normalize(m: UiMessage): UiMessage {
+    const receipts = Array.isArray(m.receipts) ? m.receipts.filter(validReceipt) : []
     return {
         ...m,
         createdAt: typeof m.createdAt === 'number' ? m.createdAt : 0,
@@ -79,6 +90,7 @@ function normalize(m: UiMessage): UiMessage {
         error: m.error && typeof m.error === 'object' ? m.error : null,
         productIds: Array.isArray(m.productIds) ? m.productIds : [],
         wa: !!m.wa,
+        receipts: receipts.length > 0 ? receipts : undefined,
     }
 }
 

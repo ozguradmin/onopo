@@ -14,6 +14,7 @@ import { formatTL } from '@/lib/format'
 import { itemsTotal } from '@/lib/pricing'
 import { useCartStore } from '@/store/cart-store'
 import { useAssistantStore } from '../assistant-store'
+import { freeShippingState } from '../cart-ops'
 
 export function CartStrip() {
     const router = useRouter()
@@ -23,9 +24,7 @@ export function CartStrip() {
     if (count === 0) return null
 
     const total = itemsTotal(items)
-    const free = items.some(i => i.free_shipping) || (freeShippingThreshold > 0 && total >= freeShippingThreshold)
-    const left = Math.max(0, Math.round((freeShippingThreshold - total) * 100) / 100)
-    const progress = free || freeShippingThreshold <= 0 ? 100 : Math.min(100, Math.round((total / freeShippingThreshold) * 100))
+    const { free, left, progress } = freeShippingState(total, freeShippingThreshold, items.some(i => i.free_shipping))
 
     return (
         <div className="border-t border-line bg-white px-3 pb-2 pt-2.5">

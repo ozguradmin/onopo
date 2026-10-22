@@ -123,7 +123,7 @@ export interface PublicSiteSettings {
     /**
      * The assistant's popular-question chips (site_settings.ai_popular_questions, a JSON string array of at most
      * 3, written by the weekly analysis or Admin › AI Asistan); [] = none. The empty chat shows them after the
-     * fixed "Kargo bedava için ne eklesem?".
+     * fixed "Kargo bedava için ne eklesem?"; the chat UI (components/assistant/starters.ts) checks each one again.
      */
     ai_popular_questions: string[]
 }
@@ -368,7 +368,7 @@ function toPublicSettings(rows: Record<string, any>[]): PublicSiteSettings {
         : []
     const popular = parseJson<unknown>(kv.ai_popular_questions, [])
     s.ai_popular_questions = Array.isArray(popular)
-        ? popular.map(str).map(q => q.replace(/\s+/g, ' ').trim()).filter(q => q.length > 0 && q.length <= 32).slice(0, 3)
+        ? popular.filter((q): q is string => typeof q === 'string').map(q => q.replace(/\s+/g, ' ').trim()).filter(q => q.length > 0 && q.length <= 32).slice(0, 3)
         : []
     const top = parseJson<unknown>(kv.topbar_messages, null)
     s.topbar_messages = Array.isArray(top) ? top.map(str).map(t => t.trim()).filter(Boolean) : null
