@@ -10,15 +10,33 @@
 import type { AssistantEvent, ChipAction, HandoffReason } from './contract'
 import type { StoreFacts } from './facts'
 import { amountText, sameDayInfo } from './facts'
+import { foldTr } from '../search'
 
 export const CANNED = {
     greeting: 'Merhaba! Ben Onopo Asistan, yapay zekâ destekli alışveriş asistanıyım. Telefonuna uygun şarj aleti, kablo ya da ekran koruyucu bulmana yardım edebilirim. Ne arıyorsun?',
     off_topic: 'Ben yalnızca Onopo ürünleri ve alışverişinle ilgili yardımcı olabiliyorum. Örneğin telefonuna uygun şarj aletini ya da ekran koruyucuyu bulabilirim.',
     refusal: 'Bunu yapamam ama ürünlerimizle ilgili her soruna yardımcı olabilirim. Ne arıyorsun?',
-    busy: "Şu an çok yoğunuz ve yanıt hazırlayamadım. Sorunu WhatsApp'tan ekibimize hemen iletebilirsin; mesajın hazır.",
+    busy: "Şu an yoğunluk var, yanıtı hazırlayamadım. Sorunu WhatsApp'tan ekibimize hemen iletebilirsin; mesajın hazır.",
     /** Not in SPEC 9.6: the model returned nothing usable (every sentence failed the validator). */
     unsure: "Bundan emin değilim. İstersen ekibimize WhatsApp'tan sorabilirsin.",
+    /** w8: small talk later in a conversation (no second self-introduction). */
+    thanks: 'Rica ederim! Başka bakmak istediğin bir şey olursa buradayım.',
+    howAreYou: 'İyiyim, sorduğun için teşekkürler! Bugün neye bakıyorsun?',
+    helloAgain: 'Buradayım. Ne arıyorsun?',
+    bye: 'Görüşmek üzere! Bir sorun olursa buradayım.',
 } as const
+
+/**
+ * The answer to a short greeting / thanks the router marked as small talk: a thank-you gets "Rica ederim",
+ * "nasılsın" a short reply, and only the first greeting of a conversation introduces the assistant.
+ */
+export function smallTalkText(masked: string, hasHistory: boolean): string {
+    const f = ` ${foldTr(masked).replace(/[^a-z0-9]+/g, ' ').trim()} `
+    if (/ (tesekkur\w*|sagol\w*|sag ol\w*|eyvallah|mersi|thanks|thank you|tsk\w*) /.test(f)) return CANNED.thanks
+    if (/ (gorusuruz|gorusmek uzere|hosca kal|iyi gunler|iyi aksamlar|bye) /.test(f)) return CANNED.bye
+    if (/ (nasilsin\w*|naber|ne haber|nasil gidiyor) /.test(f)) return CANNED.howAreYou
+    return hasHistory ? CANNED.helloAgain : CANNED.greeting
+}
 
 export type CannedKey = 'greeting' | 'off_topic' | 'refusal'
 

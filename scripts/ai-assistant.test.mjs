@@ -147,9 +147,18 @@ test('catalog block: no old price, screen protectors grouped by price, tags corr
     // Ceramic protectors: one line per price with "id model" entries
     assert.match(block, /^fiyat 99,99: 473 iPhone 11 · /m)
     assert.match(block, /fiyat 129,99: .*562 iPhone 16 Pro Max/)
-    assert.match(block, /481 iPhone 12 Pro \[tükendi\]/)
+    // Sold-out products sit apart at the end, without a price, under an unmistakable heading (w8)
+    const soldOutAt = block.indexOf(cb.SOLD_OUT_HEADING)
+    assert.ok(soldOutAt > 0)
+    for (const r of ROWS.filter(x => !x.inStock)) {
+        assert.ok(block.indexOf(`
+${r.id} | ${r.displayName}
+`) > soldOutAt, `#${r.id} not in the sold-out section`)
+        assert.ok(!new RegExp(`(^|[ :·])${r.id} `, 'm').test(block.slice(0, soldOutAt)), `#${r.id} listed for sale`)
+    }
+    assert.ok(!block.includes('[tükendi]') && !/\| tükendi$/m.test(block))
+    assert.match(block, /^424 \| 33W Type-C Hızlı Şarj Aleti Adaptör - A10$/m)
     // Normal rows: "id | name | price | tags"
-    assert.match(block, /^424 \| 33W Type-C Hızlı Şarj Aleti Adaptör - A10 \| 319,99 \| tükendi$/m)
     assert.match(block, /^407 \| .* \| 379,99 \| seçenekli$/m)
     assert.match(block, /^401 \| .* \| 249,99 \| çok satan$/m)
     // Raw 547.3 is shown as the rounded customer price
@@ -212,7 +221,7 @@ test('searchCatalog: Turkish folding, model queries, filters, limit, sold-out la
 // ---------------------------------------------------------------------------------------------
 
 test('TOOLS: SPEC section 4 order, frozen', () => {
-    assert.deepEqual(tools.TOOLS.map(t => t.function.name), ['search_products', 'get_product', 'show_products', 'show_comparison', 'show_category', 'store_info', 'whatsapp_handoff'])
+    assert.deepEqual(tools.TOOLS.map(t => t.function.name), ['search_products', 'get_product', 'show_products', 'show_comparison', 'show_category', 'store_info', 'whatsapp_handoff', 'show_cart', 'update_cart'])
     assert.ok(Object.isFrozen(tools.TOOLS) && Object.isFrozen(tools.TOOLS[0].function.parameters))
 })
 
@@ -553,14 +562,17 @@ test('router: state stays under 2,000 characters and sends the Clef body shape',
 
 test('prompt: turn context has same-day shipping, the server cart total and candidates', () => {
     const cart = prompt.computeCart([{ id: 401, qty: 2 }, { id: 999999, qty: 1 }], K.byId, FACTS)
-    assert.deepEqual(cart, { count: 2, lines: [{ id: 401, qty: 2 }], total: 499.98, remaining: 0.02 })
+    assert.deepEqual({ count: cart.count, total: cart.total, remaining: cart.remaining, unknown: cart.unknown }, { count: 2, total: 499.98, remaining: 0.02, unknown: [999999] })
+    assert.deepEqual(cart.lines.map(l => [l.row.id, l.qty, l.lineTotal]), [[401, 2, 499.98]])
     const ctx = prompt.buildTurnContext({
         now: new Date('2026-10-22T14:42:00Z'), facts: FACTS, page: 'anasayfa', device: 'iPhone 15', cart,
         candidates: [row(401)], router: { intent: 'product_search', group: 'sarj-aleti', buyingStage: 2 }, notes: ['not bir'],
     })
     assert.match(ctx, /simdi: 2026-10-22 17:42, Perşembe \(Türkiye saati\)/)
     assert.match(ctx, /ayni_gun_kargo: evet \(kesim saatine 18 dk\)/)
-    assert.match(ctx, /sunucu_sepet_toplami: 499,98 TL · ucretsiz_kargoya_kalan: 0,02 TL/)
+    assert.match(ctx, /sepet: 1 ürün, 2 adet · sunucu_sepet_toplami: 499,98 TL · ucretsiz_kargoya_kalan: 0,02 TL/)
+    assert.match(ctx, /sepet_urunleri: #401 "20W PD Type-C Hızlı Şarj Aleti Adaptör" x2 = 499,98 TL/)
+    assert.match(ctx, /sepet_ozeti: "Sepetinde 1 ürün var: 20W PD Type-C Hızlı Şarj Aleti Adaptör \(2 adet\)\. Toplam 499,98 TL; ücretsiz kargoya 0,02 TL kaldı\."/)
     assert.match(ctx, /aday_urunler: #401 20W PD Type-C Hızlı Şarj Aleti Adaptör - A1 249,99 TL/)
     assert.match(ctx, /yonlendirici: niyet=product_search, grup=sarj-aleti, satin_alma=2\/3/)
     const late = prompt.buildTurnContext({ now: new Date('2026-10-23T16:00:00Z'), facts: FACTS, page: null, device: null, cart: null, candidates: [], router: null, notes: [] })

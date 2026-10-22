@@ -10,21 +10,27 @@
  * Order of one turn (SPEC section 2): meta + "Sorunu anlıyorum…" → router (≤ 700 ms, in parallel with the
  * knowledge memo) → canned answer, or candidates + DeepSeek stream (≤ 3 calls, validated sentence by
  * sentence, UI tools end the turn) → server cards → suggestions → done.
+ *
+ * w8: the visitor's cart is part of the turn (cart.ts: show_cart, update_cart, the ready summary sentence),
+ * a short yes/no is read against the previous offer (followup.ts), and sold-out products are kept out of
+ * the candidates, searches and cards unless the visitor named one (catalog-block.ts namedSoldOut).
  */
 import type { AssistantEvent, ChatRequest, HandoffReason, PageContext } from './contract'
 import { maskPII } from './contract'
 import type { CatalogRow, RatingMap } from './catalog-block'
-import { buildCatalogBlock, GROUP_ORDER, GROUP_TITLES, groupHref, searchCatalog } from './catalog-block'
+import { buildCatalogBlock, GROUP_ORDER, GROUP_TITLES, groupHref, namedSoldOut, searchCatalog } from './catalog-block'
+import { cartIntent, cartSummaryText, isCheckoutRequest, normalizeCart, priceCart } from './cart'
+import { followUpNote, followUpOf } from './followup'
 import type { LinkTarget, StoreFacts } from './facts'
 import { buildFactsBlock, buildLinksBlock, istanbulDay } from './facts'
 import { buildProductFactsBlock } from './product-facts'
 import { buildMessages, buildSystemMessage, buildTurnContext, computeCart, type ChatMessage } from './prompt'
 import { sanitize } from './request'
-import { buildRouterState, decide, routeTurn, type RouteDecision } from './router'
+import { buildRouterState, decide, NOTES, routeTurn, type RouteDecision } from './router'
 import { parseWorkersAiSse, type Usage } from './sse-parser'
-import { DATA_TOOLS, TOOL_STEP, TOOLS, catalogLinesFor, isKnownTool, newToolState, runTool, waBaseOf, whatsappEvents, type ProductDetailRow, type ToolContext, type ToolResult } from './tools'
+import { DATA_TOOLS, TOOL_STEP, TOOLS, catalogLinesFor, flushCart, isKnownTool, newToolState, runTool, waBaseOf, whatsappEvents, type ProductDetailRow, type ToolContext, type ToolResult } from './tools'
 import { addToolText, collectAllowed, createTextGuard } from './validator'
-import { CANNED, DEFAULT_TEXT, faqAnswer, POLICY_REASON, policyText, policyTopic } from './canned'
+import { CANNED, DEFAULT_TEXT, faqAnswer, POLICY_REASON, policyText, policyTopic, smallTalkText } from './canned'
 import { buildSuggestions, type TurnEnd } from './suggestions'
 import { detectDevice } from './device'
 import { costMicroUsd } from './limits'
@@ -74,6 +80,8 @@ export interface KnowledgeInput {
 }
 
 const GAMING_CATEGORY = 'Oyun ve Oyuncu Aksesuarları'
+/** The checkout page (app/odeme); the cart itself is a drawer, not a page. */
+export const CHECKOUT_HREF = '/odeme/'
 
 function minPrice(rows: CatalogRow[]): number | null {
     return rows.length ? Math.min(...rows.map(r => r.displayPrice)) : null
@@ -105,6 +113,7 @@ export function buildKnowledge(input: KnowledgeInput): Knowledge {
         links.set(`sayfa:${p.slug}`, { key: `sayfa:${p.slug}`, title: p.title, href: p.href ?? cmsPagePath(p.slug), count: null, fromPrice: null, icon: null })
     }
     links.set('siparislerim', { key: 'siparislerim', title: 'Siparişlerim', href: '/orders/', count: null, fromPrice: null, icon: null })
+    links.set('odeme', { key: 'odeme', title: 'Ödemeye geç', href: CHECKOUT_HREF, count: null, fromPrice: null, icon: null })
     links.set('tum-urunler', { key: 'tum-urunler', title: 'Tüm ürünler', href: '/products/', count: rows.length, fromPrice: minPrice(rows), icon: null })
 
     const factsBlock = buildFactsBlock(input.facts)
@@ -386,6 +395,29 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
             return log
         }
 
+        // ---- "Ödemeye geç" (the chip after a cart answer): the checkout link, no model call ----
+        if (isCheckoutRequest(masked)) {
+            k = await knowledgeP
+            state = newToolState({ pageProduct: pageRow(req.context.page, k), maskedInput: masked, loggedIn: deps.loggedIn })
+            const priced = priceCart(req.context.cart, k.byId, k.facts.freeThreshold)
+            log.mode = 'canned'
+            log.outcome = 'canned'
+            log.intent = 'checkout'
+            out({ t: 'meta', turnId, mode: 'canned', waBase: k.waBase })
+            if (priced.lines.length) {
+                out({ t: 'text', v: `${cartSummaryText(priced)} Ödeme adımına buradan geçebilirsin.` })
+                out({ t: 'links', items: [{ title: 'Ödemeye geç', href: CHECKOUT_HREF, count: null, fromPrice: null, icon: null }] })
+                state.shown.push('links')
+            } else {
+                out({ t: 'text', v: 'Sepetin şu an boş. Ne aradığını yazarsan birlikte bulalım.' })
+            }
+            whatsappEvents({ k, state }, { reason: 'other', summary: masked, productIds: [], variant: 'compact' })?.forEach(out)
+            const chips = buildSuggestions({ kind: 'other' }, { remaining: priced.lines.length ? priced.remaining : null, waShown: state.waVariant != null })
+            if (chips.length) out({ t: 'suggestions', chips })
+            finish('canned')
+            return log
+        }
+
         // ---- Store questions the owner cannot answer for sure: a full WhatsApp card, no model call ----
         const topic = policyTopic(masked, foldTr)
         if (topic) {
@@ -441,7 +473,12 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
         const routeP = routeTurn(deps.ai, deps.models.router, routerState, timeouts.routerMs, turnAbort.signal)
         k = await knowledgeP
         const pageProduct = pageRow(req.context.page, k)
-        state = newToolState({ pageProduct, maskedInput: masked, loggedIn: deps.loggedIn })
+        const shownBefore = [...new Set(req.history.flatMap(h => (h.role === 'assistant' ? h.productIds ?? [] : [])))]
+            .filter(n => Number.isInteger(n) && n > 0)
+            .slice(-8)
+        const visitorCart = normalizeCart(req.context.cart)
+        const soldOutOk = namedSoldOut(k.rows, masked).map(r => r.id)
+        state = newToolState({ pageProduct, maskedInput: masked, loggedIn: deps.loggedIn, cart: visitorCart, shownBefore, soldOutOk })
         out({ t: 'meta', turnId, mode: 'llm', waBase: k.waBase })
         out({ t: 'step', id: 'understand', state: 'active' })
         const route = await routeP
@@ -450,6 +487,21 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
         const decision: RouteDecision = decide(route.answers, masked.length)
         decision.flags.forEach(f => flags.add(f))
         log.intent = decision.intent
+        // A short "olur" to the previous offer, or a cart question, is never a greeting or off topic
+        const followUp = followUpOf(req.history, masked)
+        const cartWish = cartIntent(masked)
+        if ((decision.canned === 'greeting' || decision.canned === 'off_topic') && (followUp?.reply || cartWish)) {
+            decision.canned = null
+            flags.add('canned_skipped')
+        }
+        // ...nor an early hand-off: the early card turns the model's tools off, and these need them
+        if (decision.earlyHandoff && (cartWish || (followUp?.reply === 'yes' && followUp.offer.kind !== 'whatsapp'))) {
+            decision.earlyHandoff = null
+            decision.notes = decision.notes.filter(n => n !== NOTES.earlyHandoff)
+            flags.add('handoff_skipped')
+        }
+        if (cartWish) log.intent = `cart_${cartWish}`
+        else if (followUp?.reply === 'yes') log.intent = 'accept_offer'
         out({ t: 'step', id: 'understand', state: 'done' })
 
         const detected = detectDevice(masked)
@@ -460,7 +512,7 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
         if (decision.canned) {
             log.mode = 'canned'
             log.outcome = decision.canned === 'refusal' ? 'blocked' : 'canned'
-            out({ t: 'text', v: CANNED[decision.canned] })
+            out({ t: 'text', v: decision.canned === 'greeting' ? smallTalkText(masked, req.history.length > 0) : CANNED[decision.canned] })
             // Owner decision (w7): a WhatsApp row under every answer
             whatsappEvents({ k, state }, { reason: 'other', summary: masked, productIds: [], variant: 'compact' })?.forEach(out)
             const chips = buildSuggestions({ kind: 'other' }, { remaining: cartSummary()?.remaining ?? null, waShown: state.waVariant != null })
@@ -487,33 +539,40 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
         }
 
         // ---- Turn context and messages ----
+        // Candidates: never sold out (unless named), never already in the cart; the page product stays first
         const query = `${masked} ${device ?? ''}`.trim()
-        let candidates = searchCatalog(k.rows, query, { group: decision.group, limit: 6 }).rows
+        const cartIds = new Set(visitorCart.map(c => c.id))
+        const pool = k.rows.filter(r => (r.inStock || state.soldOutOk.has(r.id)) && !cartIds.has(r.id))
+        let candidates = searchCatalog(pool, query, { group: decision.group, limit: 6 }).rows
         if (decision.group && candidates.length < 6) {
-            for (const r of searchCatalog(k.rows, query, { limit: 6 }).rows) if (!candidates.includes(r)) candidates.push(r)
+            for (const r of searchCatalog(pool, query, { limit: 6 }).rows) if (!candidates.includes(r)) candidates.push(r)
         }
         if (pageProduct) candidates = [pageProduct, ...candidates.filter(r => r.id !== pageProduct.id)]
         candidates = candidates.slice(0, 6)
-        const cart = cartSummary()
-        const shownBefore = [...new Set(req.history.flatMap(h => (h.role === 'assistant' ? h.productIds ?? [] : [])))]
-            .filter(n => Number.isInteger(n) && n > 0)
-            .slice(-8)
+        const priced = priceCart(visitorCart, k.byId, k.facts.freeThreshold)
+        const cart = priced.lines.length ? priced : null
+        if (cartWish === 'view') notes.push(priced.lines.length ? NOTES_W8.cartView : NOTES_W8.cartEmpty)
+        else if (cartWish === 'edit') notes.push(priced.lines.length ? NOTES_W8.cartEdit : NOTES_W8.cartEmpty)
+        if (priced.lines.length && priced.remaining > 0 && isFreeShippingQuestion(masked)) notes.push(NOTES_W8.freeShipping)
+        const fuNote = followUp ? followUpNote(followUp, masked) : null
+        if (fuNote) notes.push(fuNote)
         const turnContext = buildTurnContext({
             now: deps.now(),
             facts: k.facts,
             page: describePage(req.context.page, k),
             device,
-            cart,
+            cart: priced,
             candidates,
             router: route.answers ? { intent: decision.intent, group: decision.group, buyingStage: decision.buyingStage } : null,
             notes,
             shownBefore,
             waBefore: req.history.some(h => h.role === 'assistant' && h.wa),
+            offer: followUp?.offer ?? null,
         })
         const messages: ChatMessage[] = buildMessages(k.systemMessage, req.history, turnContext, masked)
         const historyUserTexts = req.history.filter(h => h.role === 'user').map(h => maskPII(sanitize(h.text)))
         const allowed = collectAllowed({
-            prices: [...k.allowedPrices, ...(cart ? [cart.total, cart.remaining] : [])],
+            prices: [...k.allowedPrices, ...(cart ? [cart.total, cart.remaining, ...cart.lines.map(l => l.lineTotal)] : [])],
             texts: [k.factsBlock, turnContext, masked, ...historyUserTexts],
             cutoff: k.facts.cutoff,
             campaigns: k.facts.campaigns,
@@ -735,11 +794,14 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
                 }
                 r.steps.forEach(out)
                 r.events.forEach(out)
+                if (r.prices) allowed.prices.push(...r.prices.filter(Number.isFinite))
                 addToolText(allowed, `${r.forModel}\n${catalogLinesFor(k, r.productIds)}`)
                 if (r.isData) dataCalled = true
                 executed.push(tc)
                 toolMessages.push({ role: 'tool', tool_call_id: tc.id, content: r.forModel })
             }
+            // update_cart: the cart card as it is after the change (contract: cart_ops, then cart)
+            flushCart(ctx).forEach(out)
             if (stopTurn || call === 2 || !dataCalled) break
             messages.push({
                 role: 'assistant',
@@ -771,10 +833,34 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
                 flags.add('tool_error')
             }
         }
+        // A short yes to a category offer: the categories, even when the model did something else
+        if (followUp?.reply === 'yes' && followUp.offer.kind === 'categories' && !state.shown.includes('links')) {
+            flags.add('offer_rescue')
+            const keys = mainCategoryKeys(k)
+            try {
+                if (keys.length) (await runTool('show_category', JSON.stringify({ keys }), ctx)).events.forEach(out)
+            } catch {
+                flags.add('tool_error')
+            }
+        }
+        // A cart question: the cart card, even when the model only wrote text
+        if (cartWish && state.cart.length && !state.shown.includes('cart')) {
+            flags.add('cart_rescue')
+            try {
+                const r = await runTool('show_cart', '{}', ctx)
+                r.events.forEach(out)
+            } catch {
+                flags.add('tool_error')
+            }
+        }
+        flushCart(ctx).forEach(out)
         let unsure = false
         if (!textSent) {
             const first = state.shown[0]
-            if (first) out({ t: 'text', v: DEFAULT_TEXT[first] })
+            if (first === 'cart' || first === 'cart_ops') out({ t: 'text', v: cartSummaryText(priceCart(state.cart, k.byId, k.facts.freeThreshold)) })
+            else if (first === 'links' && followUp?.offer.kind === 'categories') out({ t: 'text', v: 'Kategorilerimiz şunlar:' })
+            else if (first) out({ t: 'text', v: DEFAULT_TEXT[first] })
+            else if (cartWish && !state.cart.length) out({ t: 'text', v: 'Sepetin şu an boş. Ne aradığını yazarsan birlikte bulalım.' })
             else {
                 out({ t: 'text', v: CANNED.unsure })
                 unsure = true
@@ -794,14 +880,17 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
             whatsappEvents(ctx, { reason: decision.compactHandoff ?? 'other', summary: masked, productIds: [], variant: 'compact' })?.forEach(out)
         }
 
+        const nowCart = priceCart(state.cart, k.byId, k.facts.freeThreshold)
         const end: TurnEnd = state.waVariant === 'full'
             ? { kind: 'whatsapp_full' }
-            : state.shown.includes('compare')
-                ? { kind: 'compare' }
-                : state.shown.includes('products')
-                    ? { kind: 'products', group: state.productGroup }
-                    : { kind: 'other' }
-        const chips = buildSuggestions(end, { remaining: cart ? cart.remaining : null, waShown: state.waVariant != null })
+            : state.shown.includes('cart') || state.shown.includes('cart_ops')
+                ? { kind: 'cart', empty: nowCart.lines.length === 0 }
+                : state.shown.includes('compare')
+                    ? { kind: 'compare' }
+                    : state.shown.includes('products')
+                        ? { kind: 'products', group: state.productGroup }
+                        : { kind: 'other' }
+        const chips = buildSuggestions(end, { remaining: nowCart.lines.length ? nowCart.remaining : null, waShown: state.waVariant != null })
         if (chips.length) out({ t: 'suggestions', chips })
 
         if (useFallback) {
@@ -846,4 +935,29 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
 
 function pageRow(page: PageContext, k: Knowledge): CatalogRow | null {
     return page.type === 'product' ? k.bySlug.get(page.slug) ?? null : null
+}
+
+/** Turn notes of the w8 revision (cart, free shipping). */
+export const NOTES_W8 = {
+    cartView: 'Müşteri sepetini soruyor: sepet_ozeti cümlesini aynen kullan (ürün sayısı, adet, ürünler, toplam, kalan), sonra show_cart çağır. Sepetteki ürünler için show_products çağırma.',
+    cartEdit: "Müşteri sepetini değiştirmek istiyor: sepet_urunleri'nden doğru id'yi bul ve update_cart çağır (qty 0 = çıkar). Hangi ürün olduğu belli değilse tek kısa soru sor.",
+    cartEmpty: 'Sepet boş: bunu kısaca söyle ve ne aradığını sor.',
+    freeShipping: "Ücretsiz kargo için ürün soruyor: ucretsiz_kargoya_kalan tutara yakın, stokta olan, sepette olmayan ve sepetteki ürünlerle uyumlu 2–3 ürünü show_products ile göster.",
+} as const
+
+/** "Kargo bedava için ne eklesem?", "ücretsiz kargo için ne alayım". */
+export function isFreeShippingQuestion(text: string): boolean {
+    const f = foldTr(text)
+    return /(kargo bedava|ucretsiz kargo|kargo ucretsiz|bedava kargo)/.test(f) && /(ekle|alsam|alayim|ne al|oner|tamamla|kalan|icin)/.test(f)
+}
+
+/** The main product groups for a "show me the categories" answer: the biggest in-stock groups, at most 6. */
+export function mainCategoryKeys(k: Knowledge): string[] {
+    const counts = new Map<string, number>()
+    for (const r of k.rows) if (r.inStock && r.group !== 'diger') counts.set(r.group, (counts.get(r.group) ?? 0) + 1)
+    return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1] || (GROUP_ORDER as readonly string[]).indexOf(a[0]) - (GROUP_ORDER as readonly string[]).indexOf(b[0]))
+        .map(([g]) => `grup:${g}`)
+        .filter(key => k.links.has(key))
+        .slice(0, 6)
 }

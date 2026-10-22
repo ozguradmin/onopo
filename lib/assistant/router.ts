@@ -26,6 +26,8 @@ export const ROUTER_QUESTIONS = {
             bulk: 'Wholesale, many units, company invoice',
             complaint: 'Complaint or angry customer',
             human_request: 'Wants a human, phone call or WhatsApp',
+            cart: 'About their own shopping cart: what is in it, its total, removing an item or changing a quantity',
+            accept_offer: 'A short yes (olur, evet, tamam, göster) or no to what the assistant offered in recent',
             smalltalk: 'Greeting, thanks, chit-chat',
             off_topic: 'Unrelated to the shop or its products' } },
     group: { type: 'choice', instructions: 'Which product group is the customer talking about?',

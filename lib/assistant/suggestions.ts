@@ -24,6 +24,7 @@ export type TurnEnd =
     | { kind: 'compare' }
     | { kind: 'faq'; chip: ChipAction }
     | { kind: 'whatsapp_full' }
+    | { kind: 'cart'; empty: boolean }
     | { kind: 'other' }
 
 export function buildSuggestions(end: TurnEnd, opts: { remaining: number | null; waShown: boolean }): Suggestion[] {
@@ -44,13 +45,20 @@ export function buildSuggestions(end: TurnEnd, opts: { remaining: number | null;
         case 'compare':
             chips = [{ label: 'Hangisini önerirsin?' }, { label: 'Ne zaman kargoya verilir?', chip: 'faq_cutoff' }]
             break
+        case 'cart':
+            // After a cart answer: fill up to free shipping (added below when something is left), or check out
+            chips = end.empty ? [...DEFAULT_CHIPS] : [{ label: 'Ödemeye geç' }]
+            break
         case 'faq':
             chips = FAQ_CHIPS.filter(c => c.chip !== end.chip).slice(0, 2)
             break
         default:
             chips = [...DEFAULT_CHIPS]
     }
-    if (opts.remaining != null && opts.remaining > 0) chips.push(FREE_SHIPPING_CHIP)
+    if (opts.remaining != null && opts.remaining > 0) {
+        if (end.kind === 'cart') chips.unshift(FREE_SHIPPING_CHIP)
+        else chips.push(FREE_SHIPPING_CHIP)
+    }
     if (!opts.waShown) chips.push(WHATSAPP_CHIP)
     return chips.slice(0, 3)
 }

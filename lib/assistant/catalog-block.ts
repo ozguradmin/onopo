@@ -213,10 +213,18 @@ export const CATALOG_MAX_CHARS = 18_000
 /** Rows (or screen-protector entries) kept per group when the block is still too long without tags. */
 export const CATALOG_ROWS_PER_GROUP_WHEN_CUT = 40
 export const CATALOG_CUT_NOTE = '# liste kısaltıldı: diğer ürünler için search_products kullan'
+/**
+ * Heading of the sold-out section. Sold-out products are NOT listed in their groups (a live transcript had a
+ * sold-out trigger suggested as a free-shipping filler): they sit apart, without a price, so the model can
+ * only say "tükendi" when a visitor names one.
+ */
+export const SOLD_OUT_HEADING = '## TÜKENDİ: satışta değil. Önerme, karta koyma, ücretsiz kargo için ekletme; yalnızca müşteri bu ürünü adıyla sorarsa "tükendi" de'
 
-function renderCatalog(rows: readonly CatalogRow[], version: string, opts: { tags: boolean; perGroup: number | null }): string {
+function renderCatalog(allRows: readonly CatalogRow[], version: string, opts: { tags: boolean; perGroup: number | null }): string {
     const lines: string[] = [`<katalog surum="${version}">`, '# satır: id | ad | fiyat TL | etiketler']
     let cut = false
+    const rows = allRows.filter(r => r.inStock)
+    const soldOut = allRows.filter(r => !r.inStock).sort((a, b) => a.id - b.id)
     for (const [group, list] of groupRows(rows)) {
         if (list.length === 0) continue
         const title = `${GROUP_TITLES[group]} (${group})`
@@ -254,6 +262,10 @@ function renderCatalog(rows: readonly CatalogRow[], version: string, opts: { tag
         }
     }
     if (cut) lines.push(CATALOG_CUT_NOTE)
+    if (soldOut.length) {
+        lines.push(SOLD_OUT_HEADING, '# satır: id | ad')
+        for (const r of soldOut) lines.push(`${r.id} | ${r.displayName}`)
+    }
     lines.push('</katalog>')
     return lines.join('\n')
 }
@@ -304,6 +316,8 @@ export interface CatalogSearchOptions {
     sort?: CatalogSort | null
     /** Default 6. */
     limit?: number | null
+    /** Only the AND match of every known word (no relaxed "most words" pass). */
+    strict?: boolean
 }
 
 export interface CatalogSearchResult {
@@ -342,7 +356,7 @@ export function searchCatalog(rows: readonly CatalogRow[], query: string, opts: 
     } else {
         const strict = prepareQuery(known.join(' '))
         ranked = searchItems(pool.map(docOf), strict, { soldOutLast: true }).map(d => d.row)
-        if (ranked.length === 0) {
+        if (ranked.length === 0 && !opts.strict) {
             const singles = known.map(t => prepareQuery(t))
             const scored = pool
                 .map(r => {
@@ -365,6 +379,28 @@ export function searchCatalog(rows: readonly CatalogRow[], query: string, opts: 
     }
     pool = ranked
     return { rows: pool.slice(0, limit), total: pool.length }
+}
+
+/**
+ * Sold-out products the visitor NAMED in this message ("PUBG nişan tetik var mı?"): every known word of the
+ * message matches the product and at most three products match them all, or the message carries the
+ * product code. Only these (and the product of the page the visitor is on) may be shown as a sold-out card;
+ * a sold-out product is never suggested otherwise.
+ */
+export function namedSoldOut(rows: readonly CatalogRow[], text: string): CatalogRow[] {
+    const out: CatalogRow[] = []
+    const folded = ` ${normalizeText(text)} `
+    for (const r of rows) {
+        if (r.inStock || !r.code) continue
+        const code = normalizeText(r.code)
+        if (code.length >= 3 && folded.includes(` ${code} `)) out.push(r)
+    }
+    const known = prepareQuery(text).tokens.filter(t => rows.some(r => scoreSearch(docOf(r), prepareQuery(t)) > 0))
+    if (known.length >= 2) {
+        const { rows: hits, total } = searchCatalog(rows, known.join(' '), { strict: true, limit: 4 })
+        if (total <= 3) for (const r of hits) if (!r.inStock && !out.includes(r)) out.push(r)
+    }
+    return out
 }
 
 // ---------------------------------------------------------------------------------------------

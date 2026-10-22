@@ -11,6 +11,7 @@ import type { AssistantEvent, CardProduct, HandoffReason, LinkItem, StepId } fro
 import { buildWhatsappMessage, formatPriceTR, maskPII } from './contract'
 import type { CatalogRow } from './catalog-block'
 import { catalogLine, isGroupKey, priceText, rowTags, searchCatalog, toCardProduct } from './catalog-block'
+import { applyCartOps, cartEvent, priceCart, type CartItem } from './cart'
 import { INFO_TOPICS, infoRows, amountText } from './facts'
 import { safeJson } from './sse-parser'
 import type { Knowledge } from './turn'
@@ -172,7 +173,7 @@ export const TOOLS = deepFreeze([
                             "maxLength": 60
                         },
                         "minItems": 1,
-                        "maxItems": 3
+                        "maxItems": 6
                     }
                 }
             }
@@ -254,10 +255,61 @@ export const TOOLS = deepFreeze([
                 }
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "show_cart",
+            "description": "Müşterinin sepetini kart olarak gösterir: ürünler, adetler, toplam ve ücretsiz kargoya kalan tutar. Sepet sorulduğunda kısa özeti yazdıktan sonra çağır.",
+            "parameters": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_cart",
+            "description": "Müşteri isteyince sepetteki ürünü çıkarır ya da adedini değiştirir (qty 0 = çıkar). Müşteri açıkça isterse bu sohbette gösterilen bir ürünü ekler. Önce metin yazma; sonuç dönünce tek cümleyle onayla.",
+            "parameters": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "ops"
+                ],
+                "properties": {
+                    "ops": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                                "id",
+                                "qty"
+                            ],
+                            "properties": {
+                                "id": {
+                                    "type": "integer"
+                                },
+                                "qty": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 10
+                                }
+                            }
+                        },
+                        "minItems": 1,
+                        "maxItems": 10
+                    }
+                }
+            }
+        }
     }
 ] as const)
 
-export type ToolName = 'search_products' | 'get_product' | 'show_products' | 'show_comparison' | 'show_category' | 'store_info' | 'whatsapp_handoff'
+export type ToolName = 'search_products' | 'get_product' | 'show_products' | 'show_comparison' | 'show_category' | 'store_info' | 'whatsapp_handoff' | 'show_cart' | 'update_cart'
 export const DATA_TOOLS: ReadonlySet<string> = new Set(['search_products', 'get_product'])
 export const TOOL_NAMES: ReadonlySet<string> = new Set(TOOLS.map(t => t.function.name))
 
@@ -270,6 +322,8 @@ export const TOOL_STEP: Record<ToolName, StepId> = {
     show_category: 'categories',
     store_info: 'store_info',
     whatsapp_handoff: 'whatsapp',
+    show_cart: 'prices',
+    update_cart: 'prices',
 }
 
 export function isKnownTool(name: string): name is ToolName {
@@ -288,7 +342,7 @@ export interface ProductDetailRow {
     variations: { name: string; value: string }[]
 }
 
-export type CardKind = 'products' | 'compare' | 'links' | 'store_info' | 'whatsapp'
+export type CardKind = 'products' | 'compare' | 'links' | 'store_info' | 'whatsapp' | 'cart' | 'cart_ops'
 
 /** Mutable per-turn state shared by the executors and the turn loop. */
 export interface ToolState {
@@ -304,10 +358,36 @@ export interface ToolState {
     pageProduct: CatalogRow | null
     maskedInput: string
     loggedIn: boolean
+    /** The visitor's cart (context.cart, duplicates merged), changed by update_cart within the turn. */
+    cart: CartItem[]
+    /** update_cart changed the cart and no fresh cart card has been sent since (flushCart sends it). */
+    cartDirty: boolean
+    /** Products shown on cards earlier in this conversation (history productIds): update_cart may add these. */
+    shownBefore: ReadonlySet<number>
+    /** Sold-out products the visitor named in this message, plus a sold-out page product: only these may get a card. */
+    soldOutOk: ReadonlySet<number>
 }
 
-export function newToolState(init: { pageProduct: CatalogRow | null; maskedInput: string; loggedIn: boolean }): ToolState {
-    return { lastSearch: null, shown: [], productIds: [], productGroup: null, waVariant: null, handoff: null, ...init }
+export interface ToolStateInit {
+    pageProduct: CatalogRow | null
+    maskedInput: string
+    loggedIn: boolean
+    cart?: readonly CartItem[]
+    shownBefore?: Iterable<number>
+    soldOutOk?: Iterable<number>
+}
+
+export function newToolState(init: ToolStateInit): ToolState {
+    const soldOutOk = new Set(init.soldOutOk ?? [])
+    if (init.pageProduct && !init.pageProduct.inStock) soldOutOk.add(init.pageProduct.id)
+    return {
+        lastSearch: null, shown: [], productIds: [], productGroup: null, waVariant: null, handoff: null,
+        pageProduct: init.pageProduct, maskedInput: init.maskedInput, loggedIn: init.loggedIn,
+        cart: (init.cart ?? []).map(c => ({ id: c.id, qty: c.qty })),
+        cartDirty: false,
+        shownBefore: new Set(init.shownBefore ?? []),
+        soldOutOk,
+    }
 }
 
 export interface ToolContext {
@@ -327,6 +407,8 @@ export interface ToolResult {
     isData: boolean
     /** Products this result talks about (their catalogue lines become validator tool text). */
     productIds: number[]
+    /** Amounts this result computed (cart totals): real prices the model may repeat. */
+    prices?: number[]
 }
 
 const RESULT_MAX = 4000
@@ -464,12 +546,19 @@ function addShownProducts(state: ToolState, rows: CatalogRow[]) {
 
 const SORTS = new Set(['relevance', 'price_asc', 'price_desc'])
 
+/** Rows the assistant may offer: in stock, or a sold-out product the visitor named (or whose page they are on). */
+export function offerableRows(ctx: Pick<ToolContext, 'k' | 'state'>): CatalogRow[] {
+    return ctx.k.rows.filter(r => r.inStock || ctx.state.soldOutOk.has(r.id))
+}
+
+const inCart = (state: ToolState, id: number) => state.cart.some(c => c.id === id)
+
 async function searchProducts(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
     const query = text(args.query, 100)
     const group = isGroupKey(args.group) ? args.group : null
     const limit = Math.max(1, Math.min(8, toInt(args.limit) ?? 6))
     const sort = typeof args.sort === 'string' && SORTS.has(args.sort) ? (args.sort as 'relevance' | 'price_asc' | 'price_desc') : 'relevance'
-    const { rows, total } = searchCatalog(ctx.k.rows, query, {
+    const { rows, total } = searchCatalog(offerableRows(ctx), query, {
         group,
         minPrice: toNum(args.min_price),
         maxPrice: toNum(args.max_price),
@@ -479,7 +568,7 @@ async function searchProducts(args: Record<string, unknown>, ctx: ToolContext): 
     ctx.state.lastSearch = { query, total }
     const result = {
         toplam: total,
-        sonuclar: rows.map(r => ({ id: r.id, ad: r.displayName, fiyat: `${priceText(r.displayPrice)} TL`, grup: r.group, etiketler: rowTags(r) })),
+        sonuclar: rows.map(r => ({ id: r.id, ad: r.displayName, fiyat: `${priceText(r.displayPrice)} TL`, grup: r.group, etiketler: rowTags(r), ...(inCart(ctx.state, r.id) ? { sepette: true } : {}) })),
     }
     return { forModel: wrapForModel(result), events: [], steps: [step('search', total)], isData: true, productIds: rows.map(r => r.id) }
 }
@@ -534,10 +623,22 @@ async function getProduct(args: Record<string, unknown>, ctx: ToolContext): Prom
     return { forModel, events: [], steps: [step('details')], isData: true, productIds: [row.id] }
 }
 
+/**
+ * Product cards. Never a "Sepete Ekle" card for a product already in the cart (all of them in the cart →
+ * the cart card instead), never a sold-out product the visitor did not name; a named sold-out product gets
+ * its card (marked inStock false: the UI shows "Tükendi") and the full WhatsApp card under it.
+ */
 function showProducts(args: Record<string, unknown>, ctx: ToolContext): ToolResult {
-    const ids = idList(args.ids, 4).filter(id => ctx.k.byId.has(id))
+    const requested = idList(args.ids, 4).filter(id => ctx.k.byId.has(id))
+    const alreadyInCart = requested.filter(id => inCart(ctx.state, id))
+    const soldOut = requested.filter(id => !alreadyInCart.includes(id) && !ctx.k.byId.get(id)!.inStock && !ctx.state.soldOutOk.has(id))
+    const ids = requested.filter(id => !alreadyInCart.includes(id) && !soldOut.includes(id))
     if (ids.length === 0) {
-        return { forModel: wrapForModel({ hata: 'gecersiz_id' }), events: [], steps: [step('prices')], isData: true, productIds: [] }
+        if (alreadyInCart.length) {
+            const r = showCart({}, ctx)
+            return { ...r, forModel: wrapForModel({ gosterildi: [], sepette_zaten: alreadyInCart, sepet_karti: r.events.length > 0 }), productIds: alreadyInCart }
+        }
+        return { forModel: wrapForModel(soldOut.length ? { hata: 'tukendi', tukendi: soldOut } : { hata: 'gecersiz_id' }), events: [], steps: [step('prices')], isData: true, productIds: [] }
     }
     const rows = ids.map(id => ctx.k.byId.get(id)!)
     const events: AssistantEvent[] = []
@@ -551,8 +652,14 @@ function showProducts(args: Record<string, unknown>, ctx: ToolContext): ToolResu
             moreHref: ls && ls.query && ls.total > rows.length ? `/products/?q=${encodeURIComponent(ls.query)}` : null,
             total: ls ? ls.total : null,
         })
+        const out = rows.find(r => !r.inStock)
+        if (out) whatsappEvents(ctx, { reason: 'product_request', summary: "Bu ürün tükenmiş görünüyor; tekrar gelecek mi?", productIds: [out.id], variant: 'full' })?.forEach(e => events.push(e))
     }
-    return { forModel: wrapForModel({ gosterildi: ids }), events, steps: [step('prices')], isData: false, productIds: ids }
+    const result: Record<string, unknown> = { gosterildi: ids }
+    if (alreadyInCart.length) result.sepette_zaten = alreadyInCart
+    if (soldOut.length) result.tukendi_gosterilmedi = soldOut
+    if (rows.some(r => !r.inStock)) result.tukendi_karti = rows.filter(r => !r.inStock).map(r => r.id)
+    return { forModel: wrapForModel(result), events, steps: [step('prices')], isData: false, productIds: ids }
 }
 
 function connectorOf(chips: string[]): string {
@@ -560,7 +667,7 @@ function connectorOf(chips: string[]): string {
 }
 
 async function showComparison(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
-    const ids = idList(args.ids, 3).filter(id => ctx.k.byId.has(id))
+    const ids = idList(args.ids, 3).filter(id => ctx.k.byId.has(id) && (ctx.k.byId.get(id)!.inStock || ctx.state.soldOutOk.has(id)))
     if (ids.length < 2) {
         return { forModel: wrapForModel({ hata: 'gecersiz_id' }), events: [], steps: [step('compare', ids.length)], isData: true, productIds: [] }
     }
@@ -598,7 +705,7 @@ function showCategory(args: Record<string, unknown>, ctx: ToolContext): ToolResu
     for (const k of raw) {
         const key = text(k, 60)
         if (key && ctx.k.links.has(key) && !keys.includes(key)) keys.push(key)
-        if (keys.length >= 3) break
+        if (keys.length >= 6) break
     }
     if (keys.length === 0) {
         return { forModel: wrapForModel({ hata: 'gecersiz_anahtar' }), events: [], steps: [step('categories')], isData: true, productIds: [] }
@@ -653,6 +760,82 @@ function whatsappHandoff(args: Record<string, unknown>, ctx: ToolContext): ToolR
     return { forModel: wrapForModel({ gosterildi: true }), events, steps: [step('whatsapp')], isData: false, productIds: productIds.filter(id => ctx.k.byId.has(id)) }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Cart (contract v2)
+// ---------------------------------------------------------------------------------------------
+
+function cartAmounts(p: ReturnType<typeof priceCart>): number[] {
+    return [p.total, p.remaining, ...p.lines.map(l => l.lineTotal)]
+}
+
+/** The cart card (first one of the turn), or nothing for an empty cart. */
+function showCart(_args: Record<string, unknown>, ctx: ToolContext): ToolResult {
+    const p = priceCart(ctx.state.cart, ctx.k.byId, ctx.k.facts.freeThreshold)
+    if (p.lines.length === 0) {
+        return { forModel: wrapForModel({ sepet: 'bos' }), events: [], steps: [step('prices')], isData: false, productIds: [] }
+    }
+    const events: AssistantEvent[] = []
+    if (markShown(ctx.state, 'cart')) {
+        events.push(cartEvent(p, ctx.k.ratings))
+        ctx.state.cartDirty = false
+    }
+    return { forModel: wrapForModel({ gosterildi: true }), events, steps: [step('prices')], isData: false, productIds: p.lines.map(l => l.row.id), prices: cartAmounts(p) }
+}
+
+/**
+ * The visitor's own change ("toz haznesini sil", "2 tane yap"): validated against the cart and the products
+ * shown in this conversation, sent as one cart_ops event; flushCart then sends the cart after the change.
+ * A data result: the model confirms in one sentence with the new totals.
+ */
+function updateCart(args: Record<string, unknown>, ctx: ToolContext): ToolResult {
+    const raw = Array.isArray(args.ops) ? args.ops : []
+    const ops: { id: number; qty: number }[] = []
+    for (const o of raw) {
+        if (!o || typeof o !== 'object') continue
+        const id = toInt((o as Record<string, unknown>).id)
+        const qty = toInt((o as Record<string, unknown>).qty)
+        if (id && id > 0 && qty != null && qty >= 0) ops.push({ id, qty })
+    }
+    if (ops.length === 0) {
+        return { forModel: wrapForModel({ hata: 'gecersiz_arguman' }), events: [], steps: [step('prices')], isData: true, productIds: [] }
+    }
+    const shown = new Set<number>([...ctx.state.shownBefore, ...ctx.state.productIds, ...(ctx.state.pageProduct ? [ctx.state.pageProduct.id] : [])])
+    const r = applyCartOps(ctx.state.cart, ops, ctx.k.byId, shown)
+    if (r.applied.length === 0) {
+        return { forModel: wrapForModel({ yapilmadi: r.rejected }), events: [], steps: [step('prices')], isData: true, productIds: [] }
+    }
+    ctx.state.cart = r.cart
+    ctx.state.cartDirty = true
+    ctx.state.shown.push('cart_ops')
+    const p = priceCart(r.cart, ctx.k.byId, ctx.k.facts.freeThreshold)
+    const result: Record<string, unknown> = {
+        yapildi: r.changes,
+        sepet: {
+            urun: p.lines.length,
+            adet: p.count,
+            toplam: `${priceText(p.total)} TL`,
+            ucretsiz_kargoya_kalan: p.lines.length === 0 ? null : p.remaining > 0 ? `${priceText(p.remaining)} TL` : 'yok (kargo bedava)',
+        },
+    }
+    if (r.rejected.length) result.yapilmadi = r.rejected
+    return {
+        forModel: wrapForModel(result),
+        events: [{ t: 'cart_ops', ops: r.applied, note: r.note }],
+        steps: [step('prices')],
+        isData: true,
+        productIds: r.changes.map(c => c.id),
+        prices: cartAmounts(p),
+    }
+}
+
+/** After a batch of tool calls: the cart card as it is after update_cart (contract: cart_ops, then cart). */
+export function flushCart(ctx: Pick<ToolContext, 'k' | 'state'>): Extract<AssistantEvent, { t: 'cart' }>[] {
+    if (!ctx.state.cartDirty) return []
+    ctx.state.cartDirty = false
+    if (!ctx.state.shown.includes('cart')) ctx.state.shown.push('cart')
+    return [cartEvent(priceCart(ctx.state.cart, ctx.k.byId, ctx.k.facts.freeThreshold), ctx.k.ratings)]
+}
+
 /** Runs one tool. `rawArgs` is the model's JSON string or object; bad arguments give {"hata":"gecersiz_arguman"}. */
 export async function runTool(name: ToolName, rawArgs: unknown, ctx: ToolContext): Promise<ToolResult> {
     const args = safeJson(rawArgs)
@@ -667,6 +850,8 @@ export async function runTool(name: ToolName, rawArgs: unknown, ctx: ToolContext
         case 'show_category': return showCategory(args, ctx)
         case 'store_info': return storeInfo(args, ctx)
         case 'whatsapp_handoff': return whatsappHandoff(args, ctx)
+        case 'show_cart': return showCart(args, ctx)
+        case 'update_cart': return updateCart(args, ctx)
     }
 }
 
