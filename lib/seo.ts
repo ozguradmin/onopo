@@ -558,7 +558,23 @@ const TITLE_CASE_FIXES: Rewrite[] = [
     [/(\d)\s?MM\b/g, '$1 mm'],
     [/(\d)\s?CM\b/g, '$1 cm'],
     [/\bTurbu\b/g, 'Turbo'],
+    [/\bPubg\b/g, 'PUBG'],
+    [/(\d\s)In(?=\s+\d)/g, '$1in'], // "5 In 1" -> "5 in 1"
+    [/(^|\s)İn[cç](?=\s|$)/g, '$1inç'], // "9.6 İnc" -> "9.6 inç"
 ]
+
+/** A unit right after a number ("3.5 mm", "1 Metre", "20 W"): the two are never separated by a cut. */
+const UNIT_AFTER_NUMBER = /^\s?(?:mAh|mm|cm|m|M|Metre|metre|W|A|V|inç)(?=\s|$|[,/)])/
+
+/** truncateWords for titles that never ends on a number whose unit was cut off ("… 3.5" from "… 3.5 mm"). */
+function truncateTitleWords(s: string, max: number): string {
+    const full = collapseWs(s)
+    let cut = truncateWords(full, max)
+    if (/\d$/.test(cut) && full.startsWith(cut) && UNIT_AFTER_NUMBER.test(full.slice(cut.length))) {
+        cut = cut.replace(/\s*\S+$/, '').replace(DANGLING, '').replace(/[\s,;:(\-–—|/]+$/, '')
+    }
+    return cut
+}
 
 /** Strips the leading brand ("onopo ", "ONOPO - ") from a product name. */
 export function stripBrandPrefix(name: string): string {
@@ -632,7 +648,7 @@ export function productTitle(name: string, max: number = PRODUCT_TITLE_MAX): str
             if (s.length <= budget) break
             s = collapseWs(s.replace(re, rep))
         }
-        return finish(s.length > budget ? truncateWords(s, budget) : s)
+        return finish(s.length > budget ? truncateTitleWords(s, budget) : s)
     }
 
     let before = s.slice(0, type.index).trim()
@@ -656,11 +672,12 @@ export function productTitle(name: string, max: number = PRODUCT_TITLE_MAX): str
     // "Kablolu Kulaklık … Kulaklık": the head noun already appears earlier, do not repeat it
     if (before.includes(head)) head = ''
     if (total() > budget) {
-        const room = budget - [head, after].filter(Boolean).join(' ').length - 1
-        before = room >= 8 ? truncateWords(before, room) : ''
+        const rest = [head, after].filter(Boolean).join(' ')
+        const room = budget - (rest ? rest.length + 1 : 0)
+        before = room >= 8 ? truncateTitleWords(before, room) : ''
     }
     let result = [before, head, after].filter(Boolean).join(' ')
-    if (result.length > budget) result = truncateWords(result, budget)
+    if (result.length > budget) result = truncateTitleWords(result, budget)
     return finish(result)
 }
 
@@ -904,11 +921,15 @@ function pageSuffix(page?: number): string {
     return page && page > 1 ? ` - Sayfa ${page}` : ''
 }
 
-/** "<Category> Modelleri ve Fiyatları" when it fits, else shorter. */
+/** Category names that are a selection, not a kind of product ("Çok Satanlar", "Yeni Gelenler", "İndirimli Ürünler"). */
+const MERCHANDISING_CATEGORY = /(^|\s)(cok satan|en cok|yeni gelen|yeni urun|indirim|kampanya|firsat|outlet|one cikan|populer|trend)/
+
+/** "<Category> Modelleri ve Fiyatları" when it fits, else shorter; a selection like "Çok Satanlar" keeps its plain name. */
 export function categoryTitle(name: string, page?: number): string {
     const suffix = pageSuffix(page)
     const max = PRODUCT_TITLE_MAX - suffix.length
-    for (const t of [`${name} Modelleri ve Fiyatları`, `${name} Fiyatları`, name]) {
+    const forms = MERCHANDISING_CATEGORY.test(foldTr(name)) ? [name] : [`${name} Modelleri ve Fiyatları`, `${name} Fiyatları`, name]
+    for (const t of forms) {
         if (t.length <= max) return `${t}${suffix}`
     }
     return `${truncateWords(name, max)}${suffix}`
