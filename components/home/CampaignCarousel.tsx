@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { onPageAwake } from '@/components/layout/page-awake'
 
 function prefersReducedMotion(): boolean {
     return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -15,9 +16,9 @@ const AUTOPLAY_MS = 5000
  * Swipe slider for the campaign banners at the top of the home page (components/home/CampaignBanners).
  * The slides are server-rendered role="group" children (the section around this is the labelled carousel,
  * the ARIA carousel pattern); this island adds the dots, the desktop arrows and a gentle autoplay. Autoplay starts
- * with the visitor's first scroll, touch, click or key: a page that is only loaded and watched (a speed test)
- * keeps its first slide, otherwise its last frame differs from every earlier one and Speed Index counts the
- * page as still drawing until the slide moved (~20 s on Lighthouse's phone run). It never runs
+ * with the visitor's first scroll, touch, click or key, or 6 s after the page has loaded and is visible
+ * (components/layout/page-awake.ts; owner: a phone that only opened the page must see the banners slide too),
+ * whichever comes first; the first slide stays still while the page loads. It never runs
  * with prefers-reduced-motion, while the slider is off screen or the tab is hidden, or while the pointer
  * or focus is on it. A swipe or a control does NOT stop it (owner):
  * it only restarts the 5 s countdown, so the next slide comes a full interval later. The pause button keeps
@@ -78,23 +79,14 @@ export function CampaignCarousel({ count, children }: { count: number; children:
         }
     }, [count])
 
-    // Autoplay: on at the first interaction with the page, unless reduced motion
+    // Autoplay: on at the first interaction with the page or 6 s after it has loaded and is visible, unless
+    // reduced motion
     React.useEffect(() => {
         if (count < 2 || prefersReducedMotion()) return
-        const events = ['pointerdown', 'scroll', 'keydown', 'touchstart', 'wheel'] as const
-        let started = false
-        const start = () => {
-            if (started) return
-            started = true
+        return onPageAwake(() => {
             lastMove.current = Date.now()
             setPlaying(true)
-            cleanup()
-        }
-        const cleanup = () => {
-            events.forEach(e => window.removeEventListener(e, start))
-        }
-        events.forEach(e => window.addEventListener(e, start, { passive: true, once: true }))
-        return cleanup
+        })
     }, [count])
 
     React.useEffect(() => {
