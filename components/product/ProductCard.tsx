@@ -7,7 +7,7 @@ import { Price } from '@/components/ui/Price'
 import { FavoriteButton, QuickAddButton } from '@/components/product/ProductCardActions'
 import { ProductCardImages } from '@/components/product/ProductCardImages'
 import { brandOf, specChips, splitDisplayName } from '@/lib/search'
-import { discountPercent, displayPrice, MIN_DISCOUNT_BADGE_PERCENT } from '@/lib/format'
+import { discountPercent, displayPrice, formatTL, MIN_DISCOUNT_BADGE_PERCENT } from '@/lib/format'
 import { PRODUCT_CARD_SIZES } from '@/lib/images'
 
 /**
@@ -140,8 +140,8 @@ export function ProductCard({
             )}
         >
             {/* Image well */}
-            <div className={cn('relative overflow-hidden rounded-t-card bg-white', compact ? 'aspect-[5/4]' : 'aspect-square')}>
-                <ProductCardImages main={main} second={second} alt={product.name} sizes={sizes} priority={priority} eager={eager} soldOut={soldOut} />
+            <div className="relative aspect-square overflow-hidden rounded-t-card bg-white">
+                <ProductCardImages main={main} second={second} alt={product.name} sizes={sizes} priority={priority} eager={eager} soldOut={soldOut} tight={compact} />
 
                 {(soldOut || pct >= MIN_DISCOUNT_BADGE_PERCENT) && (
                     <div className="pointer-events-none absolute left-2 top-2 z-[1] flex flex-col items-start gap-1">
@@ -155,14 +155,14 @@ export function ProductCard({
             </div>
 
             {/* Body: text on top, price block pinned to the bottom so prices line up across a row */}
-            <div className={cn('flex flex-1 flex-col', compact ? 'p-2 lg:p-2.5' : 'p-2.5 lg:p-3')}>
+            <div className={cn('flex flex-1 flex-col', compact ? 'px-2.5 pb-2.5 pt-1.5' : 'p-2.5 lg:p-3')}>
                 {compact ? null : eyebrow ? (
                     <p className="type-micro truncate text-muted">{eyebrow}</p>
                 ) : (
                     <span className="block h-4" aria-hidden="true" />
                 )}
 
-                <Heading className={cn('type-card-title text-ink', !compact && 'mt-1', (compact || !compat) && 'min-h-10')}>
+                <Heading className={cn(compact ? 'min-h-9 text-[13px] font-medium leading-[18px] text-ink' : 'type-card-title text-ink', !compact && 'mt-1', !compact && !compat && 'min-h-10')}>
                     <Link
                         href={href}
                         prefetch={false}
@@ -188,14 +188,39 @@ export function ProductCard({
                     </div>
                 )}
 
-                <div className={cn('mt-auto flex flex-col', compact ? 'gap-1 pt-1.5' : 'gap-1.5 pt-2')}>
+                {compact ? (
+                    // Compact: stars right under the name, then ONE price row pinned to the bottom: the old price
+                    // in a reserved small line above the price (every card the same height, no empty band) and
+                    // a small round add button on the price's right
+                    <>
+                        {rating !== undefined && <RatingStars rating={rating} className="mt-1" />}
+                        <div className="mt-auto flex items-end justify-between gap-1.5 pt-1.5">
+                            <div className="min-w-0" data-price="">
+                                <p className="h-4 truncate text-xs leading-4 text-muted tabular-nums">
+                                    {pct > 0 && original != null && (
+                                        <>
+                                            <span className="sr-only">Eski fiyat: </span>
+                                            <s>{formatTL(original)}</s>
+                                        </>
+                                    )}
+                                </p>
+                                <p className="truncate text-[15px] font-extrabold leading-5 text-ink tabular-nums">
+                                    {pct > 0 && <span className="sr-only">İndirimli fiyat: </span>}
+                                    {formatTL(shown)}
+                                </p>
+                            </div>
+                            {!soldOut && <QuickAddButton product={cartProduct} variant="icon" className="h-8 w-8 shrink-0 shadow-none" />}
+                        </div>
+                    </>
+                ) : (
+                <div className="mt-auto flex flex-col gap-1.5 pt-2">
                     {rating !== undefined && <RatingStars rating={rating} />}
 
                     {/* Owner: the round add button sits next to the price, not on the photo */}
                     <div className="flex items-end justify-between gap-2">
                         <Price price={product.price} originalPrice={product.original_price ?? null} size="card" className="min-w-0" />
                         {!soldOut && (
-                            <QuickAddButton product={cartProduct} variant="icon" className={cn('shrink-0', !compact && 'lg:hidden')} />
+                            <QuickAddButton product={cartProduct} variant="icon" className="shrink-0 lg:hidden" />
                         )}
                     </div>
 
@@ -211,6 +236,7 @@ export function ProductCard({
                         </div>
                     )}
                 </div>
+                )}
             </div>
         </article>
     )

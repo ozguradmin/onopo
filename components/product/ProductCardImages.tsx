@@ -24,11 +24,13 @@ export interface ProductCardImagesProps {
     /** eager with the browser's normal priority */
     eager?: boolean
     soldOut?: boolean
+    /** Less white padding around the photo (compact home cards: the packshots already have margins). */
+    tight?: boolean
 }
 
 const IMG = 'absolute inset-0 h-full w-full object-contain p-[8%] transition-opacity duration-200'
 
-export function ProductCardImages({ main, second, alt, sizes, priority = false, eager = false, soldOut = false }: ProductCardImagesProps) {
+export function ProductCardImages({ main, second, alt, sizes, priority = false, eager = false, soldOut = false, tight = false }: ProductCardImagesProps) {
     const ref = React.useRef<HTMLImageElement>(null)
     const [hover, setHover] = React.useState<'off' | 'loading' | 'ready'>('off')
 
@@ -61,7 +63,7 @@ export function ProductCardImages({ main, second, alt, sizes, priority = false, 
                 height={400}
                 loading={priority || eager ? 'eager' : 'lazy'}
                 fetchPriority={priority ? 'high' : undefined}
-                className={cn(IMG, crossfade && 'lg:group-hover:opacity-0', soldOut && 'opacity-50')}
+                className={cn(IMG, tight && 'p-[3%]', crossfade && 'lg:group-hover:opacity-0', soldOut && 'opacity-50')}
             />
             {second && hover !== 'off' && (
                 <FallbackImage
@@ -75,7 +77,7 @@ export function ProductCardImages({ main, second, alt, sizes, priority = false, 
                     width={400}
                     height={400}
                     onLoad={() => setHover('ready')}
-                    className={cn(IMG, 'hidden opacity-0 lg:block', crossfade && (soldOut ? 'lg:group-hover:opacity-50' : 'lg:group-hover:opacity-100'))}
+                    className={cn(IMG, tight && 'p-[3%]', 'hidden opacity-0 lg:block', crossfade && (soldOut ? 'lg:group-hover:opacity-50' : 'lg:group-hover:opacity-100'))}
                 />
             )}
         </>
