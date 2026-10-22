@@ -10,6 +10,11 @@ export const RAIL_ITEM_CLASS =
 
 const RAIL_IMAGE_SIZES = '(max-width: 640px) 40vw, (max-width: 1024px) 30vw, 240px'
 
+/** Compact rows (home): ~2.6 cards on a 390px phone, ~4.4 on tablets, 5 at lg and 6 at xl (16px gaps). */
+const COMPACT_ITEM_CLASS =
+    'flex w-[36vw] max-w-[180px] shrink-0 snap-start sm:w-[26vw] md:w-[calc((100%-4*16px)/4.4)] md:max-w-none lg:w-[calc((100%-4*16px)/5)] xl:w-[calc((100%-5*16px)/6)]'
+const COMPACT_IMAGE_SIZES = '(max-width: 640px) 36vw, (max-width: 1024px) 23vw, 200px'
+
 export interface ProductRailProps {
     id: string
     title: string
@@ -22,6 +27,8 @@ export interface ProductRailProps {
     priorityCount?: number
     /** Extra classes for the section header row (e.g. a tighter bottom margin for the row at the top). */
     headerClassName?: string
+    /** Compact cards, more per row (the home page rows at the top). */
+    compact?: boolean
     className?: string
 }
 
@@ -40,6 +47,7 @@ export async function ProductRail({
     freeShippingThreshold,
     priorityCount = 0,
     headerClassName,
+    compact = false,
     className,
 }: ProductRailProps) {
     if (!products.length) return null
@@ -51,19 +59,29 @@ export async function ProductRail({
         <section aria-labelledby={headingId} className={cn('container-store', className)}>
             <RailScroller
                 label={title}
-                fitsLg={products.length <= 4}
-                fitsXl={products.length <= 5}
-                heading={{ id: headingId, title, description: description || undefined, href, linkLabel, className: headerClassName }}
+                fitsLg={products.length <= (compact ? 5 : 4)}
+                fitsXl={products.length <= (compact ? 6 : 5)}
+                // Compact rows: the description stays off phones, where the first screen is short
+                heading={{
+                    id: headingId,
+                    title,
+                    description: description ? compact ? <span className="hidden md:inline">{description}</span> : description : undefined,
+                    href,
+                    linkLabel,
+                    className: headerClassName,
+                }}
+                listClassName={compact ? 'gap-2.5 md:gap-4 lg:gap-4' : undefined}
             >
                 {products.map((p, i) => (
-                    <li key={p.id} className={RAIL_ITEM_CLASS}>
+                    <li key={p.id} className={compact ? COMPACT_ITEM_CLASS : RAIL_ITEM_CLASS}>
                         <ProductCard
                             product={p}
                             priority={i < eager}
                             freeShippingThreshold={freeShippingThreshold}
                             rating={ratings ? ratings.get(p.id) ?? null : undefined}
-                            sizes={RAIL_IMAGE_SIZES}
+                            sizes={compact ? COMPACT_IMAGE_SIZES : RAIL_IMAGE_SIZES}
                             headingLevel="h3"
+                            compact={compact}
                             className="w-full"
                         />
                     </li>

@@ -1,0 +1,190 @@
+'use client'
+
+import * as React from 'react'
+import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+function prefersReducedMotion(): boolean {
+    return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+}
+
+/** Time a slide stays before the slider moves on by itself. */
+const AUTOPLAY_MS = 5000
+
+/**
+ * Swipe slider for the campaign banners at the top of the home page (components/home/CampaignBanners).
+ * The slides are server-rendered <li> children; this island adds the dots, the desktop arrows and a
+ * gentle autoplay. Autoplay never runs with prefers-reduced-motion, while the slider is off screen or
+ * the tab is hidden, while the pointer or focus is on it, and it stops for good once the visitor swipes
+ * or uses a control. The pause button keeps it under the visitor's control (WCAG 2.2.2).
+ */
+export function CampaignCarousel({ count, label, children }: { count: number; label: string; children: React.ReactNode }) {
+    const listRef = React.useRef<HTMLUListElement>(null)
+    const [active, setActive] = React.useState(0)
+    const [edges, setEdges] = React.useState({ start: true, end: count < 2 })
+    const [playing, setPlaying] = React.useState(false)
+    const held = React.useRef(false)
+    const visible = React.useRef(false)
+    const programmatic = React.useRef(false)
+
+    const slideAt = (el: HTMLUListElement, i: number) => el.children[i] as HTMLElement | undefined
+
+    const scrollToSlide = React.useCallback((i: number, smooth = true) => {
+        const el = listRef.current
+        const target = el && slideAt(el, (i + count) % count)
+        if (!el || !target) return
+        programmatic.current = true
+        const offset = target.offsetLeft - (el.firstElementChild as HTMLElement).offsetLeft
+        el.scrollTo({ left: offset, behavior: smooth && !prefersReducedMotion() ? 'smooth' : 'auto' })
+    }, [count])
+
+    // Active dot and arrow state follow the scroll position
+    React.useEffect(() => {
+        const el = listRef.current
+        if (!el) return
+        let frame = 0
+        let idle: ReturnType<typeof setTimeout> | undefined
+        const update = () => {
+            const first = el.firstElementChild as HTMLElement | null
+            const step = first ? first.offsetWidth + parseFloat(getComputedStyle(el).columnGap || '0') : el.clientWidth
+            const max = el.scrollWidth - el.clientWidth
+            setActive(Math.min(count - 1, Math.max(0, Math.round(el.scrollLeft / Math.max(1, step)))))
+            setEdges({ start: el.scrollLeft <= 4, end: el.scrollLeft >= max - 4 })
+        }
+        const onScroll = () => {
+            cancelAnimationFrame(frame)
+            frame = requestAnimationFrame(update)
+            clearTimeout(idle)
+            idle = setTimeout(() => {
+                programmatic.current = false
+            }, 150)
+        }
+        update()
+        el.addEventListener('scroll', onScroll, { passive: true })
+        return () => {
+            cancelAnimationFrame(frame)
+            clearTimeout(idle)
+            el.removeEventListener('scroll', onScroll)
+        }
+    }, [count])
+
+    // Autoplay: on once mounted (unless reduced motion), off for good after the visitor takes over
+    React.useEffect(() => {
+        if (count > 1 && !prefersReducedMotion()) setPlaying(true)
+    }, [count])
+
+    React.useEffect(() => {
+        const el = listRef.current
+        if (!el || typeof IntersectionObserver === 'undefined') {
+            visible.current = true
+            return
+        }
+        const io = new IntersectionObserver(([entry]) => {
+            visible.current = entry.isIntersecting
+        }, { threshold: 0.5 })
+        io.observe(el)
+        return () => io.disconnect()
+    }, [])
+
+    React.useEffect(() => {
+        if (!playing) return
+        const id = setInterval(() => {
+            const el = listRef.current
+            if (!el || held.current || !visible.current || document.hidden) return
+            const max = el.scrollWidth - el.clientWidth
+            // At the end (desktop shows two at once, so the end comes before the last index): back to the start
+            scrollToSlide(el.scrollLeft >= max - 4 ? 0 : active + 1)
+        }, AUTOPLAY_MS)
+        return () => clearInterval(id)
+    }, [playing, active, scrollToSlide])
+
+    const takeOver = () => setPlaying(false)
+    const hold = (on: boolean) => () => {
+        held.current = on
+    }
+
+    const arrow = 'absolute top-1/2 z-[1] hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-ink shadow-card transition-opacity duration-150 hover:bg-surface lg:inline-flex'
+
+    return (
+        <div
+            className="relative"
+            onPointerEnter={hold(true)}
+            onPointerLeave={hold(false)}
+            onFocusCapture={hold(true)}
+            onBlurCapture={hold(false)}
+        >
+            <ul
+                ref={listRef}
+                aria-label={label}
+                className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain scroll-px-4 px-4 md:-mx-6 md:gap-4 md:scroll-px-6 md:px-6 lg:mx-0 lg:scroll-px-0 lg:px-0"
+                // A real swipe (not our own smooth scroll) hands control to the visitor
+                onTouchStart={takeOver}
+                onWheel={e => {
+                    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) takeOver()
+                }}
+            >
+                {children}
+            </ul>
+
+            {count > 1 && (
+                <>
+                    <button
+                        type="button"
+                        className={cn(arrow, 'left-0 -translate-x-1/2', edges.start && 'pointer-events-none opacity-0')}
+                        onClick={() => {
+                            takeOver()
+                            scrollToSlide(active - 1)
+                        }}
+                        aria-label="Önceki kampanya"
+                        tabIndex={edges.start ? -1 : undefined}
+                    >
+                        <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                    <button
+                        type="button"
+                        className={cn(arrow, 'right-0 translate-x-1/2', edges.end && 'pointer-events-none opacity-0')}
+                        onClick={() => {
+                            takeOver()
+                            scrollToSlide(active + 1)
+                        }}
+                        aria-label="Sonraki kampanya"
+                        tabIndex={edges.end ? -1 : undefined}
+                    >
+                        <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                    </button>
+
+                    <div className="mt-1 flex items-center justify-center">
+                        {Array.from({ length: count }, (_, i) => (
+                            <button
+                                key={i}
+                                type="button"
+                                onClick={() => {
+                                    takeOver()
+                                    scrollToSlide(i)
+                                }}
+                                aria-label={`${i + 1}. kampanyaya git`}
+                                aria-current={i === active ? 'true' : undefined}
+                                className="flex h-7 w-6 items-center justify-center"
+                            >
+                                <span
+                                    aria-hidden="true"
+                                    className={cn('h-1.5 rounded-full transition-all duration-200', i === active ? 'w-5 bg-brand-600' : 'w-1.5 bg-line-strong')}
+                                />
+                            </button>
+                        ))}
+                        <button
+                            type="button"
+                            onClick={() => setPlaying(p => !p)}
+                            aria-label={playing ? 'Kampanyaları durdur' : 'Kampanyaları oynat'}
+                            className="ml-1 flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors duration-150 hover:text-ink"
+                        >
+                            {playing ? <Pause className="h-3 w-3" aria-hidden="true" /> : <Play className="h-3 w-3" aria-hidden="true" />}
+                        </button>
+                    </div>
+                </>
+            )}
+        </div>
+    )
+}
+
+export default CampaignCarousel

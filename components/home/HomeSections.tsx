@@ -35,12 +35,14 @@ export function HomeProductSection({
     freeShippingThreshold,
     priorityCount = 0,
     headerClassName,
+    compact = false,
     className,
 }: {
     section: HomeSectionView
     freeShippingThreshold: number
     priorityCount?: number
     headerClassName?: string
+    compact?: boolean
     className?: string
 }) {
     const products: Product[] = section.products ?? []
@@ -56,6 +58,7 @@ export function HomeProductSection({
             freeShippingThreshold={freeShippingThreshold}
             priorityCount={priorityCount}
             headerClassName={headerClassName}
+            compact={compact}
             className={className}
         />
     )
