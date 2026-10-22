@@ -284,3 +284,30 @@ CREATE TABLE IF NOT EXISTS analytics_salts (
 
 -- The admin statistics read the old table by date
 CREATE INDEX IF NOT EXISTS idx_analytics_created_at ON analytics(created_at);
+
+-- Old-URL redirects (lib/redirects.ts, worker.ts, Admin › Yönlendirmeler; also created lazily there). Only URLs that
+-- would answer 404 are looked up. from_path is the normalized path (lower-case, trailing slash, no tracking
+-- parameters); to_path a same-site path or an images.onopostore.com URL, always a live page (checked on save and use).
+CREATE TABLE IF NOT EXISTS redirects (
+    from_path TEXT PRIMARY KEY,
+    to_path TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    hits INTEGER NOT NULL DEFAULT 0,
+    last_hit_at TEXT,
+    note TEXT
+);
+
+-- 404s nobody could resolve, for the admin to map. Content-free: normalized path, counts, times and the referrer's
+-- host only (no IP, no user agent). Bots other than Googlebot are not counted. Capped at ~2000 rows (least
+-- recently seen dropped). ignored = 1: the admin chose "Yok say".
+CREATE TABLE IF NOT EXISTS not_found_log (
+    path TEXT PRIMARY KEY,
+    hits INTEGER NOT NULL DEFAULT 0,
+    googlebot_hits INTEGER NOT NULL DEFAULT 0,
+    first_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_referrer_host TEXT,
+    ignored INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_not_found_log_hits ON not_found_log(ignored, hits);
+CREATE INDEX IF NOT EXISTS idx_not_found_log_seen ON not_found_log(last_seen);
