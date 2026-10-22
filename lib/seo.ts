@@ -256,6 +256,19 @@ export function cmsPagePath(slug: string): string {
 }
 
 /**
+ * Replacements for the old hard-coded listings /tech/ /beauty/ /gaming/ /new/ (they have 0 products).
+ * "Yeni Gelenler" (/new) is the listing sorted newest first. The server redirects (lib/seo-routing.ts) and the
+ * menu links (components/layout/nav-data.ts) both read this table. Kept here, not in seo-routing.ts, because the
+ * menus are client code and seo-routing.ts imports the D1 layer.
+ */
+export const LEGACY_CATEGORY_TARGETS: Readonly<Record<string, string>> = {
+    tech: '/products/',
+    beauty: '/products/',
+    new: '/products/?sort=newest',
+    gaming: '/kategori/oyun-ve-oyuncu-aksesuarlari/',
+}
+
+/**
  * Absolute canonical URL: apex https host, path with a trailing slash, and only the query
  * parameters passed explicitly (e.g. { page: 2 }); empty, null, "1"-pages and others are dropped.
  */
