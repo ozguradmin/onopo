@@ -5,6 +5,7 @@ import { send2FACode } from '@/lib/email'
 import { readJsonBody } from '@/lib/api-request'
 import { ADMIN_ACCOUNT_EMAIL, adminMailRecipient, isLoginAlias, normalizeEmail } from '@/lib/login-alias'
 import { TWO_FACTOR_TTL_MS, ensureChallengeTable, newChallengeId, setChallengeCookie, setSessionCookies } from '../two-factor'
+import { LOGIN_WINDOW_MS, TOO_MANY_ATTEMPTS, clearLoginFailures, clientKey, reserveLoginAttempt, type LoginAttempt } from '../login-limit'
 
 // Generate 6-digit code (crypto RNG)
 function generate2FACode(): string {
@@ -27,8 +28,25 @@ export async function POST(req: NextRequest) {
         const loginAlias = await isLoginAlias(email)
         const lookupEmail = loginAlias ? ADMIN_ACCOUNT_EMAIL : email
 
+        // Failed attempts are limited per account e-mail + client IP (../login-limit.ts). This attempt is
+        // counted before the password is checked, so parallel guesses can't get past the limit. If the
+        // counter itself fails, the login goes on (it must not lock everyone out).
+        let attempt: LoginAttempt | null = null
+        try {
+            attempt = await reserveLoginAttempt(db, normalizeEmail(String(lookupEmail)), clientKey(req.headers))
+        } catch (error) {
+            console.error('[Login] attempt limit unavailable', error)
+        }
+        if (attempt && !attempt.allowed) {
+            return NextResponse.json(
+                { error: TOO_MANY_ATTEMPTS },
+                { status: 429, headers: { 'Retry-After': String(LOGIN_WINDOW_MS / 1000) } }
+            )
+        }
+
         const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(lookupEmail).first()
 
+        // Unknown e-mail and wrong password get the same answer (and both stay counted)
         if (!user) {
             return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
         }
@@ -37,6 +55,11 @@ export async function POST(req: NextRequest) {
 
         if (!isValid) {
             return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
+        }
+
+        // The right password: this e-mail + IP starts from zero again
+        if (attempt?.allowed) {
+            await clearLoginFailures(db, attempt).catch(error => console.error('[Login] attempt counter not cleared', error))
         }
 
         // Check if user is admin - require 2FA
