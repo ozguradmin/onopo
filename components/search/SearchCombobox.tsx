@@ -34,7 +34,7 @@ import { CONNECTOR_LINKS, POPULAR_SEARCHES, PRODUCT_TYPE_LINKS, whatsappHref } f
 import { useSearchIndex, type SearchIndexItem } from './search-index'
 import { addRecentSearch, clearRecentSearches, useRecentSearches } from './recent-searches'
 import { Highlight } from './Highlight'
-import { ASSISTANT_EXCLUDED_PATH, useAssistantStore } from '@/components/assistant/assistant-store'
+import { ASSISTANT_EXCLUDED_PATH, useAssistantStore, yieldAssistantSheet } from '@/components/assistant/assistant-store'
 import { preloadAssistant } from '@/components/assistant/preload'
 
 type Option =
@@ -183,6 +183,8 @@ export function SearchCombobox({ variant, onBeforeOpen, className }: SearchCombo
         return registerMobileSearch(() => {
             onBeforeOpen?.()
             inputRef.current?.focus()
+            // The assistant's phone sheet steps aside (after the focus, so its trap leaves it in the search field)
+            yieldAssistantSheet()
             setSheetOpen(true)
             loadIndex()
         })
@@ -204,6 +206,7 @@ export function SearchCombobox({ variant, onBeforeOpen, className }: SearchCombo
         if (!isMobile) onBeforeOpen?.()
         else if (!sheetOpen) {
             onBeforeOpen?.()
+            yieldAssistantSheet()
             setSheetOpen(true)
         }
     }
