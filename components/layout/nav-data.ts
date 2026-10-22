@@ -88,12 +88,15 @@ export function samePath(a: string, b: string): boolean {
     return clean(a) === clean(b)
 }
 
-/** Flat admin menus (Admin › Menüler) → top-level items with children (one level). */
+/**
+ * Flat admin menus (Admin › Menüler, active items only) → top-level items with children (one level).
+ * A child whose parent is not in the list (deactivated or deleted) is dropped with it, not promoted to the top level.
+ */
 export function buildMenuTree(flat: MenuItem[]): MenuItem[] {
     const items = flat.map(m => ({ ...m, children: [] as MenuItem[] }))
     const byId = new Map(items.map(m => [m.id, m]))
-    for (const m of items) if (m.parent_id != null) byId.get(m.parent_id)?.children.push(m)
-    return items.filter(m => m.parent_id == null || !byId.has(m.parent_id))
+    for (const m of items) if (m.parent_id) byId.get(m.parent_id)?.children.push(m)
+    return items.filter(m => !m.parent_id)
 }
 
 /** "500 ₺" for whole amounts, "499,90 ₺" otherwise (deterministic, no ICU). */
