@@ -14,6 +14,15 @@ export default function AdminDashboard() {
     const [stats, setStats] = React.useState({ totalProducts: 0, totalOrders: 0, totalRevenue: 0, todayViews: 0 })
     const [maintenanceMode, setMaintenanceMode] = React.useState(false)
     const [savingMaintenance, setSavingMaintenance] = React.useState(false)
+    // Open errors of the automatic jobs (Sistem kayıtları, lib/system-log.ts)
+    const [openErrors, setOpenErrors] = React.useState(0)
+
+    React.useEffect(() => {
+        fetch('/api/admin/system-logs/?summary=1', { cache: 'no-store' })
+            .then(r => (r.ok ? r.json() : null))
+            .then(d => setOpenErrors(Number(d?.unresolved?.error) || 0))
+            .catch(() => { })
+    }, [])
 
     React.useEffect(() => {
         Promise.all([
@@ -71,6 +80,19 @@ export default function AdminDashboard() {
 
     return (
         <div className="space-y-8">
+            {openErrors > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+                    <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+                    <div className="flex-1">
+                        <p className="font-semibold text-red-800">Otomatik işlerde {openErrors} açık hata var</p>
+                        <p className="text-sm text-red-700">Asistanın ürün bilgileri, görsel kopyaları ya da günlük işlerden biri yapılamadı.</p>
+                    </div>
+                    <Button onClick={() => router.push('/admin/kayitlar/')} variant="outline">
+                        Kayıtlara bak
+                    </Button>
+                </div>
+            )}
+
             {/* Maintenance Mode Alert */}
             {maintenanceMode && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex items-center gap-3">

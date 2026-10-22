@@ -255,8 +255,9 @@ const CONTENT_WRITE = /^\/api\/(admin|products|categories|homepage-sections|hero
 // ...except these, which change nothing the storefront shows (and some are reachable without a session):
 // password reset and the client error log; optimize-images only checks image URLs (one POST per product
 // from the admin button); email/send only sends mail; profile changes the admin's own login; users is
-// read-only.
-const CONTENT_WRITE_EXCEPTIONS = /^\/api\/admin\/(forgot-password|reset-password|log|optimize-images|email|profile|users)(\/|$)/
+// read-only. system-logs only marks admin log entries "Çözüldü"; assistant/facts writes the assistant's product
+// facts lines (the storefront HTML does not show them; the "Ürün bilgilerini yenile" button posts every ~20 s).
+const CONTENT_WRITE_EXCEPTIONS = /^\/api\/admin\/(forgot-password|reset-password|log|optimize-images|email|profile|users|system-logs|assistant\/facts)(\/|$)/
 
 export function shouldBumpCacheVersion(pathname: string, method: string, hasSession: boolean): boolean {
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false
