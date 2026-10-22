@@ -1,9 +1,10 @@
 'use client'
 
 /**
- * Side-by-side comparison (SPEC §10.7). The rows (Fiyat, Güç, Bağlantı, Uzunluk, Kargo, Garanti, Stok) are
- * built by the server from D1 and product names, never by the model; "—" means the data does not say. On
- * phones three columns scroll sideways under a sticky label column.
+ * Side-by-side comparison (SPEC §10.7). The server builds the rows from each product's data and picks them
+ * by what is compared (lib/assistant/compare.ts: cam türü for screen protectors, güç and çıkış for chargers
+ * …); a row no product has a value for never arrives, and the model's own rows are checked cell by cell.
+ * "—" means the data does not say. On phones three columns scroll sideways under a sticky label column.
  */
 import * as React from 'react'
 import Link from 'next/link'
@@ -59,11 +60,12 @@ export function CompareCard({ card }: { card: CompareEvent }) {
                     </tr>
                 </thead>
                 <tbody>
-                    {card.rows.map(row => (
+                    {/* A restored chat may hold a card from before the empty-row rule */}
+                    {card.rows.filter(row => row.values.some(v => v && v !== '—')).map(row => (
                         <tr key={row.label}>
                             <th scope="row" className={`${LABEL} ${CELL}`}>{row.label}</th>
                             {card.products.map((p, i) => (
-                                <td key={p.id} className={`${CELL} text-ink-2`}>{row.values[i] ?? '—'}</td>
+                                <td key={p.id} className={`${CELL} text-ink-2`}>{row.values[i] || '—'}</td>
                             ))}
                         </tr>
                     ))}

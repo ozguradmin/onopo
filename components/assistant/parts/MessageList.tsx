@@ -3,7 +3,7 @@
 /**
  * The transcript (SPEC §10.6, §10.10): user bubbles on the right, assistant turns full width without a
  * bubble, in a fixed order: steps → text → cards (event order) → cart change receipts → WhatsApp card → error row
- * → follow-up chips.
+ * → follow-up chips. The compact WhatsApp row shows only under the latest assistant message (visibleWhatsapp).
  *
  * Why the typewriter: the server sends whole validated sentences, which would otherwise land in jumps. The
  * client reveals what it has with requestAnimationFrame, max(2, ceil(remaining / 8)) characters a frame, so
@@ -12,7 +12,7 @@
  */
 import * as React from 'react'
 import { LIMITS, whatsappLink, type Suggestion } from '@/lib/assistant/contract'
-import { lastUserText, localWhatsapp, type CardEvent, type UiMessage } from '../chat-reducer'
+import { lastAssistantIndex, lastUserText, localWhatsapp, visibleWhatsapp, type CardEvent, type UiMessage } from '../chat-reducer'
 import { MiniMarkdown } from '../MiniMarkdown'
 import { useAssistantUi } from '../useAssistantChat'
 import { Steps } from './Steps'
@@ -104,11 +104,12 @@ function UserBubble({ m }: { m: UiMessage }) {
     )
 }
 
-function AssistantTurn({ m, isLast, restored, onChip }: { m: UiMessage; isLast: boolean; restored: boolean; onChip: (s: Suggestion) => void }) {
+function AssistantTurn({ m, isLast, latest, restored, onChip }: { m: UiMessage; isLast: boolean; latest: boolean; restored: boolean; onChip: (s: Suggestion) => void }) {
     const { chat, onNavigate } = useAssistantUi()
     const streaming = m.status === 'streaming'
     const text = useReveal(m.text, streaming)
     const wait = useWaitLevel(m.createdAt, streaming && !m.text)
+    const whatsapp = visibleWhatsapp(m, latest)
 
     // A product from a restored chat is no longer sold: offer to find a similar one
     const gone = m.stale ? m.cards.flatMap(c => (c.t === 'products' || c.t === 'compare' ? c.products : [])).find(p => m.stale?.[p.id] === 'gone') : undefined
@@ -150,9 +151,9 @@ function AssistantTurn({ m, isLast, restored, onChip }: { m: UiMessage; isLast: 
                     <CartReceiptRow receipt={r} messageId={m.id} index={i} />
                 </div>
             ))}
-            {m.whatsapp && (
+            {whatsapp && (
                 <div className={m.local ? undefined : 'mt-3'}>
-                    <WhatsAppCard card={m.whatsapp} beaconShown={!restored} />
+                    <WhatsAppCard card={whatsapp} beaconShown={!restored} />
                 </div>
             )}
             {m.status === 'stopped' && (
@@ -192,13 +193,14 @@ function AssistantTurn({ m, isLast, restored, onChip }: { m: UiMessage; isLast: 
 export function MessageList({ onChip }: { onChip: (s: Suggestion) => void }) {
     const { chat } = useAssistantUi()
     const messages = chat.messages
+    const latest = lastAssistantIndex(messages)
     return (
         <div role="log" aria-label="Sohbet" aria-relevant="additions" className="space-y-5">
             {messages.map((m, i) =>
                 m.role === 'user' ? (
                     <UserBubble key={m.id} m={m} />
                 ) : (
-                    <AssistantTurn key={m.id} m={m} isLast={i === messages.length - 1} restored={chat.restoredIds.has(m.id)} onChip={onChip} />
+                    <AssistantTurn key={m.id} m={m} isLast={i === messages.length - 1} latest={i === latest} restored={chat.restoredIds.has(m.id)} onChip={onChip} />
                 ),
             )}
         </div>

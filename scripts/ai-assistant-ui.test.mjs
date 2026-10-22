@@ -562,3 +562,52 @@ test('cards: in-cart products show the stepper, sold-out products have no add bu
     assert.match(list, /case 'cart':\s*return <CartCard card=\{card\} \/>/)
     assert.match(list, /<CartReceiptRow receipt=\{r\} messageId=\{m\.id\} index=\{i\} \/>/)
 })
+
+// ---------------------------------------------------------------------------------------------
+// WhatsApp row only under the latest answer
+// ---------------------------------------------------------------------------------------------
+
+const compactWa = { t: 'whatsapp', variant: 'compact', reason: 'other', message: 'Merhaba', waBase: WA_BASE, productIds: [] }
+const fullWa = { ...compactWa, variant: 'full', reason: 'return', message: 'İade' }
+const answer = (text, wa) => ({ ...fold([{ t: 'text', v: text }, wa, { t: 'done', finish: 'stop', productIds: [], wa: true }]) })
+
+/** The WhatsApp cards MessageList renders, one entry per message (null = none). */
+function shownWhatsapp(messages) {
+    const latest = reducer.lastAssistantIndex(messages)
+    return messages.map((m, i) => (m.role === 'assistant' ? reducer.visibleWhatsapp(m, i === latest)?.variant ?? null : null))
+}
+
+test('whatsapp row: the compact row shows only under the latest assistant message; full cards stay', () => {
+    const chat = [
+        done('soru 1'), answer('cevap 1', compactWa),
+        done('iade'), answer('cevap 2', fullWa),
+        done('soru 3'), answer('cevap 3', compactWa),
+        done('soru 4'), answer('cevap 4', compactWa),
+    ]
+    assert.deepEqual(shownWhatsapp(chat), [null, null, null, 'full', null, null, null, 'compact'])
+    // While the next answer has just started (no card yet), the earlier rows stay hidden
+    const sending = [...chat, done('soru 5'), reducer.assistantMessage()]
+    assert.deepEqual(shownWhatsapp(sending).slice(-4), [null, null, null, null])
+    // The visitor's message after the last answer does not move the row
+    assert.deepEqual(shownWhatsapp([...chat, done('soru 5')]).slice(-3), [null, 'compact', null])
+    assert.equal(reducer.lastAssistantIndex([done('a')]), -1)
+    assert.equal(reducer.visibleWhatsapp(reducer.userMessage('a'), true), null)
+})
+
+test('whatsapp row: a restored chat also shows the compact row under its last answer only', () => {
+    const s = memoryStorage()
+    const chat = [done('soru 1'), answer('cevap 1', compactWa), done('soru 2'), answer('cevap 2', compactWa), done('soru 3'), answer('cevap 3', compactWa)]
+    persist.saveChat(s, { conversationId: CONV, device: null, messages: chat }, 0)
+    const back = persist.loadChat(s, 1_000).messages
+    // The events are kept as they were (the server sent one per answer); only the rendering hides them
+    assert.equal(back.filter(m => m.whatsapp?.variant === 'compact').length, 3)
+    assert.deepEqual(shownWhatsapp(back), [null, null, null, null, null, 'compact'])
+})
+
+test('whatsapp row: MessageList renders the card through visibleWhatsapp', () => {
+    const list = src('components/assistant/parts/MessageList.tsx')
+    assert.match(list, /const whatsapp = visibleWhatsapp\(m, latest\)/)
+    assert.match(list, /<WhatsAppCard card=\{whatsapp\} beaconShown=\{!restored\} \/>/)
+    assert.match(list, /latest=\{i === latest\}/)
+    assert.ok(!/<WhatsAppCard card=\{m\.whatsapp\}/.test(list))
+})
