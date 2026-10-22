@@ -14,7 +14,7 @@ export default function ImageOptimizationPage() {
     // Fetch every active product (includeAll: the plain list is the storefront's first 24 in stock)
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            fetch('/api/products?includeAll=true')
+            fetch('/api/products?includeAll=true', { cache: 'no-store' })
                 .then(res => res.json())
                 .then(data => {
                     if (Array.isArray(data)) {

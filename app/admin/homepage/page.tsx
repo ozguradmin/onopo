@@ -275,8 +275,9 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
     React.useEffect(() => {
         if (section.type === 'products' || section.type === 'new_products') {
             // includeAll: the picker must offer every active product, not the storefront's first 24 in stock
-            fetch('/api/products?includeAll=true').then(r => r.json()).then(data => setProducts(Array.isArray(data) ? data : []))
-            fetch('/api/categories?hideEmpty=true').then(r => r.json()).then(data => setCategories(Array.isArray(data) ? data : []))
+            // no-store: these public lists are cached for minutes; the admin needs what was just saved
+            fetch('/api/products?includeAll=true', { cache: 'no-store' }).then(r => r.json()).then(data => setProducts(Array.isArray(data) ? data : []))
+            fetch('/api/categories?hideEmpty=true', { cache: 'no-store' }).then(r => r.json()).then(data => setCategories(Array.isArray(data) ? data : []))
         }
     }, [section.type])
 

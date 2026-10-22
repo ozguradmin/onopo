@@ -21,7 +21,7 @@ export default function IntegrationsPage() {
     const fetchStats = async () => {
         try {
             // Use the public products API to get count
-            const res = await fetch('/api/products?includeAll=true')
+            const res = await fetch('/api/products?includeAll=true', { cache: 'no-store' })
             if (res.ok) {
                 const data = await res.json()
                 setFeedStats({

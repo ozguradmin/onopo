@@ -54,7 +54,7 @@ export default function AdminProductsPage() {
         Promise.all([
             // includeInactive: hidden products too (shown with a 'Gizli' badge; admin sessions only)
             fetch('/api/products?includeAll=true&includeInactive=true').then(r => r.json()),
-            fetch('/api/categories').then(r => r.json())
+            fetch('/api/categories', { cache: 'no-store' }).then(r => r.json())
         ]).then(([prods, cats]) => {
             setProducts(prods || [])
             setCategories(cats || [])

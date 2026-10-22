@@ -27,10 +27,12 @@ export async function GET(req: NextRequest) {
 
         const { results } = await db.prepare(query).all()
 
-        // Cache for 5 minutes
+        // Cache for 5 minutes. Not for an admin session: Admin › Kategoriler re-reads this list right after
+        // a rename or delete (PUT/DELETE /api/categories/<id> do not invalidate the browser's copy of this URL)
+        const isAdmin = (await requireAdmin()) === null
         return NextResponse.json(results || [], {
             headers: {
-                'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600'
+                'Cache-Control': isAdmin ? 'private, no-store' : 'public, s-maxage=300, stale-while-revalidate=600'
             }
         })
     } catch (error: any) {

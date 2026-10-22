@@ -17,7 +17,7 @@ export default function AdminDashboard() {
     React.useEffect(() => {
         Promise.all([
             // includeAll: every active product (the plain list is the storefront's: in stock only, 24 items)
-            fetch('/api/products?includeAll=true').then(r => r.json()).catch(() => []),
+            fetch('/api/products?includeAll=true', { cache: 'no-store' }).then(r => r.json()).catch(() => []),
             fetch('/api/orders').then(r => r.json()).catch(() => []),
             fetch('/api/analytics?range=day').then(r => r.json()).catch(() => ({ totalViews: 0 })),
             fetch('/api/site-settings').then(r => r.json()).catch(() => ({}))

@@ -65,7 +65,7 @@ export default function AdminSettingsPage() {
         Promise.all([
             fetch('/api/auth/me').then(r => r.json()),
             fetch('/api/site-settings').then(r => r.json()),
-            fetch('/api/categories').then(r => r.json())
+            fetch('/api/categories', { cache: 'no-store' }).then(r => r.json())
         ]).then(([userData, settingsData, categoriesData]) => {
             if (userData.user) {
                 setUser(userData.user)

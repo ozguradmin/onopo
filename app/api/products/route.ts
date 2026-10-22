@@ -216,8 +216,9 @@ export async function GET(req: NextRequest) {
         // Admin response - array format for backwards compatibility
         return NextResponse.json(products, {
             headers: {
-                // The variant with hidden products is for one admin only: never stored anywhere
-                'Cache-Control': includeInactive ? 'private, no-store' : 'public, s-maxage=60, stale-while-revalidate=300'
+                // The variant with hidden products is for one admin only: never stored anywhere. An admin's
+                // browser must not keep the list either (the dashboard and pickers re-read it after a change)
+                'Cache-Control': includeInactive || await isAdminSession() ? 'private, no-store' : 'public, s-maxage=60, stale-while-revalidate=300'
             }
         })
     } catch (error: any) {

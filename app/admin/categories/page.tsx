@@ -88,7 +88,8 @@ export default function AdminCategoriesPage() {
     const fetchCategories = async () => {
         setLoading(true)
         try {
-            const res = await fetch('/api/categories')
+            // no-store: the browser may still hold the list from before a rename or delete
+            const res = await fetch('/api/categories', { cache: 'no-store' })
             const data = await res.json()
             setCategories(Array.isArray(data) ? data : [])
         } catch (err) {
