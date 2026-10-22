@@ -1,20 +1,17 @@
 'use client'
 
 import * as React from 'react'
-import { Heart, MapPin, Package, ShieldCheck, Truck } from 'lucide-react'
-import { useShippingSettings } from '@/components/layout/store-data'
-import { formatNumberTR } from '@/lib/format'
+import { Heart, MapPin, Package } from 'lucide-react'
 
+/**
+ * What membership itself gives. Shipping, payment security and returns are left out on purpose: the top
+ * bar and the pre-footer band already say them on every page (owner: the same sentences 2-3 times).
+ */
 function useBenefits() {
-    const { freeShippingThreshold } = useShippingSettings()
     return [
         { Icon: Package, text: 'Siparişlerini ve kargo durumunu tek yerden takip et' },
         { Icon: Heart, text: 'Beğendiğin ürünleri favorilerine kaydet' },
         { Icon: MapPin, text: 'Adresin kayıtlı kalsın, ödemeyi hızlıca tamamla' },
-        ...(freeShippingThreshold > 0
-            ? [{ Icon: Truck, text: `${formatNumberTR(freeShippingThreshold, 0)} ₺ ve üzeri siparişlerde kargo bedava` }]
-            : []),
-        { Icon: ShieldCheck, text: 'Güvenli ödeme: 256-bit SSL ve 3D Secure' },
     ]
 }
 
