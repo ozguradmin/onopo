@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { FallbackImage } from '@/components/ui/FallbackImage'
 import { originalImageUrl, productImageSrcSet, productImageUrl } from '@/lib/images'
 import { getImageSize, normalizeHref } from '@/lib/home-data'
+import { isNoindexListingHref } from '@/components/layout/nav-data'
 
 interface ImageCardSectionProps {
     title?: string
@@ -70,7 +71,8 @@ export async function ImageCardSection({ title, image_url, link_url, className }
                         {image}
                     </a>
                 ) : (
-                    <Link href={href} prefetch={false} className={box} style={boxStyle} aria-label={label || 'Kampanyayı incele'}>
+                    // A noindex listing variant (?sort=, ?f=, …) gets nofollow, like the menu links (docs/SEO.md §3)
+                    <Link href={href} prefetch={false} rel={isNoindexListingHref(href) ? 'nofollow' : undefined} className={box} style={boxStyle} aria-label={label || 'Kampanyayı incele'}>
                         {image}
                     </Link>
                 )

@@ -3,7 +3,7 @@
  * Isomorphic; no React.
  */
 import type { MenuItem } from '@/lib/catalog'
-import { LEGACY_CATEGORY_TARGETS } from '@/lib/seo'
+import { LEGACY_CATEGORY_TARGETS, LISTING_NOINDEX_PARAMS } from '@/lib/seo'
 
 export interface NavLinkItem {
     label: string
@@ -86,6 +86,53 @@ export function normalizeHref(raw: string | null | undefined): string {
 export function samePath(a: string, b: string): boolean {
     const clean = (s: string) => (s.split(/[?#]/)[0] || '/').replace(/\/+$/, '') || '/'
     return clean(a) === clean(b)
+}
+
+/**
+ * The listing view a query selects: its noindex listing parameters (lib/seo LISTING_NOINDEX_PARAMS:
+ * q, f, sort, …) in a fixed order. Paging and tracking parameters do not change the view.
+ */
+function listingView(query: string): string {
+    const sp = new URLSearchParams(query.split('#')[0])
+    return LISTING_NOINDEX_PARAMS.map(k => [k, (sp.get(k) ?? '').trim()])
+        .filter(([, v]) => v !== '')
+        .map(([k, v]) => `${k}=${v}`)
+        .join('&')
+}
+
+function queryOf(href: string): string | null {
+    const i = href.indexOf('?')
+    return i < 0 ? null : href.slice(i + 1)
+}
+
+/**
+ * Internal link to a noindex listing variant (?sort=, ?f=, ?q= …). Such links get rel="nofollow",
+ * like the toolbar's sort and facet links (docs/SEO.md §3). Pass a normalised href.
+ */
+export function isNoindexListingHref(href: string): boolean {
+    if (isExternalHref(href)) return false
+    const query = queryOf(href)
+    return query !== null && listingView(query) !== ''
+}
+
+/**
+ * The menu link for the current page ("you are here"), as its normalised href, or null. A link with a
+ * query ("Yeni Gelenler" = /products/?sort=newest) matches only that listing view. A link without one
+ * matches its path, unless a link with a query matches the current view: on /products/?sort=newest
+ * "Yeni Gelenler" is active and "Tüm Ürünler" is not.
+ */
+export function activeNavHref(hrefs: ReadonlyArray<string | null | undefined>, pathname: string, search: string): string | null {
+    const view = listingView(search.replace(/^\?/, ''))
+    let pathMatch: string | null = null
+    for (const raw of hrefs) {
+        if (!raw || !raw.trim() || raw.trim().startsWith('#')) continue
+        const target = normalizeHref(raw)
+        if (isExternalHref(target) || !samePath(target, pathname)) continue
+        const query = queryOf(target)
+        if (query === null) pathMatch ??= target
+        else if (listingView(query) === view) return target
+    }
+    return pathMatch
 }
 
 /**

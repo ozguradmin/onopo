@@ -17,7 +17,7 @@
  */
 import * as React from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import {
     ArrowRight, BatteryCharging, Cable, Car, ChevronDown, ChevronRight, Headphones, LayoutGrid, ShieldCheck,
     Smartphone, Zap, type LucideIcon,
@@ -27,8 +27,8 @@ import type { MenuItem } from "@/lib/catalog"
 import { useShellFacts, useStoreData } from "@/components/layout/store-data"
 import { CategoryIcon } from "./CategoryIcon"
 import {
-    buildMenuTree, CONNECTOR_LINKS, formatAmountShort, isExternalHref, normalizeHref, PRODUCT_TYPE_LINKS, samePath,
-    type NavLinkItem,
+    activeNavHref, buildMenuTree, CONNECTOR_LINKS, formatAmountShort, isExternalHref, isNoindexListingHref, normalizeHref,
+    PRODUCT_TYPE_LINKS, type NavLinkItem,
 } from "./nav-data"
 
 const TYPE_ICONS: Record<string, LucideIcon> = {
@@ -40,7 +40,10 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
     kulaklik: Headphones,
 }
 
-/** Internal links navigate client-side (no prefetch); external ones are plain anchors. */
+/**
+ * Internal links navigate client-side (no prefetch); external ones are plain anchors. Links to noindex
+ * listing variants (?sort=, ?f=, …: "Yeni Gelenler") get rel="nofollow", like the toolbar's sort links.
+ */
 export function ShellLink({
     href,
     children,
@@ -56,21 +59,22 @@ export function ShellLink({
         )
     }
     return (
-        <Link href={target} prefetch={false} {...rest}>
+        <Link href={target} prefetch={false} rel={isNoindexListingHref(target) ? 'nofollow' : undefined} {...rest}>
             {children}
         </Link>
     )
 }
 
-function useCurrentHref(): string {
+/**
+ * The current page's menu link among `hrefs` (normalised), compared with the query for links that
+ * have one: on /products/?sort=newest "Yeni Gelenler" is active, "Tüm Ürünler" is not. The server
+ * render sees the same listing parameters as the browser (only tracking parameters differ, and they
+ * are ignored), so there is no hydration mismatch.
+ */
+export function useActiveNavHref(hrefs: ReadonlyArray<string | null | undefined>): string | null {
     const pathname = usePathname() || '/'
-    return pathname
-}
-
-function isActive(href: string, pathname: string): boolean {
-    const target = normalizeHref(href)
-    if (isExternalHref(target) || target.includes('?')) return false
-    return samePath(target, pathname)
+    const search = useSearchParams()?.toString() ?? ''
+    return activeNavHref(hrefs, pathname, search)
 }
 
 /** Hover intent: open after `openDelay` ms, close after `closeDelay` ms (mouse only). */
@@ -143,7 +147,6 @@ const ITEM =
 
 export function DesktopNav() {
     const { settings, menus } = useStoreData()
-    const pathname = useCurrentHref()
     const tree = React.useMemo(() => buildMenuTree(menus), [menus])
 
     const links: NavLinkItem[] = React.useMemo(() => {
@@ -151,6 +154,8 @@ export function DesktopNav() {
         if (admin.length === 0) return [{ label: 'Kategoriler', href: '#categories' }, { label: 'Tüm ürünler', href: '/products/' }]
         return admin.some(l => l.href === '#categories') ? admin : [{ label: 'Kategoriler', href: '#categories' }, ...admin]
     }, [settings.header_links])
+    const active = useActiveNavHref([...links.map(l => l.href), ...tree.filter(m => m.children.length === 0).map(m => m.url)])
+    const isActive = (href: string) => active !== null && normalizeHref(href) === active
 
     return (
         <nav aria-label="Ana menü" className="relative hidden border-b border-line bg-white lg:block">
@@ -163,7 +168,7 @@ export function DesktopNav() {
                             <li key={`${l.href}-${i}`}>
                                 <ShellLink
                                     href={l.href}
-                                    aria-current={isActive(l.href, pathname) ? 'page' : undefined}
+                                    aria-current={isActive(l.href) ? 'page' : undefined}
                                     className={cn(ITEM, 'aria-[current=page]:text-ink aria-[current=page]:after:opacity-100')}
                                 >
                                     {l.label}
@@ -178,7 +183,7 @@ export function DesktopNav() {
                             <li key={m.id}>
                                 <ShellLink
                                     href={m.url}
-                                    aria-current={isActive(m.url, pathname) ? 'page' : undefined}
+                                    aria-current={isActive(m.url) ? 'page' : undefined}
                                     className={cn(ITEM, 'aria-[current=page]:text-ink aria-[current=page]:after:opacity-100')}
                                 >
                                     {m.title}
