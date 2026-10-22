@@ -457,8 +457,9 @@ export function fuzzyMatch(segment: string, entries: IndexEntry[], idf: (t: stri
 export type ResolveVia = 'admin' | 'pattern' | 'fuzzy'
 
 export type ResolveResult =
-    /** checked: the target's existence was verified directly (a static file), not through the index. */
-    | { target: string; via: ResolveVia; rule: string; label?: string; score?: number; checked?: boolean }
+    /** checked: the target's existence was verified directly (a static file), not through the index.
+     *  from: the redirects row used (via 'admin'), for its hit counter. */
+    | { target: string; via: ResolveVia; rule: string; label?: string; score?: number; checked?: boolean; from?: string }
     /** An admin redirect exists but its target is gone: no redirect (worker logs it). */
     | { target: null; problem: 'admin-target-gone'; from: string; to: string }
 
@@ -716,7 +717,7 @@ export async function resolvePath(input: string, deps: ResolveDeps): Promise<Res
             if (to == null) continue
             const target = safeTarget(to)
             if (target && target !== parsed.key && target !== parsed.path && isLiveTarget(target, deps.index)) {
-                return { target, via: 'admin', rule: 'admin' }
+                return { target, via: 'admin', rule: 'admin', from: key }
             }
             return { target: null, problem: 'admin-target-gone', from: key, to }
         }
