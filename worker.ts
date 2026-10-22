@@ -11,6 +11,8 @@
 //   - old URLs (the previous shop's links still in Google, renamed products, /_next/image?url=…): a GET that
 //     would answer 404 gets a 301 to its live replacement when lib/redirects.ts finds one; the rest is counted
 //     in not_found_log for Admin › Yönlendirmeler,
+//   - Strict-Transport-Security (lib/edge-cache.ts hstsHeader) on every HTTPS response returned here, the
+//     redirects and edge-cache HITs included (one place: withHsts in fetch below),
 //   - the cron (scheduled) handler (daily price update, image variants and assistant product facts; on Mondays
 //     also the assistant's popular questions). Failures are written to the system log (Admin › Sistem kayıtları).
 // See https://opennext.js.org/cloudflare/howtos/custom-worker
@@ -29,6 +31,7 @@ import {
     cacheKeyUrl,
     canonicalRedirect,
     hasAuthCookie,
+    hstsHeader,
     isCacheableRequest,
     isMaintenanceBody,
     isRscRequest,
@@ -365,65 +368,79 @@ async function withOldUrlRedirect(request: Request, url: URL, response: Response
     return response
 }
 
+// Strict-Transport-Security on the outgoing response (HTTPS only; the value and why there is no
+// includeSubDomains are in lib/edge-cache.ts). Stored edge-cache copies do not need it: every HIT passes here.
+function withHsts(response: Response, url: URL): Response {
+    const value = hstsHeader(url)
+    if (!value || response.headers.get('strict-transport-security') === value) return response
+    const out = new Response(response.body, response)
+    out.headers.set('Strict-Transport-Security', value)
+    return out
+}
+
+async function handleFetch(request: Request, env: Env, ctx: Ctx): Promise<Response> {
+    const url = new URL(request.url)
+    const method = request.method
+
+    const redirectTo = canonicalRedirect(url, method)
+    if (redirectTo) {
+        return new Response(null, {
+            status: 301,
+            headers: { Location: redirectTo, 'Cache-Control': 'public, max-age=86400' },
+        })
+    }
+
+    // Writes (checkout, PayTR/BirFatura callbacks, admin saves) are passed through untouched
+    if (method !== 'GET' && method !== 'HEAD') {
+        const response: Response = await handler.fetch(request, env, ctx)
+        if (response.ok && shouldBumpCacheVersion(url.pathname, method, hasAuthCookie(request.headers.get('cookie')))) {
+            try {
+                await bumpCacheVersion(env)
+            } catch (error) {
+                console.error('[edge-cache] cache_version bump failed', error)
+            }
+        }
+        return withSessionHint(request, url, response)
+    }
+
+    // Next renders the page as if tracking parameters weren't there (the cache key ignores them too), so a
+    // stored page never carries the first visitor's click ids; a redirect Next answers gets them back
+    // (withTrackingParams)
+    const clean = stripTrackingParams(url)
+    const target = clean ? new Request(clean.href, request) : request
+    const targetUrl = clean ?? url
+    const finish = (response: Response) =>
+        withSessionHint(request, targetUrl, clean ? withTrackingParams(response, url, clean) : response)
+    // A 404 with a live replacement becomes a 301 (its Location gets the tracking parameters back in finish)
+    const oldUrl = (response: Response) => withOldUrlRedirect(target, targetUrl, response, env, ctx)
+
+    if (isCacheableRequest({ method, url: targetUrl, headers: target.headers })) {
+        return finish(await oldUrl(await serveFromEdgeCache(target, targetUrl, env, ctx)))
+    }
+    // HEAD of a store page during maintenance: rendered as a GET so the 503 status and headers match
+    if (method === 'HEAD' && mayRenderMaintenance(targetUrl.pathname)) {
+        const settings = await getEdgeSettings(env)
+        if (settings?.maintenance) {
+            const get = new Request(targetUrl.href, { method: 'GET', headers: target.headers })
+            const full = await passThrough(await handler.fetch(get, env, ctx), targetUrl, 'GET', settings)
+            return finish(new Response(null, full))
+        }
+    }
+    const [response, settings] = await Promise.all([
+        handler.fetch(target, env, ctx) as Promise<Response>,
+        method === 'GET' && mayRenderMaintenance(targetUrl.pathname) ? getEdgeSettings(env) : null,
+    ])
+    // A client-side navigation during maintenance: the router falls back to a full page load (the 503 page)
+    if (settings?.maintenance && isRscRequest(target.headers, targetUrl) && blocksRscDuringMaintenance(targetUrl.pathname)) {
+        await response.body?.cancel().catch(() => {})
+        return finish(maintenanceRscResponse())
+    }
+    return finish(await oldUrl(await passThrough(response, targetUrl, method, settings)))
+}
+
 const worker = {
     async fetch(request: Request, env: Env, ctx: Ctx): Promise<Response> {
-        const url = new URL(request.url)
-        const method = request.method
-
-        const redirectTo = canonicalRedirect(url, method)
-        if (redirectTo) {
-            return new Response(null, {
-                status: 301,
-                headers: { Location: redirectTo, 'Cache-Control': 'public, max-age=86400' },
-            })
-        }
-
-        // Writes (checkout, PayTR/BirFatura callbacks, admin saves) are passed through untouched
-        if (method !== 'GET' && method !== 'HEAD') {
-            const response: Response = await handler.fetch(request, env, ctx)
-            if (response.ok && shouldBumpCacheVersion(url.pathname, method, hasAuthCookie(request.headers.get('cookie')))) {
-                try {
-                    await bumpCacheVersion(env)
-                } catch (error) {
-                    console.error('[edge-cache] cache_version bump failed', error)
-                }
-            }
-            return withSessionHint(request, url, response)
-        }
-
-        // Next renders the page as if tracking parameters weren't there (the cache key ignores them too), so a
-        // stored page never carries the first visitor's click ids; a redirect Next answers gets them back
-        // (withTrackingParams)
-        const clean = stripTrackingParams(url)
-        const target = clean ? new Request(clean.href, request) : request
-        const targetUrl = clean ?? url
-        const finish = (response: Response) =>
-            withSessionHint(request, targetUrl, clean ? withTrackingParams(response, url, clean) : response)
-        // A 404 with a live replacement becomes a 301 (its Location gets the tracking parameters back in finish)
-        const oldUrl = (response: Response) => withOldUrlRedirect(target, targetUrl, response, env, ctx)
-
-        if (isCacheableRequest({ method, url: targetUrl, headers: target.headers })) {
-            return finish(await oldUrl(await serveFromEdgeCache(target, targetUrl, env, ctx)))
-        }
-        // HEAD of a store page during maintenance: rendered as a GET so the 503 status and headers match
-        if (method === 'HEAD' && mayRenderMaintenance(targetUrl.pathname)) {
-            const settings = await getEdgeSettings(env)
-            if (settings?.maintenance) {
-                const get = new Request(targetUrl.href, { method: 'GET', headers: target.headers })
-                const full = await passThrough(await handler.fetch(get, env, ctx), targetUrl, 'GET', settings)
-                return finish(new Response(null, full))
-            }
-        }
-        const [response, settings] = await Promise.all([
-            handler.fetch(target, env, ctx) as Promise<Response>,
-            method === 'GET' && mayRenderMaintenance(targetUrl.pathname) ? getEdgeSettings(env) : null,
-        ])
-        // A client-side navigation during maintenance: the router falls back to a full page load (the 503 page)
-        if (settings?.maintenance && isRscRequest(target.headers, targetUrl) && blocksRscDuringMaintenance(targetUrl.pathname)) {
-            await response.body?.cancel().catch(() => {})
-            return finish(maintenanceRscResponse())
-        }
-        return finish(await oldUrl(await passThrough(response, targetUrl, method, settings)))
+        return withHsts(await handleFetch(request, env, ctx), new URL(request.url))
     },
 
     // Triggered by [triggers] crons in wrangler.toml (0 7 * * * = 10:00 Turkey time). A scheduled invocation may

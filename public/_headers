@@ -1,3 +1,8 @@
+# Static assets are served before the Worker: they get HSTS here (Worker responses: worker.ts withHsts).
+# One year, this host only: no includeSubDomains, no preload (lib/edge-cache.ts HSTS_VALUE).
+/*
+  Strict-Transport-Security: max-age=31536000
+
 /_next/static/*
   Cache-Control: public, max-age=31536000, immutable
 
