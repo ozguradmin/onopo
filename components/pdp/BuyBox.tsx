@@ -18,6 +18,8 @@ import { Check, CreditCard, Minus, Plus, ShoppingBag, Truck, Clock } from 'lucid
 import { cn } from '@/lib/utils'
 import { getImageUrl } from '@/lib/utils'
 import { Price } from '@/components/ui/Price'
+import { FallbackImage } from '@/components/ui/FallbackImage'
+import { originalImageUrl, productImageUrl } from '@/lib/images'
 import { Button, buttonClasses } from '@/components/ui/button'
 import { FavoriteButton } from '@/components/product/ProductCardActions'
 import InstallmentModal from '@/components/product/InstallmentModal'
@@ -249,8 +251,8 @@ export function BuyBox({ product, variations, freeShippingThreshold, maxInstallm
                                             )}
                                         >
                                             {opt.image_url && (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={getImageUrl(opt.image_url)} alt="" width={24} height={24} className="h-6 w-6 rounded-chip object-cover" loading="lazy" />
+                                                // 24 px swatch: the 200w variant when variants are on (original otherwise), falls back once to the original
+                                                <FallbackImage src={productImageUrl(opt.image_url, 200)} fallbackSrc={originalImageUrl(opt.image_url)} alt="" width={24} height={24} className="h-6 w-6 rounded-chip object-cover" loading="lazy" />
                                             )}
                                             <span>{opt.value}</span>
                                             {opt.price_modifier !== 0 && (
