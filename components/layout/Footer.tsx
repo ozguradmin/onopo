@@ -209,7 +209,11 @@ function FooterInner({ variant }: { variant: 'store' | 'checkout' }) {
     )
 }
 
-/** Link column: a plain list on desktop, an accordion on phones (content stays in the HTML). */
+/**
+ * Link column: a plain list on desktop, an accordion on phones (content stays in the HTML). The title is
+ * one heading with one text node at every width; on phones the toggle button, named by that heading,
+ * covers the heading row, and from lg it is not rendered (display: none).
+ */
 function FooterColumn({
     id,
     title,
@@ -225,20 +229,20 @@ function FooterColumn({
 }) {
     const [open, setOpen] = React.useState(defaultOpen)
     return (
-        <div className={cn('border-t border-white/10 lg:border-0', className)}>
-            <h2 className="text-sm font-semibold text-white">
-                <button
-                    type="button"
-                    aria-expanded={open}
-                    aria-controls={`${id}-list`}
-                    onClick={() => setOpen(o => !o)}
-                    className="flex min-h-[52px] w-full items-center justify-between text-left lg:hidden"
-                >
-                    {title}
-                    <ChevronDown className={cn('h-5 w-5 text-white/60 transition-transform duration-200', open && 'rotate-180')} aria-hidden="true" />
-                </button>
-                <span className="hidden lg:mb-4 lg:block">{title}</span>
+        <div className={cn('relative border-t border-white/10 lg:border-0', className)}>
+            <h2 id={`${id}-title`} className="flex min-h-[52px] items-center pr-8 text-sm font-semibold text-white lg:mb-4 lg:block lg:min-h-0 lg:pr-0">
+                {title}
             </h2>
+            <button
+                type="button"
+                aria-labelledby={`${id}-title`}
+                aria-expanded={open}
+                aria-controls={`${id}-list`}
+                onClick={() => setOpen(o => !o)}
+                className="absolute inset-x-0 top-0 flex h-[52px] items-center justify-end lg:hidden"
+            >
+                <ChevronDown className={cn('h-5 w-5 text-white/60 transition-transform duration-200', open && 'rotate-180')} aria-hidden="true" />
+            </button>
             <ul id={`${id}-list`} className={cn('flex-col gap-1 pb-4 text-sm lg:flex lg:gap-2.5 lg:pb-0', open ? 'flex' : 'hidden')}>
                 {children}
             </ul>
