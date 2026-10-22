@@ -362,7 +362,7 @@ function fakeBucket(objects = {}) {
             const start = cursor ? Number(cursor) : 0
             const page = keys.slice(start, start + Math.min(limit, 2)) // tiny pages: paging is exercised
             const next = start + page.length
-            return { objects: page.map(key => ({ key })), truncated: next < keys.length, cursor: next < keys.length ? String(next) : undefined }
+            return { objects: page.map(key => ({ key, size: store.get(key).size })), truncated: next < keys.length, cursor: next < keys.length ? String(next) : undefined }
         },
     }
 }
@@ -395,6 +395,26 @@ test('images: existing variants are listed with paging and only missing widths a
     assert.ok(existing.has('v/1200/k1.png.webp') && existing.has('v/400/y.webp'))
     const missing = iv.selectMissing([{ key: 'k1.png', uses: [], keepTransparency: false }, { key: 'k2.jpg', uses: [], keepTransparency: false }], existing)
     assert.deepEqual(missing.map(m => [m.ref.key, m.widths]), [['k2.jpg', [400, 800, 1200]]])
+})
+
+test('images: coverage counts ready, partial and missing images and compares card copies with their originals', async () => {
+    const bucket = fakeBucket({
+        'a.png': { size: 1000 }, 'v/200/a.png.webp': { size: 10 }, 'v/400/a.png.webp': { size: 100 }, 'v/800/a.png.webp': { size: 300 }, 'v/1200/a.png.webp': { size: 500 },
+        'b.jpg': { size: 2000 }, 'v/400/b.jpg.webp': { size: 200 },
+        'c.jpg': { size: 3000 },
+        'other/x.txt': { size: 7 },
+    })
+    const sizes = await iv.listObjectSizes(bucket)
+    assert.equal(sizes.size, 9, 'every page of the listing is read')
+    const ref = key => ({ key, uses: [], keepTransparency: false })
+    const c = iv.variantCoverage([ref('a.png'), ref('b.jpg'), ref('c.jpg'), ref('gone.jpg')], sizes, 2)
+    assert.deepEqual(
+        [c.images, c.ready, c.partial, c.missing, c.unsupported, c.noOriginal],
+        [4, 1, 1, 2, 2, 1],
+        'gone.jpg has no original and no copies: missing, and counted as a broken link',
+    )
+    assert.equal(c.originalBytes, 6000)
+    assert.deepEqual([c.cardBytes, c.cardOriginalBytes], [300, 3000], 'only images that have a 400 px copy are compared')
 })
 
 test('images: createVariants makes WebP at each width (scale-down, white background) with the upload headers', async () => {

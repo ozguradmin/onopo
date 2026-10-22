@@ -1,133 +1,134 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Loader2, CheckCircle, Image as ImageIcon } from 'lucide-react'
-import { toast } from 'sonner'
+import { AlertTriangle, CheckCircle, Loader2, RefreshCw, Zap } from 'lucide-react'
 import { MissingVariantsPanel } from '@/components/admin/MissingVariantsPanel'
 
-export default function ImageOptimizationPage() {
-    const [optimizing, setOptimizing] = useState(false)
-    const [progress, setProgress] = useState(0)
-    const [stats, setStats] = useState({ total: 0, optimized: 0, saved: '0 MB' })
-    const [products, setProducts] = useState<any[]>([])
+/**
+ * Admin › Görsel Optimizasyonu: the real state of the small WebP copies (v/<w>/<key>.webp) of every image the
+ * storefront shows, from GET /api/admin/optimize-images/ (one R2 listing). The copies are made automatically
+ * (on upload and by the daily cron); MissingVariantsPanel below can still make missing ones in the browser.
+ */
 
-    // Fetch every active product (includeAll: the plain list is the storefront's first 24 in stock)
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            fetch('/api/products?includeAll=true', { cache: 'no-store' })
-                .then(res => res.json())
-                .then(data => {
-                    if (Array.isArray(data)) {
-                        setProducts(data)
-                        const totalImgs = data.reduce((acc, p) => acc + (p.images ? (typeof p.images === 'string' ? JSON.parse(p.images).length : p.images.length) : 0), 0)
-                        setStats(prev => ({ ...prev, total: totalImgs }))
-                    }
-                })
-                .catch(() => { })
+interface Coverage {
+    images: number
+    ready: number
+    partial: number
+    missing: number
+    unsupported: number
+    noOriginal: number
+    originalBytes: number
+    cardBytes: number
+    cardOriginalBytes: number
+    automatic: boolean
+}
+
+function formatBytes(bytes: number): string {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} MB`
+    return `${Math.round(bytes / 1024).toLocaleString('tr-TR')} KB`
+}
+
+export default function ImageOptimizationPage() {
+    const [coverage, setCoverage] = useState<Coverage | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState('')
+
+    const load = useCallback(async () => {
+        setLoading(true)
+        setError('')
+        try {
+            const res = await fetch('/api/admin/optimize-images/', { cache: 'no-store' })
+            const data = await res.json().catch(() => null)
+            if (!res.ok || !data || typeof data.images !== 'number') throw new Error(data?.error || `HTTP ${res.status}`)
+            setCoverage(data)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Görsel durumu okunamadı.')
+        } finally {
+            setLoading(false)
         }
     }, [])
 
-    const handleOptimize = async () => {
-        setOptimizing(true)
-        setProgress(0)
+    useEffect(() => { load() }, [load])
 
-        let processed = 0
-        const totalImages = stats.total || 1
-
-        for (const product of products) {
-            try {
-                const res = await fetch('/api/admin/optimize-images', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ productId: product.id })
-                })
-
-                if (res.ok) {
-                    const data = await res.json()
-                    if (data.optimized) processed += data.optimized
-                }
-            } catch (e) {
-                console.error(e)
-            }
-            const pct = Math.min(100, Math.round((processed / totalImages) * 100))
-            setProgress(pct)
-        }
-
-        setOptimizing(false)
-        setProgress(100)
-        toast.success('Optimizasyon tamamlandı.')
-    }
+    const c = coverage
+    const incomplete = c ? c.partial + c.missing : 0
+    const readyPct = c && c.images > 0 ? Math.round((c.ready / c.images) * 100) : 0
+    const lighterPct = c && c.cardOriginalBytes > 0 ? Math.round((1 - c.cardBytes / c.cardOriginalBytes) * 100) : 0
 
     return (
         <div>
-            <h1 className="text-2xl font-bold mb-6 text-slate-900">Görsel Optimizasyonu</h1>
-
-            <div className="grid md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-white p-6 rounded-xl border border-slate-200">
-                    <p className="text-sm text-slate-500 mb-1">Toplam Görsel</p>
-                    <p className="text-3xl font-bold text-slate-900">{stats.total}</p>
-                </div>
-                <div className="bg-white p-6 rounded-xl border border-slate-200">
-                    <p className="text-sm text-slate-500 mb-1">Optimize Edilen</p>
-                    <p className="text-3xl font-bold text-green-600">{stats.optimized}</p>
-                </div>
-                <div className="bg-white p-6 rounded-xl border border-slate-200">
-                    <p className="text-sm text-slate-500 mb-1">Kazanılan Alan</p>
-                    <p className="text-3xl font-bold text-blue-600">{stats.saved}</p>
-                </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                <h1 className="text-2xl font-bold text-slate-900">Görsel Optimizasyonu</h1>
+                <Button variant="outline" onClick={load} disabled={loading}>
+                    {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                    Yenile
+                </Button>
             </div>
 
-            <div className="bg-white p-8 rounded-xl border border-slate-200 max-w-2xl">
-                <div className="flex items-start gap-6 mb-8">
-                    <div className="p-4 bg-blue-50 rounded-2xl shrink-0">
-                        <ImageIcon className="w-8 h-8 text-blue-600" />
-                    </div>
-                    <div>
-                        <h3 className="text-xl font-bold text-slate-900 mb-2">Toplu Optimizasyon</h3>
-                        <p className="text-slate-600 leading-relaxed">
-                            Tüm ürün görsellerini tarayarak sıkıştırır ve WebP formatına dönüştürür.
-                            Bu işlem sayfa yükleme hızını artırır ve sunucu alanından tasarruf sağlar.
+            {error && (
+                <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                    <AlertTriangle className="w-5 h-5 shrink-0" />
+                    <span>Görsel durumu okunamadı: {error}</span>
+                </div>
+            )}
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white p-6 rounded-xl border border-slate-200">
+                    <p className="text-sm text-slate-500 mb-1">Sitede gösterilen görsel</p>
+                    <p className="text-3xl font-bold text-slate-900">{c ? c.images : '–'}</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl border border-slate-200">
+                    <p className="text-sm text-slate-500 mb-1">Küçük kopyaları hazır</p>
+                    <p className="text-3xl font-bold text-green-600">{c ? c.ready : '–'}</p>
+                    {c && c.images > 0 && <p className="text-xs text-slate-500 mt-1">%{readyPct}</p>}
+                </div>
+                <div className="bg-white p-6 rounded-xl border border-slate-200">
+                    <p className="text-sm text-slate-500 mb-1">Eksik</p>
+                    <p className={`text-3xl font-bold ${incomplete > 0 ? 'text-amber-600' : 'text-slate-900'}`}>{c ? incomplete : '–'}</p>
+                    {c && c.partial > 0 && <p className="text-xs text-slate-500 mt-1">{c.partial} tanesinin bazı boyutları var</p>}
+                </div>
+                <div className="bg-white p-6 rounded-xl border border-slate-200">
+                    <p className="text-sm text-slate-500 mb-1">Ürün kartında yüklenen</p>
+                    <p className="text-3xl font-bold text-blue-600">{c && c.cardOriginalBytes > 0 ? `%${lighterPct} daha hafif` : '–'}</p>
+                    {c && c.cardOriginalBytes > 0 && (
+                        <p className="text-xs text-slate-500 mt-1">
+                            Orijinaller {formatBytes(c.cardOriginalBytes)}, kartlardaki kopyalar {formatBytes(c.cardBytes)}
                         </p>
-                        <div className="mt-4 flex flex-wrap gap-2">
-                            <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">Lossless Compression</span>
-                            <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">WebP Conversion</span>
-                            <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">Resize</span>
-                        </div>
-                    </div>
+                    )}
                 </div>
-
-                {optimizing ? (
-                    <div className="space-y-3 bg-slate-50 p-6 rounded-xl border border-slate-100">
-                        <div className="flex justify-between text-sm font-medium">
-                            <span className="text-slate-700">Optimize ediliyor...</span>
-                            <span className="text-blue-600">{progress}%</span>
-                        </div>
-                        <div className="h-3 bg-white rounded-full overflow-hidden border border-slate-200">
-                            <div
-                                className="h-full bg-blue-600 transition-all duration-300 ease-out"
-                                style={{ width: `${progress}%` }}
-                            />
-                        </div>
-                        <p className="text-xs text-slate-400 text-center">Lütfen pencereyi kapatmayın.</p>
-                    </div>
-                ) : (
-                    <Button
-                        onClick={handleOptimize}
-                        className="w-full h-12 text-lg bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/10"
-                        disabled={stats.optimized === stats.total}
-                    >
-                        {stats.optimized === stats.total ? (
-                            <>
-                                <CheckCircle className="w-5 h-5 mr-2" />
-                                Tüm Görseller Optimize Edildi
-                            </>
-                        ) : (
-                            'Optimizasyonu Başlat'
-                        )}
-                    </Button>
-                )}
             </div>
+
+            {c && (
+                <div className="bg-white p-6 rounded-xl border border-slate-200 max-w-3xl space-y-3 text-sm text-slate-700">
+                    <div className="flex items-start gap-3">
+                        {c.automatic
+                            ? <Zap className="w-5 h-5 shrink-0 text-green-600" />
+                            : <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600" />}
+                        <p>
+                            {c.automatic
+                                ? 'Otomatik: yeni yüklenen ya da değiştirilen görsellerin küçük kopyaları (200, 400, 800 ve 1200 px WebP) yükleme anında hazırlanır; kaçan olursa her sabah 10:00\'da tamamlanır. Bir şey yapmanıza gerek yok.'
+                                : 'Sunucuda otomatik kopya oluşturma şu an kullanılamıyor. Yeni görsellerin kopyalarını yüklerken tarayıcınız hazırlar; eksik kalanları aşağıdaki panelden oluşturabilirsiniz.'}
+                        </p>
+                    </div>
+                    {incomplete === 0 && c.images > 0 && (
+                        <div className="flex items-start gap-3">
+                            <CheckCircle className="w-5 h-5 shrink-0 text-green-600" />
+                            <p>Sitede gösterilen bütün görsellerin küçük kopyaları hazır.</p>
+                        </div>
+                    )}
+                    {c.noOriginal > 0 && (
+                        <div className="flex items-start gap-3">
+                            <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600" />
+                            <p>{c.noOriginal} görselin orijinali depoda bulunamadı (bozuk görsel bağlantısı). İlgili ürünün görselini yeniden yükleyin.</p>
+                        </div>
+                    )}
+                    {c.unsupported > 0 && (
+                        <p className="text-slate-500">{c.unsupported} görsel (SVG ya da GIF) küçültülmeden, olduğu gibi gösteriliyor.</p>
+                    )}
+                    <p className="text-slate-500">Tüm orijinallerin toplam boyutu: {formatBytes(c.originalBytes)}. Orijinaller silinmez; kopyalar onların yanında durur.</p>
+                </div>
+            )}
 
             <MissingVariantsPanel />
         </div>

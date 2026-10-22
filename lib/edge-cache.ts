@@ -253,8 +253,8 @@ export function cacheKeyUrl(url: URL, buildId: string, version: string): string 
 // /api/orders, /api/favorites, /api/analytics, /api/user, /api/coupons) are not on the list at all.
 const CONTENT_WRITE = /^\/api\/(admin|products|categories|homepage-sections|hero|hero-slides|menus|pages|site-settings|shipping-settings|upload|migrations|seed-pages|fix-db)(\/|$)/
 // ...except these, which change nothing the storefront shows (and some are reachable without a session):
-// password reset and the client error log; optimize-images only checks image URLs (one POST per product
-// from the admin button); email/send only sends mail; profile changes the admin's own login; users is
+// password reset and the client error log; optimize-images only reports image copy coverage (GET);
+// email/send only sends mail; profile changes the admin's own login; users is
 // read-only; redirects only changes what 404 URLs answer (never cached), and its resolve POST only reads;
 // system-logs only marks admin log entries "Çözüldü"; assistant/facts writes the assistant's product facts lines
 // (the storefront HTML does not show them; the "Ürün bilgilerini yenile" button posts every ~20 s).

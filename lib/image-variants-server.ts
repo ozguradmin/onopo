@@ -14,12 +14,15 @@ import {
     canHaveVariants,
     collectReferencedImages,
     createVariants,
+    listObjectSizes,
     runVariantSweep,
+    variantCoverage,
     sweepLogEvents,
     variantFailureEvent,
     type BucketLite,
     type ImagesLite,
     type SweepResult,
+    type VariantCoverage,
 } from '@/lib/image-variants-auto'
 import { runInBackground } from '@/lib/automation/background'
 
@@ -71,6 +74,16 @@ async function loadSources(db: D1Database) {
         imageCards: (cards.results ?? []).map(r => ({ title: r.title as string | null, config: r.config })),
         products: (products.results ?? []).map(r => ({ id: Number(r.id), name: r.name as string | null, images: r.images })),
     })
+}
+
+/**
+ * Admin › Görsel Optimizasyonu: the real coverage of the images the storefront shows (the same list the daily
+ * sweep works from) and whether new uploads get their copies on the server (`automatic`).
+ */
+export async function variantCoverageReport(env: CloudflareEnv): Promise<VariantCoverage & { automatic: boolean }> {
+    const { refs, unsupported } = await loadSources(env.DB)
+    const sizes = await listObjectSizes(env.BUCKET as unknown as BucketLite)
+    return { ...variantCoverage(refs, sizes, unsupported.length), automatic: Boolean(env.IMAGES) && Date.now() >= blockedUntil }
 }
 
 /**

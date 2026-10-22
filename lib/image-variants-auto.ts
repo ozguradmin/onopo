@@ -130,7 +130,7 @@ export function collectReferencedImages(src: ImageSources): { refs: ImageRef[]; 
 export interface BucketLite {
     get(key: string): Promise<{ size: number; arrayBuffer(): Promise<ArrayBuffer>; httpMetadata?: { contentType?: string } } | null>
     put(key: string, value: ArrayBuffer, options: { httpMetadata: { contentType: string; cacheControl: string }; onlyIf?: Headers }): Promise<unknown>
-    list(options: { prefix: string; cursor?: string; limit?: number }): Promise<{ objects: { key: string }[]; truncated: boolean; cursor?: string }>
+    list(options: { prefix: string; cursor?: string; limit?: number }): Promise<{ objects: { key: string; size?: number }[]; truncated: boolean; cursor?: string }>
 }
 
 export interface ImagesLite {
@@ -154,6 +154,60 @@ export async function listExistingVariants(bucket: BucketLite, widths: readonly 
         }
     }
     return out
+}
+
+/** Every object under `prefix` with its size in bytes (paged R2 list, at most `maxPages` pages of 1000). */
+export async function listObjectSizes(bucket: BucketLite, prefix = '', maxPages = 50): Promise<Map<string, number>> {
+    const out = new Map<string, number>()
+    let cursor: string | undefined
+    for (let page = 0; page < maxPages; page++) {
+        const r = await bucket.list({ prefix, cursor, limit: 1000 })
+        for (const o of r.objects) out.set(o.key, typeof o.size === 'number' ? o.size : 0)
+        if (!r.truncated || !r.cursor) break
+        cursor = r.cursor
+    }
+    return out
+}
+
+export interface VariantCoverage {
+    /** images the storefront shows that can have variants */
+    images: number
+    /** all four widths exist */
+    ready: number
+    /** some widths exist */
+    partial: number
+    /** no width exists */
+    missing: number
+    /** SVG/GIF/odd keys: shown as they are */
+    unsupported: number
+    /** originals not found in R2 (a broken image link) */
+    noOriginal: number
+    /** total size of the originals found in R2 */
+    originalBytes: number
+    /** total size of the 400 px copies (what product cards load) of the images that have one */
+    cardBytes: number
+    /** total size of the originals of those same images, to compare with cardBytes */
+    cardOriginalBytes: number
+}
+
+/** Admin › Görsel Optimizasyonu: how many shown images have their WebP copies, from one listing of the bucket. */
+export function variantCoverage(refs: readonly ImageRef[], sizes: ReadonlyMap<string, number>, unsupported = 0, widths: readonly number[] = VARIANT_WIDTHS): VariantCoverage {
+    const c: VariantCoverage = { images: refs.length, ready: 0, partial: 0, missing: 0, unsupported, noOriginal: 0, originalBytes: 0, cardBytes: 0, cardOriginalBytes: 0 }
+    for (const ref of refs) {
+        const have = widths.filter(w => sizes.has(variantKeyOf(ref.key, w))).length
+        if (have === widths.length) c.ready++
+        else if (have > 0) c.partial++
+        else c.missing++
+        const original = sizes.get(ref.key)
+        if (original === undefined) c.noOriginal++
+        else c.originalBytes += original
+        const card = sizes.get(variantKeyOf(ref.key, 400))
+        if (card !== undefined && original !== undefined) {
+            c.cardBytes += card
+            c.cardOriginalBytes += original
+        }
+    }
+    return c
 }
 
 /** The widths each image is missing, in the refs' order; images with all four are left out. */
