@@ -104,10 +104,47 @@ export function PopularCategories({ limit = 6 }: { limit?: number }) {
 
 const POPULAR_SEARCHES = ['Type-C kablo', 'Şarj aleti', 'iPhone', 'Powerbank', 'Araç şarj', 'Ekran koruyucu']
 
+/** app/not-found.tsx title + the root title template (lib/seo.ts SITE.titleTemplate). */
+const NOT_FOUND_DOCUMENT_TITLE = 'Sayfa bulunamadı | Onopo'
+
+/**
+ * Keeps the 404's own <title> and noindex when the 404 is rendered in the browser.
+ * A notFound() thrown by a page (unknown product slug, /kategori/<unknown>/, ?page= out of range) is not
+ * server-rendered by Next 16: it answers 404 with an empty "__next_error__" document (whose head does
+ * have this title and noindex), and the browser then renders the whole tree with the metadata of the
+ * matched route, i.e. the root defaults (store title, index,follow). The same happens on a client-side
+ * navigation to such a URL. After mount this renders the 404 title again and a noindex robots tag; both
+ * go away with the 404 view. React inserts a newly mounted <title> before the existing ones, so it wins;
+ * if Next's metadata adds its <title> later (client navigation), the 404 title is mounted again (a few
+ * times at most). On an unmatched URL the server-rendered head is already right and nothing is added.
+ */
+function NotFoundHead() {
+    // 0: not needed; every increment remounts the tags so they become the first <title> again
+    const [mount, setMount] = React.useState(0)
+    React.useEffect(() => {
+        let left = 4
+        const check = () => {
+            if (document.title !== NOT_FOUND_DOCUMENT_TITLE && left-- > 0) setMount(m => m + 1)
+        }
+        check()
+        const observer = new MutationObserver(check)
+        observer.observe(document.head, { childList: true })
+        return () => observer.disconnect()
+    }, [])
+    if (!mount) return null
+    return (
+        <React.Fragment key={mount}>
+            <title>{NOT_FOUND_DOCUMENT_TITLE}</title>
+            <meta name="robots" content="noindex, follow" />
+        </React.Fragment>
+    )
+}
+
 /** The whole 404 view (see the note at the top of this file for why it is a client component). */
 export function NotFoundView() {
     return (
         <div className="bg-canvas">
+            <NotFoundHead />
             <NoCacheMarker />
             <section className="bg-surface">
                 <div className="container-store py-10 text-center lg:py-16">

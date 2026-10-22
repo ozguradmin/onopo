@@ -12,14 +12,19 @@ import { FallbackImage } from '@/components/ui/FallbackImage'
 import { Field, FormAlert, checkboxClass, inputClass, textareaClass } from '@/components/forms/Field'
 import { CheckoutSkeleton } from '@/components/checkout/CheckoutSkeleton'
 import { TrustNote } from '@/components/checkout/TrustNote'
-import { ArrowLeft, ShoppingBag, Check, CreditCard, Lock, ChevronDown, Ticket, X, Truck, RefreshCw } from 'lucide-react'
+import { ShoppingBag, Check, CreditCard, Lock, ChevronDown, Ticket, X, Truck, RefreshCw } from 'lucide-react'
 
 /*
  * Checkout (/odeme/). Design spec §13: VISUALS ONLY.
  * The state, validation, payload to POST /api/orders, the PayTR iframe + 3 s polling of
  * GET /api/orders/<id>/ and the success/failure handling below are unchanged; only the markup is new.
+ * Two additions: the phone number must look like a Turkish number before anything is sent (the value
+ * is still sent as typed), and the payment step shows the order API's totalAmount (what PayTR charges).
  * Totals come from the cart store, which uses lib/pricing.ts (exactly what the order API charges).
  */
+
+// The order API's lenient phone check answers with the same text (no-break spaces keep the example on one line)
+const PHONE_INVALID = 'Geçerli bir telefon numarası gir (örn. 0532\u00a0123\u00a045\u00a067)'
 
 // Validation messages (client and /api/orders use the same texts) → the field they belong to,
 // so the message can also be shown under that field. Display only.
@@ -34,6 +39,16 @@ const FIELD_FOR_ERROR: Record<string, string> = {
     'Fatura ili zorunlu': 'billingCity',
     'Fatura ilçesi zorunlu': 'billingDistrict',
     'Fatura adresi zorunlu': 'billingAddress',
+    [PHONE_INVALID]: 'phone',
+}
+
+/**
+ * Turkish phone number, checked before the order is sent (the value itself is sent exactly as typed).
+ * After removing spaces, dashes, dots and parentheses: 10 digits starting with 5 (mobile) or 2–4
+ * (landline), or the same number after a leading 0 or +90.
+ */
+function isValidTurkishPhone(value: string): boolean {
+    return /^(?:\+90|0)?[2-5]\d{9}$/.test(value.replace(/[\s().-]/g, ''))
 }
 
 /** 500 → "500 ₺", 499.9 → "499,90 ₺" */
@@ -132,6 +147,8 @@ export default function CheckoutPage() {
 
     // Payment Iframe State
     const [iframeUrl, setIframeUrl] = React.useState<string | null>(null)
+    // What PayTR charges: the order API's own total (cart prices saved in the browser can be outdated)
+    const [paymentTotal, setPaymentTotal] = React.useState<number | null>(null)
 
     // Calculations
     const calculateSubtotal = () => items.reduce((total, item) => total + (item.price || 0) * item.quantity, 0)
@@ -262,6 +279,7 @@ export default function CheckoutPage() {
             if (!formData.fullName.trim()) throw new Error('Ad soyad zorunlu')
             if (!formData.email.trim()) throw new Error('E-posta zorunlu')
             if (!formData.phone.trim()) throw new Error('Telefon zorunlu')
+            if (!isValidTurkishPhone(formData.phone)) throw new Error(PHONE_INVALID)
             if (!formData.city.trim()) throw new Error('Teslimat adresi için il zorunlu')
             if (!formData.district.trim()) throw new Error('Teslimat adresi için ilçe zorunlu')
             if (formData.wantsDifferentBillingAddress) {
@@ -292,6 +310,7 @@ export default function CheckoutPage() {
             if (data.payment && data.payment.status === 'success' && data.payment.iframeUrl) {
                 // If payment required (PayTR), show iframe
                 setOrderId(data.orderId)
+                setPaymentTotal(typeof data.totalAmount === 'number' && Number.isFinite(data.totalAmount) ? data.totalAmount : null)
                 setIframeUrl(data.payment.iframeUrl)
                 window.scrollTo(0, 0)
                 return
@@ -320,6 +339,19 @@ export default function CheckoutPage() {
     const providerName = paymentSettings?.provider === 'paytr' ? 'PayTR' : 'iyzico'
     const errorField = Object.prototype.hasOwnProperty.call(FIELD_FOR_ERROR, error) ? FIELD_FOR_ERROR[error] : undefined
     const fieldError = (name: string) => (errorField === name ? error : undefined)
+    // Phone format feedback as soon as the field is left (submit runs the same check again)
+    const [phoneBlurError, setPhoneBlurError] = React.useState('')
+    const handlePhoneBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        const value = e.target.value
+        setPhoneBlurError(value.trim() && !isValidTurkishPhone(value) ? PHONE_INVALID : '')
+    }
+    const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        handleInputChange(e)
+        if (isValidTurkishPhone(e.target.value)) {
+            setPhoneBlurError('')
+            if (error === PHONE_INVALID) setError('')
+        }
+    }
 
     // The confirmation replaces the (tall) payment view: show it from the top, also when the
     // payment was confirmed by the status polling rather than by the form submit
@@ -405,12 +437,9 @@ export default function CheckoutPage() {
                                 <p className="mt-1 text-sm text-muted">
                                     Sipariş <span className="font-semibold text-ink-2 tabular">#{orderId}</span>
                                     <span aria-hidden="true"> · </span>
-                                    Ödenecek tutar <span className="font-semibold text-ink-2 tabular">{formatTL(finalTotal)}</span>
+                                    Ödenecek tutar <span className="font-semibold text-ink-2 tabular">{formatTL(paymentTotal ?? finalTotal)}</span>
                                 </p>
                             </div>
-                            <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-success">
-                                <Lock className="h-4 w-4" aria-hidden="true" /> Güvenli ödeme
-                            </span>
                         </div>
                         <div className="mt-4 overflow-hidden rounded-sheet border border-line bg-white shadow-card">
                             <iframe
@@ -464,25 +493,13 @@ export default function CheckoutPage() {
     }
 
     return (
-        <div className="min-h-[60vh] bg-surface pb-12 pt-4 lg:pb-20 lg:pt-6">
+        <div className="min-h-[60vh] bg-surface pb-12 pt-5 lg:pb-20 lg:pt-8">
             <div className="container-store">
-                <div className="mx-auto max-w-[1120px]">
-                    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-                        <Link
-                            href="/products/"
-                            className="-ml-1 inline-flex min-h-11 items-center gap-1.5 rounded-card px-1 text-sm font-medium text-muted transition-colors hover:text-ink"
-                        >
-                            <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Alışverişe dön
-                        </Link>
-                        <CheckoutSteps current={1} />
-                    </div>
-
-                    <div className="mt-3 flex items-center justify-between gap-4 lg:mt-4">
-                        <h1 className="type-h1 text-ink">Ödeme</h1>
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-success-50 px-3 py-1 text-[13px] font-semibold text-success">
-                            <Lock className="h-3.5 w-3.5" aria-hidden="true" /> Güvenli ödeme
-                        </span>
-                    </div>
+                {/* Full container-store width, so the page lines up with the checkout header. The back
+                    link and the "Güvenli ödeme" badge live in that header only. */}
+                <div>
+                    <CheckoutSteps current={1} />
+                    <h1 className="type-h1 mt-3 text-ink lg:mt-4">Ödeme</h1>
 
                     <div className="mt-4 lg:mt-6 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8">
                         {/* Order summary: collapsible bar on mobile (top), sticky card on desktop (right) */}
@@ -672,12 +689,13 @@ export default function CheckoutPage() {
                                                 placeholder="ornek@eposta.com"
                                             />
                                         </Field>
-                                        <Field id="checkout-phone" label="Telefon" required error={fieldError('phone')} hint="Kargo ve sipariş bilgilendirmesi için.">
+                                        <Field id="checkout-phone" label="Telefon" required error={fieldError('phone') || phoneBlurError || undefined} hint="Kargo ve sipariş bilgilendirmesi için.">
                                             <input
                                                 type="tel"
                                                 name="phone"
                                                 value={formData.phone}
-                                                onChange={handleInputChange}
+                                                onChange={handlePhoneChange}
+                                                onBlur={handlePhoneBlur}
                                                 required
                                                 autoComplete="tel"
                                                 className={inputClass}

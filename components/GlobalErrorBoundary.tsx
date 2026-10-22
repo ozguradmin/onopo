@@ -18,15 +18,18 @@ interface State {
 
 const CHUNK_RELOAD_KEY = 'onopo:chunk-reload'
 
-/** A stale deploy (old HTML asking for chunks that no longer exist) is the one error a reload fixes. */
-function isChunkLoadError(error: unknown): boolean {
+/**
+ * A stale deploy (old HTML asking for chunks that no longer exist) or a chunk download that failed is
+ * the one error a reload fixes. Also used by app/error.tsx, the route-level boundary that catches it first.
+ */
+export function isChunkLoadError(error: unknown): boolean {
     const e = error as { name?: string; message?: string } | null
     if (!e) return false
     return e.name === 'ChunkLoadError' || /Loading (CSS )?chunk [\w-]+ failed|Failed to fetch dynamically imported module|Importing a module script failed/i.test(e.message || '')
 }
 
-/** Reload at most once per path per 60 s (sessionStorage guard), so it can never loop. */
-function reloadOnceForChunkError(): boolean {
+/** Reload at most once per path per 60 s (sessionStorage guard), so it can never loop. True if it reloads. */
+export function reloadOnceForChunkError(): boolean {
     try {
         const raw = sessionStorage.getItem(CHUNK_RELOAD_KEY)
         const last = raw ? (JSON.parse(raw) as { path: string; at: number }) : null
@@ -72,15 +75,20 @@ export class GlobalErrorBoundary extends Component<Props, State> {
         if (error) {
             // Let Next.js handle redirect()/notFound() thrown below this boundary
             unstable_rethrow(error)
-            return <ErrorFallback variant={this.props.variant ?? 'page'} onRetry={this.retry} />
+            return <ErrorFallback variant={this.props.variant ?? 'page'} onRetry={this.retry} chunkError={isChunkLoadError(error)} />
         }
         return this.props.children
     }
 }
 
-function ErrorFallback({ variant, onRetry }: { variant: 'page' | 'root'; onRetry: () => void }) {
+function ErrorFallback({ variant, onRetry, chunkError }: { variant: 'page' | 'root'; onRetry: () => void; chunkError: boolean }) {
     const router = useRouter()
     const retry = () => {
+        // The same missing chunk would fail again in place: only a full reload (new HTML) helps
+        if (chunkError) {
+            window.location.reload()
+            return
+        }
         // Re-fetch the server components of this page, then render the subtree again
         React.startTransition(() => {
             router.refresh()

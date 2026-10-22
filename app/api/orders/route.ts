@@ -56,6 +56,10 @@ export async function POST(req: NextRequest) {
         if (!customerInfo?.phone) {
             return NextResponse.json({ error: 'Telefon numarası zorunlu' }, { status: 400 })
         }
+        // Lenient on purpose (the checkout checks the exact Turkish format): a phone number has at least 10 digits
+        if (String(customerInfo.phone).replace(/\D/g, '').length < 10) {
+            return NextResponse.json({ error: 'Geçerli bir telefon numarası gir (örn. 0532\u00a0123\u00a045\u00a067)' }, { status: 400 })
+        }
         if (!customerInfo?.fullName) {
             return NextResponse.json({ error: 'Ad soyad zorunlu' }, { status: 400 })
         }
@@ -286,7 +290,9 @@ export async function POST(req: NextRequest) {
             success: true,
             orderId,
             message: 'Siparişiniz başarıyla oluşturuldu!',
-            payment: paymentResult
+            payment: paymentResult,
+            // The exact amount of the order row (and of the PayTR payment), for the checkout's payment step
+            totalAmount
         })
 
     } catch (error: any) {

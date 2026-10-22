@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { FrameAwareLink } from '@/components/checkout/FrameAwareLink'
 import { CreditCard, Mail, MessageCircle, ShoppingBag, XCircle } from 'lucide-react'
 import { buttonClasses } from '@/components/ui/button'
 import { privatePageMetadata } from '@/lib/seo'
@@ -7,7 +6,8 @@ import { getSiteSettings } from '@/lib/catalog'
 
 // PayTR's merchant_fail_url (lib/payment/paytr.ts). It opens inside the PayTR iframe on /odeme/ or on
 // its own. The cart is NOT touched here (it is only cleared after a confirmed payment), so
-// "Tekrar dene" goes back to /odeme/ with the same cart.
+// "Tekrar dene" goes back to /odeme/ with the same cart. Links leave the iframe: target="_top" (plain
+// <a>: works before hydration; on its own, _top is the same window), WhatsApp opens a new tab.
 export const metadata: Metadata = {
     title: 'Ödeme tamamlanamadı',
     ...privatePageMetadata,
@@ -48,12 +48,12 @@ export default async function OrderErrorPage() {
                     </ul>
 
                     <div className="mt-7 flex flex-col-reverse justify-center gap-3 sm:flex-row">
-                        <FrameAwareLink href="/" className={buttonClasses({ variant: 'outline-ink', size: '48' })}>
+                        <a href="/" target="_top" className={buttonClasses({ variant: 'outline-ink', size: '48' })}>
                             Ana sayfaya dön
-                        </FrameAwareLink>
-                        <FrameAwareLink href="/odeme/" className={buttonClasses({ variant: 'brand', size: '48' })}>
+                        </a>
+                        <a href="/odeme/" target="_top" className={buttonClasses({ variant: 'brand', size: '48' })}>
                             Tekrar dene
-                        </FrameAwareLink>
+                        </a>
                     </div>
 
                     {(settings.footer_email || whatsapp) && (
@@ -66,7 +66,7 @@ export default async function OrderErrorPage() {
                                     </a>
                                 )}
                                 {settings.footer_email && (
-                                    <a href={`mailto:${settings.footer_email}`} className={buttonClasses({ variant: 'subtle', size: '44' })}>
+                                    <a href={`mailto:${settings.footer_email}`} target="_top" className={buttonClasses({ variant: 'subtle', size: '44' })}>
                                         <Mail className="h-4 w-4" aria-hidden="true" /> {settings.footer_email}
                                     </a>
                                 )}
