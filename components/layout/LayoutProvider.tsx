@@ -25,20 +25,69 @@
  *   ai_assistant_enabled is on, and never on checkout. Off, nothing of it renders or loads.
  */
 import * as React from 'react'
+import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import { Wrench, Mail } from 'lucide-react'
 import { Header } from "@/components/layout/Header"
 import { Footer } from "@/components/layout/Footer"
-import { CartDrawer } from "@/components/cart/CartDrawer"
 import { MobileNav } from "@/components/layout/MobileNav"
-import { MobileMenu } from "@/components/layout/MobileMenu"
-import { AssistantRoot } from "@/components/assistant/AssistantRoot"
+import { useShellUI } from "@/components/layout/shell-ui"
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary'
 import { DEFAULT_SHELL_FACTS, ShellChromeContext, ShellFactsContext, StoreDataProvider } from '@/components/layout/store-data'
 import { syncSavedCart, useCartStore, watchSavedCart } from "@/store/cart-store"
 import type { PublicSiteSettings, StorefrontData } from '@/lib/catalog'
 
 const MAINTENANCE_EXEMPT = ['/maintenance', '/login', '/register']
+
+// Closed until used: the cart drawer, the mobile menu and the assistant load after the page has loaded, one
+// per idle period (or at once when the cart or the menu is opened first). Bundled into the shell and
+// hydrated with the page they made one long task on phones (Total Blocking Time); none of them is visible in
+// the server HTML (the drawers render their content only after the first open).
+const CartDrawer = dynamic(() => import('@/components/cart/CartDrawer').then(m => m.CartDrawer), { ssr: false })
+const MobileMenu = dynamic(() => import('@/components/layout/MobileMenu').then(m => m.MobileMenu), { ssr: false })
+const AssistantRoot = dynamic(() => import('@/components/assistant/AssistantRoot').then(m => m.AssistantRoot), { ssr: false })
+
+/**
+ * 0 until the page has loaded, then 1, 2, 3 in three separate idle periods (each at most ~3 s apart), so the
+ * cart drawer, the menu and the assistant mount one at a time. The state changes are transitions: React
+ * renders them in small slices instead of one long task.
+ */
+function useIdleStage(): number {
+    const [stage, setStage] = React.useState(0)
+    React.useEffect(() => {
+        const w = window as Window & {
+            requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
+            cancelIdleCallback?: (id: number) => void
+        }
+        let idleId: number | undefined
+        let timer: ReturnType<typeof setTimeout> | undefined
+        let next = 0
+        const schedule = () => {
+            const step = () => {
+                next += 1
+                React.startTransition(() => setStage(next))
+                if (next < 3) schedule()
+            }
+            if (w.requestIdleCallback) idleId = w.requestIdleCallback(step, { timeout: 3000 })
+            else timer = setTimeout(step, 500)
+        }
+        if (document.readyState === 'complete') schedule()
+        else window.addEventListener('load', schedule, { once: true })
+        // A tap before then (pointerdown comes ~100 ms before the click) starts loading both drawers' code
+        const preload = () => {
+            void import('@/components/cart/CartDrawer')
+            void import('@/components/layout/MobileMenu')
+        }
+        window.addEventListener('pointerdown', preload, { once: true, passive: true })
+        return () => {
+            window.removeEventListener('load', schedule)
+            window.removeEventListener('pointerdown', preload)
+            if (idleId !== undefined) w.cancelIdleCallback?.(idleId)
+            clearTimeout(timer)
+        }
+    }, [])
+    return stage
+}
 
 /** The first tracked page view of this page load was sent (later ones are in-site navigations). */
 let landingTracked = false
@@ -129,6 +178,10 @@ export function LayoutProvider({
         }
     }, [path, showChrome])
 
+    const idleStage = useIdleStage()
+    const cartOpen = useCartStore(s => s.isOpen)
+    const menuOpen = useShellUI(s => s.menuOpen)
+
     const Main = isAdmin ? 'div' : 'main'
     const variant = isCheckout ? 'checkout' : 'store'
 
@@ -146,8 +199,8 @@ export function LayoutProvider({
                         </a>
                     )}
                     {chrome && <Header fromShell variant={variant} />}
-                    {chrome && <CartDrawer />}
-                    {chrome && !isCheckout && <MobileMenu />}
+                    {chrome && (idleStage >= 1 || cartOpen) && <CartDrawer />}
+                    {chrome && !isCheckout && (idleStage >= 2 || menuOpen) && <MobileMenu />}
                     {/* The chrome-less result pages fill the frame in their own surface colour */}
                     <Main id="main-content" className={isPaymentResult ? 'min-h-dvh bg-surface' : showChrome ? 'min-h-[60vh]' : undefined}>
                         {showMaintenance ? (
@@ -160,7 +213,7 @@ export function LayoutProvider({
                     </Main>
                     {chrome && <Footer fromShell variant={variant} />}
                     {chrome && !isCheckout && <MobileNav fromShell />}
-                    {chrome && !isCheckout && assistantOn && <AssistantRoot />}
+                    {chrome && !isCheckout && assistantOn && idleStage >= 3 && <AssistantRoot />}
                 </ShellChromeContext.Provider>
             </ShellFactsContext.Provider>
         </StoreDataProvider>

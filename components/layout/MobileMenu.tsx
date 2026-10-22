@@ -80,7 +80,12 @@ export function MobileMenu() {
     ])
     const current = (href: string | null | undefined) => (active !== null && !!href && normalizeHref(href) === active ? 'page' as const : undefined)
 
+    // Close on navigation, not on mount: the menu loads lazily (LayoutProvider), and a tap on the menu button
+    // before it has loaded mounts it already open
+    const shownPath = React.useRef(pathname)
     React.useEffect(() => {
+        if (shownPath.current === pathname) return
+        shownPath.current = pathname
         closeMenu()
     }, [pathname, closeMenu])
 

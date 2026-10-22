@@ -64,7 +64,8 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
                 programmatic.current = false
             }, 150)
         }
-        update()
+        // First read on the next frame, not during hydration (a forced layout on phones)
+        frame = requestAnimationFrame(update)
         el.addEventListener('scroll', onScroll, { passive: true })
         return () => {
             cancelAnimationFrame(frame)

@@ -58,8 +58,10 @@ function StoreHeader() {
         let lastY = window.scrollY
         let collapsed = false
         let ticking = false
-        // Layout height of the open header (transforms do not change it), kept by a ResizeObserver
-        let fullHeight = header.offsetHeight
+        // Layout height of the open header (transforms do not change it), kept by a ResizeObserver. Its first
+        // callback (after the first layout) sets it: reading offsetHeight here, during hydration, forced a layout
+        // that the <html> style write below then invalidated for every later effect (a long task on phones).
+        let fullHeight = 0
 
         // Sticky parts under the header (listing toolbar and filter sidebar, [data-under-header] in
         // app/globals.css) take the header's visible bottom edge once stuck as their `top`, with the same
@@ -139,8 +141,7 @@ function StoreHeader() {
             syncHeights()
         })
         resize.observe(header)
-        syncHeights()
-        update()
+        onScroll()
         window.addEventListener('scroll', onScroll, { passive: true })
         desktop.addEventListener('change', onBreakpoint)
         header.addEventListener('focusin', onFocusIn)
