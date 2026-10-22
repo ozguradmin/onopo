@@ -2,8 +2,9 @@
 
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
-import { ArrowUpRight, Search, Filter, MoreHorizontal, ChevronDown, ChevronUp, Package, Truck, Check, X, Mail, MapPin, Trash2, Clock, ExternalLink } from 'lucide-react'
+import { ArrowUpRight, Search, Filter, MoreHorizontal, ChevronDown, ChevronUp, Package, Truck, Mail, MapPin, Trash2, ExternalLink } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { ORDER_STATUS_OPTIONS, isKnownOrderStatus, orderStatusInfo } from '@/components/admin/orderStatuses'
 
 interface Order {
     id: number
@@ -16,14 +17,6 @@ interface Order {
     admin_notes: string | null
     created_at: string
     items: string | any[] // JSON string or parsed array
-}
-
-const statusLabels: Record<string, { label: string; color: string; icon: any }> = {
-    pending: { label: 'Beklemede', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
-    processing: { label: 'Hazırlanıyor', color: 'bg-blue-100 text-blue-700', icon: Package },
-    shipped: { label: 'Kargoda', color: 'bg-purple-100 text-purple-700', icon: Truck },
-    delivered: { label: 'Teslim Edildi', color: 'bg-green-100 text-green-700', icon: Check },
-    cancelled: { label: 'İptal', color: 'bg-red-100 text-red-700', icon: X }
 }
 
 export default function AdminOrdersPage() {
@@ -102,6 +95,12 @@ function OrdersContent() {
     }, [filteredOrders, currentPage, pageSize])
 
     const totalPages = pageSize === 0 ? 1 : Math.ceil(filteredOrders.length / pageSize)
+
+    // Stored statuses outside the BirFatura list (old 'delivered' rows), so they can still be filtered
+    const legacyStatuses = React.useMemo(
+        () => Array.from(new Set(orders.map(o => o.status).filter(s => s && !isKnownOrderStatus(s)))),
+        [orders]
+    )
 
     // Reset to page 1 when filters change
     React.useEffect(() => {
@@ -209,11 +208,12 @@ function OrdersContent() {
                     className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent min-w-[160px]"
                 >
                     <option value="">Tüm Durumlar</option>
-                    <option value="pending">Beklemede</option>
-                    <option value="processing">Hazırlanıyor</option>
-                    <option value="shipped">Kargoda</option>
-                    <option value="delivered">Teslim Edildi</option>
-                    <option value="cancelled">İptal</option>
+                    {ORDER_STATUS_OPTIONS.map(s => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                    {legacyStatuses.map(s => (
+                        <option key={s} value={s}>{orderStatusInfo(s).label} (eski)</option>
+                    ))}
                 </select>
                 <select
                     value={pageSize}
@@ -253,7 +253,7 @@ function OrdersContent() {
                 <div className="space-y-4">
                     {paginatedOrders.map(order => {
                         const address = parseAddress(order.shipping_address)
-                        const statusInfo = statusLabels[order.status] || statusLabels.pending
+                        const statusInfo = orderStatusInfo(order.status)
                         const StatusIcon = statusInfo.icon
                         const isExpanded = expandedOrder === order.id
 
@@ -282,7 +282,7 @@ function OrdersContent() {
                                             <div className="font-bold text-slate-900">{order.total_amount.toFixed(2)} ₺</div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${statusInfo.color}`}>
+                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${statusInfo.badge}`}>
                                                 <StatusIcon className="w-3.5 h-3.5" />
                                                 {statusInfo.label}
                                             </span>
@@ -413,11 +413,12 @@ function OrdersContent() {
                                                 onChange={(e) => handleStatusChange(order.id, e.target.value)}
                                                 className="px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none bg-white"
                                             >
-                                                <option value="pending">Beklemede</option>
-                                                <option value="processing">Hazırlanıyor</option>
-                                                <option value="shipped">Kargoda</option>
-                                                <option value="delivered">Teslim Edildi</option>
-                                                <option value="cancelled">İptal</option>
+                                                {ORDER_STATUS_OPTIONS.map(s => (
+                                                    <option key={s.value} value={s.value}>{s.label}</option>
+                                                ))}
+                                                {!isKnownOrderStatus(order.status) && (
+                                                    <option value={order.status} disabled>{statusInfo.label} (eski)</option>
+                                                )}
                                             </select>
                                             <Button
                                                 variant="outline"

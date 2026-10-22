@@ -3,17 +3,10 @@
 import * as React from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save, Package, Truck, Check, X, Clock, ExternalLink, Trash2, Printer } from 'lucide-react'
+import { ArrowLeft, Save, ExternalLink, Trash2, Printer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-
-const statusOptions = [
-    { value: 'pending', label: 'Beklemede', icon: Clock, color: 'yellow' },
-    { value: 'processing', label: 'Hazırlanıyor', icon: Package, color: 'blue' },
-    { value: 'shipped', label: 'Kargoya Verildi', icon: Truck, color: 'purple' },
-    { value: 'completed', label: 'Tamamlandı', icon: Check, color: 'green' },
-    { value: 'cancelled', label: 'İptal Edildi', icon: X, color: 'red' },
-]
+import { ORDER_STATUS_OPTIONS, isKnownOrderStatus, orderStatusInfo } from '@/components/admin/orderStatuses'
 
 export default function OrderEditPage() {
     const router = useRouter()
@@ -299,20 +292,27 @@ export default function OrderEditPage() {
                         <label className="block text-sm font-medium text-slate-700 mb-2">
                             Sipariş Durumu
                         </label>
+                        {!isKnownOrderStatus(formData.status) && (
+                            <p className="mb-2 text-sm text-slate-600">
+                                Şu anki durum: <span className="font-semibold">{orderStatusInfo(formData.status).label}</span> (eski durum, BirFatura tanımıyor). Yeni bir durum seç.
+                            </p>
+                        )}
                         <div className="grid grid-cols-2 gap-2">
-                            {statusOptions.map(status => {
+                            {ORDER_STATUS_OPTIONS.map(status => {
                                 const Icon = status.icon
                                 const isSelected = formData.status === status.value
                                 return (
                                     <button
                                         key={status.value}
+                                        type="button"
+                                        aria-pressed={isSelected}
                                         onClick={() => setFormData({ ...formData, status: status.value })}
                                         className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all text-left ${isSelected
-                                            ? `border-${status.color}-500 bg-${status.color}-50 text-${status.color}-700`
+                                            ? status.selected
                                             : 'border-slate-200 hover:border-slate-300'
                                             }`}
                                     >
-                                        <Icon className={`w-4 h-4 ${isSelected ? `text-${status.color}-600` : 'text-slate-400'}`} />
+                                        <Icon className={`w-4 h-4 ${isSelected ? '' : 'text-slate-400'}`} />
                                         <span className="text-sm font-medium">{status.label}</span>
                                     </button>
                                 )
