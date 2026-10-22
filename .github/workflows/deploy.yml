@@ -27,6 +27,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           NEXT_PUBLIC_BASE_URL: https://onopostore.com
+          # Resized WebP variants (v/<w>/<key>.webp) are in R2 since 2026-10-22; new uploads create theirs
+          NEXT_PUBLIC_IMAGE_VARIANTS_ENABLED: "true"
 
       # Apply database migrations (continue even if tables exist)
       - name: Apply Database Migrations
