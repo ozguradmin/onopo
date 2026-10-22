@@ -20,7 +20,8 @@ import { ShoppingBag, Check, CreditCard, Lock, ChevronDown, Ticket, X, Truck, Re
  * The state, validation, payload to POST /api/orders, the PayTR iframe + 3 s polling of
  * GET /api/orders/<id>/ and the success/failure handling below are unchanged; only the markup is new.
  * Two additions: the phone number must look like a Turkish number before anything is sent (the value
- * is still sent as typed), and the payment step shows the order API's totalAmount (what PayTR charges).
+ * is still sent as typed), and the payment step shows the order API's totalAmount (what PayTR charges),
+ * with a short note when it differs from the total the summary showed (cart prices saved at add time).
  * Totals come from the cart store, which uses lib/pricing.ts (exactly what the order API charges).
  */
 
