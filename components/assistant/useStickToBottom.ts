@@ -20,10 +20,18 @@ export function useStickToBottom() {
         const el = scrollRef.current
         const content = contentRef.current
         if (!el || !content) return
+        // Only a scroll UP by the visitor stops following. Content growing under us, a smooth scroll still
+        // on its way down, or the panel getting shorter (the cart strip appears) never does.
+        let last = el.scrollTop
         const onScroll = () => {
             const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
-            stick.current = atBottom
-            if (atBottom) setAway(false)
+            if (atBottom) {
+                stick.current = true
+                setAway(false)
+            } else if (el.scrollTop < last - 2) {
+                stick.current = false
+            }
+            last = el.scrollTop
         }
         const follow = () => {
             if (stick.current) el.scrollTop = el.scrollHeight
@@ -32,6 +40,8 @@ export function useStickToBottom() {
         el.addEventListener('scroll', onScroll, { passive: true })
         const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(follow) : null
         ro?.observe(content)
+        // The scroller itself shrinks when the cart strip or the keyboard appears: keep the newest reply in view
+        ro?.observe(el)
         follow()
         return () => {
             el.removeEventListener('scroll', onScroll)

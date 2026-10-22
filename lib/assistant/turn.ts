@@ -624,6 +624,10 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
                 // Failure: 429 / 3040 opens the circuit; one fallback attempt while no text was shown
                 const msg = opened.ok ? '' : opened.message
                 const status = opened.ok ? null : opened.status
+                // Content-free diagnostics: model, HTTP status and the Workers AI code (4 digits) or the
+                // exception name. Never the message text, which may quote the request
+                const aiCode = /\b(\d{4})\b/.exec(msg)?.[1] ?? (opened.ok ? 'stream' : status == null ? (msg.split(':')[0] || 'exception').slice(0, 40) : '-')
+                console.warn(`ai_call_fail model=${model.split('/').pop()} status=${status ?? '-'} code=${aiCode}`)
                 if (primary && (status === 429 || /\b(429|3040)\b/.test(msg))) circuitOpenUntil = Date.now() + 60_000
                 const retryable = status == null || status === 429 || status === 408 || status >= 500 || /\b3040\b/.test(msg)
                 guard.discard()

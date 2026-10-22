@@ -123,7 +123,11 @@ export async function routeTurn(ai: RouterAi, model: string, state: RouterState,
         let j: any
         if (res && typeof (res as Response).json === 'function') {
             const r = res as Response
-            if (!r.ok) return { answers: null, flag: 'router_error', inputTokens: 0, ms: Date.now() - started }
+            if (!r.ok) {
+                // Content-free: the status only (the body may quote the request)
+                console.warn(`ai_router_fail status=${r.status}`)
+                return { answers: null, flag: 'router_error', inputTokens: 0, ms: Date.now() - started }
+            }
             j = await r.json()
         } else {
             j = res
@@ -137,7 +141,10 @@ export async function routeTurn(ai: RouterAi, model: string, state: RouterState,
             ms: Date.now() - started,
         }
     })()
-    const guarded = call.catch((): RouteResult => ({ answers: null, flag: 'router_error', inputTokens: 0, ms: Date.now() - started }))
+    const guarded = call.catch((err: unknown): RouteResult => {
+        if (!ctrl.signal.aborted) console.warn(`ai_router_fail exception=${err instanceof Error ? err.name : 'unknown'}`)
+        return { answers: null, flag: 'router_error', inputTokens: 0, ms: Date.now() - started }
+    })
     try {
         const r = await Promise.race([guarded, timeout])
         if (r === 'timeout') return { answers: null, flag: 'router_timeout', inputTokens: 0, ms: Date.now() - started }

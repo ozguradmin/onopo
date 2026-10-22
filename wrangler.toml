@@ -23,6 +23,8 @@ bucket_name = "onopo-storage"
 # Model calls are always remote and billed, also under `wrangler dev`.
 [ai]
 binding = "AI"
+# Workers AI has no local simulation: wrangler dev calls the real models (billed) with the developer's login
+remote = true
 
 # AI assistant throttles (Workers Rate Limiting; counted per Cloudflare location, approximate)
 [[ratelimits]]
