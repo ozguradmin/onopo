@@ -267,9 +267,9 @@ export default function AdminProductsPage() {
 
     return (
         <div>
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
                 <h1 className="text-2xl font-bold text-slate-900">Ürünler</h1>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <Button
                         onClick={handleBulkDelete}
                         variant="outline"
@@ -420,7 +420,7 @@ export default function AdminProductsPage() {
 
             {/* Pagination Controls */}
             {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-4">
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
                     <Button
                         variant="outline"
                         onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
