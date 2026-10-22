@@ -17,9 +17,11 @@ import { Breadcrumb, type BreadcrumbItem } from '@/components/ui/Breadcrumb'
 import { ProductCard } from '@/components/product/ProductCard'
 import type { ListingData } from '@/lib/listing-data'
 import { formatNumberTR } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { categoryPath } from '@/lib/seo'
 import { ActiveFilters } from './ActiveFilters'
 import { FilterPanel } from './FilterPanel'
+import { ListingIntro } from './ListingIntro'
 import { ListingProvider } from './ListingProvider'
 import { ListingSearchBox } from './ListingSearchBox'
 import { DesktopToolbar, MobileToolbar } from './ListingToolbar'
@@ -40,6 +42,12 @@ export interface ListingViewProps {
     searchLabel: string
     /** Optional notice above the results (e.g. an unknown ?category=). */
     notice?: React.ReactNode
+    /**
+     * The store header's search covers this listing (/products/, ?q=): phones skip the in-page search
+     * box and the query chip (the H1 names the query). Category pages keep both: their box searches
+     * inside the category and their H1 is the category name.
+     */
+    searchInHeader?: boolean
 }
 
 function SoldOutDivider({ count }: { count: number }) {
@@ -177,7 +185,7 @@ function EmptyResults({ data }: { data: ListingData }) {
     )
 }
 
-export async function ListingView({ data, h1, intro, breadcrumb, searchPlaceholder, searchLabel, notice }: ListingViewProps) {
+export async function ListingView({ data, h1, intro, breadcrumb, searchPlaceholder, searchLabel, notice, searchInHeader = false }: ListingViewProps) {
     const { result, state, panel, ratings, shipping, pageSize, basePath } = data
     // Cards fetched by "Daha fazla göster" (client navigation) are below the fold: no eager images there
     const h = await headers()
@@ -221,14 +229,18 @@ export async function ListingView({ data, h1, intro, breadcrumb, searchPlacehold
                     <div className="mt-3 flex flex-col gap-4 lg:mt-4 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
                         <div className="min-w-0">
                             <h1 className="type-h1 break-words text-ink">{h1}</h1>
-                            <p className="mt-1.5 line-clamp-2 max-w-3xl text-sm leading-6 text-muted lg:line-clamp-none lg:text-[15px]">
+                            <ListingIntro expandable={!!intro} className="mt-1.5 max-w-3xl text-sm leading-6 text-muted lg:text-[15px]">
                                 <span className="font-semibold tabular-nums text-ink-2">
                                     {formatNumberTR(result.total, 0)} {countLabel}
                                 </span>
                                 {intro ? <> · {intro}</> : null}
-                            </p>
+                            </ListingIntro>
                         </div>
-                        <ListingSearchBox placeholder={searchPlaceholder} label={searchLabel} className="w-full shrink-0 lg:w-[380px]" />
+                        <ListingSearchBox
+                            placeholder={searchPlaceholder}
+                            label={searchLabel}
+                            className={cn('w-full shrink-0 lg:block lg:w-[380px]', searchInHeader && 'hidden')}
+                        />
                     </div>
                     <QuickChips facets={panel.facets} className="mt-4 lg:hidden" />
                 </div>
@@ -247,7 +259,7 @@ export async function ListingView({ data, h1, intro, breadcrumb, searchPlacehold
                     <div className="min-w-0">
                         <DesktopToolbar total={result.total} label={countLabel} className="mb-4" />
                         {notice}
-                        <ActiveFilters className="mb-4" />
+                        <ActiveFilters className="mb-4" queryInH1={searchInHeader} />
                         {data.facetHint && (
                             <Link
                                 href={data.facetHint.href}
