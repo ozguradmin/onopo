@@ -54,7 +54,7 @@ export interface PopularState {
 export function cleanQuestion(raw: unknown): string | null {
     if (typeof raw !== 'string') return null
     let q = raw.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim()
-    q = q.replace(/^[-*•\d.)\s"'“”]+/, '').replace(/["'“”]+$/, '').trim()
+    q = q.replace(/^(?:[-*•]\s*|\d+[.)]\s+)/, '').replace(/^["'“”]+|["'“”]+$/g, '').trim()
     if (q.length < 4 || q.length > POPULAR_MAX_CHARS) return null
     if (/https?:|www\.|\.com|\.net|\.tr\b|@|wa\.me/i.test(q)) return null
     if (/\[(telefon|e-posta|tckn|kart|iban)\]/i.test(q) || maskPII(q) !== q) return null
@@ -63,8 +63,8 @@ export function cleanQuestion(raw: unknown): string | null {
     if (!/\p{L}{3,}/u.test(q)) return null
     if (policyTopic(q, foldTr)) return null
     if (foldTr(q) === foldTr(FIXED_FIRST_CHIP)) return null
-    // Capitalised first letter (Turkish i → İ)
-    q = q.charAt(0).toLocaleUpperCase('tr-TR') + q.slice(1)
+    // Capitalised first letter (Turkish i → İ), but "iPhone", "iPad", "iOS" keep their spelling
+    if (!/^i(phone|pad|os)/i.test(q)) q = q.charAt(0).toLocaleUpperCase('tr-TR') + q.slice(1)
     return q
 }
 

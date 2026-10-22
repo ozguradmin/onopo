@@ -383,10 +383,17 @@ export function searchCatalog(rows: readonly CatalogRow[], query: string, opts: 
 
 /**
  * Sold-out products the visitor NAMED in this message ("PUBG nişan tetik var mı?"): every known word of the
- * message matches the product and at most three products match them all, or the message carries the
- * product code. Only these (and the product of the page the visitor is on) may be shown as a sold-out card;
+ * message matches the product and it is the only match (or the message has 3+ such words and at most two
+ * products match), or the message carries the product code. Only these (and the product of the page the visitor is on) may be shown as a sold-out card;
  * a sold-out product is never suggested otherwise.
  */
+const QUESTION_WORDS = new Set([
+    'var', 'varmi', 'yok', 'mii', 'misin', 'misiniz', 'musunuz', 'neler', 'nedir', 'kac', 'kaca', 'fiyat', 'fiyati', 'fiyatlari',
+    'ucret', 'ucreti', 'stok', 'stokta', 'stoga', 'satiyor', 'satiyormusunuz', 'lazim', 'istiyorum', 'ariyorum', 'bakiyorum',
+    'icin', 'ile', 'bir', 'urun', 'urunu', 'urunun', 'hala', 'tekrar', 'gelir', 'gelecek', 'olur', 'mevcut', 'nerede', 'alabilir',
+    'alabilirmiyim', 'alirim', 'almak', 'tane', 'adet', 'sizde', 'sizin', 'bunu', 'sunu', 'onu', 'acaba', 'lutfen', 'merhaba', 'selam',
+])
+
 export function namedSoldOut(rows: readonly CatalogRow[], text: string): CatalogRow[] {
     const out: CatalogRow[] = []
     const folded = ` ${normalizeText(text)} `
@@ -395,10 +402,14 @@ export function namedSoldOut(rows: readonly CatalogRow[], text: string): Catalog
         const code = normalizeText(r.code)
         if (code.length >= 3 && folded.includes(` ${code} `)) out.push(r)
     }
-    const known = prepareQuery(text).tokens.filter(t => rows.some(r => scoreSearch(docOf(r), prepareQuery(t)) > 0))
+    // Question words ("var mı", "fiyatı ne") would match parts of names ("mi" → "mıknatıslı"): only real words count
+    const known = prepareQuery(text).tokens
+        .filter(t => (t.length >= 3 || /\d/.test(t)) && !QUESTION_WORDS.has(t))
+        .filter(t => rows.some(r => scoreSearch(docOf(r), prepareQuery(t)) > 0))
     if (known.length >= 2) {
         const { rows: hits, total } = searchCatalog(rows, known.join(' '), { strict: true, limit: 4 })
-        if (total <= 3) for (const r of hits) if (!r.inStock && !out.includes(r)) out.push(r)
+        // One product, or a very specific message (3+ words) that fits at most two: that is naming it
+        if (total === 1 || (known.length >= 3 && total <= 2)) for (const r of hits) if (!r.inStock && !out.includes(r)) out.push(r)
     }
     return out
 }

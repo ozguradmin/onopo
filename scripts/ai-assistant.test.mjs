@@ -1556,3 +1556,384 @@ test('transcripts: a whole runTurn captured the way the chat route stores it', a
     assert.deepEqual(r.events.map(e => e.t), ['products', 'whatsapp', 'suggestions'])
     assert.ok(!JSON.stringify(r).includes('0500 123') && !JSON.stringify(r).includes('wa.me'))
 })
+
+// ---------------------------------------------------------------------------------------------
+// w8: the cart (show_cart, update_cart), follow-up answers, sold-out products, small talk, popular questions
+// ---------------------------------------------------------------------------------------------
+
+const cart = await import('../lib/assistant/cart.ts')
+const followup = await import('../lib/assistant/followup.ts')
+const popular = await import('../lib/assistant/popular.ts')
+
+const SOLD_OUT = ROWS.filter(r => !r.inStock).map(r => r.id)
+/** 2 products, 3 pieces: 129,99 + 2 × 119,99 = 369,97 TL; 130,03 TL left to free shipping (threshold 500). */
+const CART3 = [{ id: 617, qty: 1 }, { id: 634, qty: 2 }]
+
+function cartCtx(over = {}) {
+    const c = toolCtx(over)
+    c.state = tools.newToolState({
+        pageProduct: over.pageProduct ?? null, maskedInput: over.maskedInput ?? 'sepet', loggedIn: false,
+        cart: over.cart ?? CART3, shownBefore: over.shownBefore ?? [], soldOutOk: over.soldOutOk ?? [],
+    })
+    return c
+}
+
+test('cart: priced with the checkout arithmetic (rounded unit × qty), duplicates merged, unknown ids skipped', () => {
+    const p = cart.priceCart([{ id: 413, qty: 1 }, { id: 413, qty: 1 }, { id: 999999, qty: 1 }], K.byId, FACTS.freeThreshold)
+    // Raw 547.3 is charged as roundPrice 544,99 per unit (lib/pricing.ts lineTotal)
+    assert.deepEqual(p.lines.map(l => [l.row.id, l.qty, l.lineTotal]), [[413, 2, 1089.98]])
+    assert.equal(p.count, 2)
+    assert.equal(p.total, 1089.98)
+    assert.equal(p.remaining, 0)
+    assert.deepEqual(p.unknown, [999999])
+    const q = cart.priceCart(CART3, K.byId, FACTS.freeThreshold)
+    assert.deepEqual([q.lines.length, q.count, q.total, q.remaining], [2, 3, 369.97, 130.03])
+    // A free-shipping product makes the whole cart ship free
+    assert.equal(cart.priceCart([{ id: 412, qty: 1 }, { id: 634, qty: 1 }], K.byId, FACTS.freeThreshold).remaining, 0)
+    const ev = cart.cartEvent(q, RATINGS)
+    assert.equal(ev.t, 'cart')
+    assert.deepEqual(ev.lines.map(l => [l.product.id, l.qty, l.lineTotal]), [[617, 1, 129.99], [634, 2, 239.98]])
+    assert.deepEqual([ev.count, ev.total, ev.threshold, ev.freeShippingRemaining], [3, 369.97, 500, 130.03])
+    assert.equal(ev.lines[0].product.displayPrice, 129.99)
+})
+
+test('cart: the ready summary names the count, the pieces and the products; the turn context carries it', () => {
+    const q = cart.priceCart(CART3, K.byId, FACTS.freeThreshold)
+    assert.equal(cart.cartSummaryText(q), 'Sepetinde 2 ürün var (3 adet): El Süpürgesi Yedek Filtre 2 Adet ve Masaüstü Telefon Tutucu Ayarlanabilir (2 adet). Toplam 369,97 TL; ücretsiz kargoya 130,03 TL kaldı.')
+    assert.equal(cart.cartSummaryText(cart.priceCart([], K.byId, 500)), 'Sepetin şu an boş.')
+    const ctx = prompt.buildTurnContext({ now: new Date('2026-10-22T09:00:00Z'), facts: FACTS, page: null, device: null, cart: q, candidates: [], router: null, notes: [] })
+    assert.match(ctx, /^sepet: 2 ürün, 3 adet · sunucu_sepet_toplami: 369,97 TL · ucretsiz_kargoya_kalan: 130,03 TL$/m)
+    assert.match(ctx, /^sepet_urunleri: #617 "El Süpürgesi Yedek Filtre 2 Adet" x1 = 129,99 TL; #634 ".*" x2 = 239,98 TL$/m)
+    assert.ok(ctx.includes(`sepet_ozeti: "${cart.cartSummaryText(q)}"`))
+    const empty = prompt.buildTurnContext({ now: new Date('2026-10-22T09:00:00Z'), facts: FACTS, page: null, device: null, cart: cart.priceCart([], K.byId, 500), candidates: [], router: null, notes: [] })
+    assert.match(empty, /^sepet: boş$/m)
+    // Every number of the summary passes the validator with the turn context as known text
+    const g = validator.createTextGuard(validator.collectAllowed({ prices: [...K.allowedPrices, q.total, q.remaining], texts: [ctx], cutoff: '18:00', campaigns: 'Yok' }))
+    const said = [...g.push(cart.cartSummaryText(q)), ...g.flush()].join('')
+    assert.equal(said, cart.cartSummaryText(q))
+})
+
+test('cartIntent: view and edit questions, not "how do I add"', () => {
+    for (const s of ['sepetimde neler var', 'Sepetimde ne var?', 'sepetimi göster', 'sepette kaç ürün var', 'sepet toplamı ne kadar', 'Sepetimdekiler neler?']) assert.equal(cart.cartIntent(s), 'view', s)
+    for (const s of ['sepetimdeki toz haznesi aparatını silebilir misin', 'sepetten filtreyi çıkar', 'sepetimdeki tutucuyu kaldır', 'sepetteki tutucunun adedini 1 yap', 'bunu sepete ekler misin']) assert.equal(cart.cartIntent(s), 'edit', s)
+    for (const s of ['sepete nasıl eklerim', 'iPhone 15 şarj aleti', 'sepetimdeki silikon kılıf uyumlu mu', 'kablo sil baştan anlat']) assert.notEqual(cart.cartIntent(s), 'edit', s)
+    assert.equal(cart.cartIntent('iPhone 15 şarj aleti'), null)
+    assert.ok(cart.isCheckoutRequest('Ödemeye geç'))
+    assert.ok(cart.isCheckoutRequest('siparişi tamamla lütfen'))
+    assert.ok(!cart.isCheckoutRequest('ödemeye geçince taksit seçebilir miyim'))
+})
+
+test('applyCartOps: remove, change, add a shown product; refuse what is not allowed', () => {
+    const shown = new Set([401, 407, 635])
+    const r = cart.applyCartOps(CART3, [{ id: 617, qty: 0 }, { id: 634, qty: 1 }, { id: 401, qty: 1 }], K.byId, shown)
+    assert.deepEqual(r.applied, [{ id: 617, qty: 0 }, { id: 634, qty: 1 }, { id: 401, qty: 1 }])
+    assert.deepEqual(r.cart, [{ id: 634, qty: 1 }, { id: 401, qty: 1 }])
+    assert.match(r.note, /^El Süpürgesi Yedek Filtre 2 Adet sepetten çıkarıldı; Masaüstü Telefon Tutucu Ayarlanabilir: 1 adet; 20W PD Type-C Hızlı Şarj Aleti Adaptör sepete eklendi$/)
+    assert.deepEqual(r.changes[0], { id: 617, ad: 'El Süpürgesi Yedek Filtre 2 Adet', once: 1, simdi: 0 })
+    const bad = cart.applyCartOps(CART3, [
+        { id: 413, qty: 1 },      // never shown, not in the cart
+        { id: 635, qty: 1 },      // sold out
+        { id: 407, qty: 1 },      // has options
+        { id: 634, qty: 11 },     // bulk
+        { id: 634, qty: 2 },      // no change
+        { id: 999999, qty: 0 },   // unknown
+    ], K.byId, shown)
+    assert.deepEqual(bad.applied, [])
+    assert.deepEqual(bad.rejected.map(x => x.neden), ['izin_yok', 'tukendi', 'secenek_gerekli', 'adet_siniri', 'degisiklik_yok', 'gecersiz_urun'])
+    assert.deepEqual(bad.cart, CART3)
+    // A sold-out line in the cart can still be lowered or removed
+    assert.deepEqual(cart.applyCartOps([{ id: 635, qty: 2 }], [{ id: 635, qty: 0 }], K.byId, new Set()).cart, [])
+})
+
+test('show_cart: the cart card from D1 prices; an empty cart shows nothing', async () => {
+    const ctx = cartCtx()
+    const r = await tools.runTool('show_cart', '{}', ctx)
+    assert.equal(r.events.length, 1)
+    assert.equal(r.events[0].t, 'cart')
+    assert.equal(r.events[0].total, 369.97)
+    assert.equal(r.isData, false)
+    assert.ok(r.prices.includes(369.97) && r.prices.includes(130.03) && r.prices.includes(239.98))
+    assert.deepEqual((await tools.runTool('show_cart', '{}', ctx)).events, [])
+    const empty = await tools.runTool('show_cart', '{}', cartCtx({ cart: [] }))
+    assert.deepEqual(empty.events, [])
+    assert.match(empty.forModel, /"sepet":"bos"/)
+})
+
+test('update_cart: cart_ops, then the cart after the change; the model gets the new totals', async () => {
+    const ctx = cartCtx()
+    const r = await tools.runTool('update_cart', JSON.stringify({ ops: [{ id: 617, qty: 0 }] }), ctx)
+    assert.deepEqual(r.events, [{ t: 'cart_ops', ops: [{ id: 617, qty: 0 }], note: 'El Süpürgesi Yedek Filtre 2 Adet sepetten çıkarıldı' }])
+    assert.equal(r.isData, true)
+    const data = JSON.parse(r.forModel.replace(/^<urun_verisi>|<\/urun_verisi>$/g, ''))
+    assert.deepEqual(data.sepet, { urun: 1, adet: 2, toplam: '239,98 TL', ucretsiz_kargoya_kalan: '260,02 TL' })
+    const flushed = tools.flushCart(ctx)
+    assert.equal(flushed.length, 1)
+    assert.deepEqual(flushed[0].lines.map(l => [l.product.id, l.qty]), [[634, 2]])
+    assert.equal(flushed[0].total, 239.98)
+    assert.deepEqual(tools.flushCart(ctx), [])
+    // Not allowed → nothing changes, the reason goes back to the model
+    const no = await tools.runTool('update_cart', JSON.stringify({ ops: [{ id: 413, qty: 1 }] }), cartCtx())
+    assert.deepEqual(no.events, [])
+    assert.match(no.forModel, /izin_yok/)
+    // A product shown earlier in the conversation may be added
+    const add = cartCtx({ shownBefore: [401] })
+    const ok = await tools.runTool('update_cart', { ops: [{ id: 401, qty: 1 }] }, add)
+    assert.equal(ok.events[0].t, 'cart_ops')
+    assert.deepEqual(add.state.cart.map(c => c.id), [617, 634, 401])
+})
+
+test('show_products: no "Sepete Ekle" card for a product already in the cart; all in the cart → the cart card', async () => {
+    const ctx = cartCtx()
+    const r = await tools.runTool('show_products', { ids: [634, 401] }, ctx)
+    assert.deepEqual(r.events.find(e => e.t === 'products').products.map(p => p.id), [401])
+    assert.match(r.forModel, /"sepette_zaten":\[634\]/)
+    const only = await tools.runTool('show_products', { ids: [617, 634] }, cartCtx())
+    assert.deepEqual(only.events.map(e => e.t), ['cart'])
+    assert.equal(only.isData, false)
+})
+
+test('sold out: never in searches, candidates or cards unless named; a named one is marked and gets WhatsApp', async () => {
+    // search_products leaves sold-out products out
+    const s = await tools.runTool('search_products', { query: 'telefon tutucu' }, cartCtx({ cart: [] }))
+    assert.ok(!/"id":635/.test(s.forModel))
+    assert.ok(!SOLD_OUT.some(id => s.productIds.includes(id)))
+    // show_products drops a sold-out id the visitor did not name
+    const ctx = cartCtx({ cart: [] })
+    const r = await tools.runTool('show_products', { ids: [635, 634] }, ctx)
+    assert.deepEqual(r.events.find(e => e.t === 'products').products.map(p => p.id), [634])
+    assert.match(r.forModel, /"tukendi_gosterilmedi":\[635\]/)
+    const none = await tools.runTool('show_products', { ids: [635] }, cartCtx({ cart: [] }))
+    assert.deepEqual(none.events, [])
+    assert.match(none.forModel, /"hata":"tukendi"/)
+    // Named: the card is shown with inStock false, and the full WhatsApp card follows
+    const named = cb.namedSoldOut(ROWS, 'Mıknatıslı telefon tutucu var mı?').map(x => x.id)
+    assert.deepEqual(named, [635])
+    assert.deepEqual(cb.namedSoldOut(ROWS, 'telefon tutucu var mı').map(x => x.id), [])
+    assert.deepEqual(cb.namedSoldOut(ROWS, 'şarj aleti öner').map(x => x.id), [])
+    assert.deepEqual(cb.namedSoldOut(ROWS, 'FX424 stokta mı').map(x => x.id), [424])
+    const okCtx = cartCtx({ cart: [], soldOutOk: named })
+    const shown = await tools.runTool('show_products', { ids: [635] }, okCtx)
+    const card = shown.events.find(e => e.t === 'products').products[0]
+    assert.equal(card.inStock, false)
+    const wa = shown.events.find(e => e.t === 'whatsapp')
+    assert.equal(wa.variant, 'full')
+    assert.equal(wa.reason, 'product_request')
+    assert.deepEqual(wa.productIds, [635])
+    // The page product counts as named
+    assert.ok(tools.newToolState({ pageProduct: row(635), maskedInput: 'x', loggedIn: false }).soldOutOk.has(635))
+})
+
+test('followup: the previous offer, its kind, and short yes / no answers', () => {
+    const h = text => [{ role: 'user', text: 'merhaba' }, { role: 'assistant', text }]
+    assert.deepEqual(followup.lastOffer(h('Bu konuda bilgim yok. Kategorilere göz atmak istersen gösterebilirim.')), { sentence: 'Kategorilere göz atmak istersen gösterebilirim.', kind: 'categories' })
+    assert.equal(followup.lastOffer(h('İstersen uygun kabloyu da gösterebilirim.')).kind, 'products')
+    assert.equal(followup.lastOffer(h('İkisini karşılaştırabilirim, ister misin?')).kind, 'compare')
+    assert.equal(followup.lastOffer(h('Ekibimize WhatsApp\'tan sormak ister misin?')).kind, 'whatsapp')
+    assert.equal(followup.lastOffer(h('Bu adaptör 20W.')), null)
+    // Only the newest assistant message counts
+    assert.equal(followup.lastOffer([{ role: 'assistant', text: 'Kategorileri gösterebilirim.' }, { role: 'user', text: 'kablo' }]), null)
+    for (const s of ['olur', 'Evet', 'tamam', 'göster', 'olsun', 'isterim', 'evet lütfen', 'Tabii ki', 'olur göster']) assert.ok(followup.isAffirmation(s), s)
+    for (const s of ['hayır', 'yok', 'olur mu acaba bu kablo iphone 15e uyar mı', 'tamam teşekkürler', 'iPhone 15 kablosu']) assert.ok(!followup.isAffirmation(s), s)
+    for (const s of ['hayır', 'yok sağ ol', 'istemiyorum', 'gerek yok']) assert.ok(followup.isDecline(s), s)
+    const f = followup.followUpOf(h('Kategorilere göz atmak istersen gösterebilirim.'), 'olur')
+    assert.equal(f.reply, 'yes')
+    assert.match(followup.followUpNote(f, 'olur'), /son teklifini kabul etti.*show_category/)
+})
+
+test('runTurn: "sepetimde neler var" → count and list in the text, the cart card, cart chips; never product cards', async () => {
+    const summary = cart.cartSummaryText(cart.priceCart(CART3, K.byId, FACTS.freeThreshold))
+    const ai = mockAi({ answers: A({ intent: 'cart', conf: 0.9 }), chat: [[{ choices: [{ delta: { content: summary } }] }, toolChunk('show_cart', {})]] })
+    const { events, log } = await runIt(ai, { input: 'sepetimde neler var', context: { cart: CART3 } })
+    const last = ai.chatCalls()[0].inputs.messages.at(-1).content
+    assert.ok(last.includes(`sepet_ozeti: "${summary}"`))
+    assert.ok(last.includes(turn.NOTES_W8.cartView))
+    const text = events.filter(e => e.t === 'text').map(e => e.v).join('')
+    assert.equal(text, summary)
+    assert.match(text, /2 ürün var \(3 adet\)/)
+    const c = events.find(e => e.t === 'cart')
+    assert.deepEqual(c.lines.map(l => l.product.id), [617, 634])
+    assert.ok(!events.some(e => e.t === 'products'))
+    assert.deepEqual(events.find(e => e.t === 'suggestions').chips.map(x => x.label).slice(0, 2), ['Kargo bedava için ne eklesem?', 'Ödemeye geç'])
+    assert.equal(log.intent, 'cart_view')
+    // The model only wrote text: the server adds the cart card
+    const ai2 = mockAi({ chat: [textChunks(summary)] })
+    const r2 = await runIt(ai2, { input: 'Sepetimde neler var?', context: { cart: CART3 } })
+    assert.ok(r2.events.some(e => e.t === 'cart'))
+    assert.ok(r2.log.flags.includes('cart_rescue'))
+    // ...and with no text at all, the summary is the text
+    const ai3 = mockAi({ chat: [[toolChunk('show_cart', {})]] })
+    const r3 = await runIt(ai3, { input: 'Sepetimde neler var?', context: { cart: CART3 } })
+    assert.equal(r3.events.filter(e => e.t === 'text').map(e => e.v).join(''), summary)
+    // The model tried product cards for the cart lines: the cart card instead
+    const ai4 = mockAi({ chat: [[{ choices: [{ delta: { content: 'Sepetinde bunlar var.' } }] }, toolChunk('show_products', { ids: [617, 634] })]] })
+    const r4 = await runIt(ai4, { input: 'sepetimde ne var', context: { cart: CART3 } })
+    assert.ok(!r4.events.some(e => e.t === 'products'))
+    assert.ok(r4.events.some(e => e.t === 'cart'))
+})
+
+test('runTurn: "sepetimdeki … silebilir misin" → update_cart, cart_ops then the new cart, a one-sentence confirmation', async () => {
+    const ai = mockAi({
+        answers: A({ intent: 'returns', handoff: 0.9 }),   // the router mistakes it for a return: no early hand-off
+        chat: [
+            [toolChunk('update_cart', { ops: [{ id: 617, qty: 0 }] })],
+            textChunks('Yedek filtreyi sepetinden çıkardım; yeni toplam 239,98 TL.'),
+        ],
+    })
+    const { events, log, types } = await runIt(ai, { input: 'sepetimdeki yedek filtreyi silebilir misin', context: { cart: CART3 } })
+    assert.equal(ai.chatCalls().length, 2)
+    assert.equal(ai.chatCalls()[0].inputs.tool_choice, 'auto')
+    assert.ok(log.flags.includes('handoff_skipped'))
+    const ops = events.find(e => e.t === 'cart_ops')
+    assert.deepEqual(ops.ops, [{ id: 617, qty: 0 }])
+    assert.ok(types.indexOf('cart_ops') < types.indexOf('cart'))
+    assert.deepEqual(events.find(e => e.t === 'cart').lines.map(l => [l.product.id, l.qty]), [[634, 2]])
+    // The new total is a real price of this turn: not replaced by the validator
+    assert.equal(events.filter(e => e.t === 'text').map(e => e.v).join(''), 'Yedek filtreyi sepetinden çıkardım; yeni toplam 239,98 TL.')
+    assert.ok(!log.flags.includes('price_mismatch'))
+    // The tool result went back to the model
+    const second = ai.chatCalls()[1].inputs.messages
+    assert.equal(second.at(-1).role, 'tool')
+    assert.match(second.at(-1).content, /"yapildi"/)
+    assert.equal(log.intent, 'cart_edit')
+})
+
+test('runTurn: "olur" after a categories offer → the categories (links), never a greeting or an unrelated product', async () => {
+    const history = [
+        { role: 'user', text: 'Bilgisayar satıyor musunuz?' },
+        { role: 'assistant', text: 'Bilgisayar satmıyoruz. Kategorilere göz atmak istersen gösterebilirim.' },
+    ]
+    // Clef calls the short "olur" small talk (it would be the canned greeting); the model shows a 9D protector
+    const ai = mockAi({ answers: A({ intent: 'smalltalk', conf: 0.97 }), chat: [[{ choices: [{ delta: { content: 'Bunu öneririm.' } }] }, toolChunk('show_products', { ids: [562] })]] })
+    const { events, log } = await runIt(ai, { input: 'olur', history, context: { turn: 2 } })
+    assert.equal(ai.chatCalls().length, 1)
+    assert.ok(log.flags.includes('canned_skipped'))
+    const last = ai.chatCalls()[0].inputs.messages.at(-1).content
+    assert.match(last, /son_teklif: "Kategorilere göz atmak istersen gösterebilirim\." \(tür: kategoriler\)/)
+    assert.match(last, /son teklifini kabul etti/)
+    // The history really reaches the model, oldest first, before the new message
+    assert.deepEqual(ai.chatCalls()[0].inputs.messages.slice(1, 3).map(m => [m.role, m.content]), history.map(h => [h.role, h.text]))
+    const links = events.find(e => e.t === 'links')
+    assert.ok(links && links.items.length >= 3)
+    assert.ok(log.flags.includes('offer_rescue'))
+    // The model doing it right: show_category with the group keys, no rescue
+    const ai2 = mockAi({ chat: [[{ choices: [{ delta: { content: 'Kategorilerimiz şunlar:' } }] }, toolChunk('show_category', { keys: ['grup:sarj-aleti', 'grup:kablo', 'grup:ekran-koruyucu-9d', 'grup:kulaklik'] })]] })
+    const r2 = await runIt(ai2, { input: 'olur', history, context: { turn: 2 } })
+    assert.equal(r2.events.find(e => e.t === 'links').items.length, 4)
+    assert.ok(!r2.log.flags.includes('offer_rescue'))
+    assert.equal(r2.log.intent, 'accept_offer')
+})
+
+test('runTurn: candidates leave out sold-out products and the cart; the catalogue keeps sold-out apart', async () => {
+    const ai = mockAi({ chat: [textChunks('Şunlara bakabilirsin.')] })
+    await runIt(ai, { input: 'Kargo bedava için ne eklesem?', context: { cart: [{ id: 401, qty: 1 }] } })
+    const last = ai.chatCalls()[0].inputs.messages.at(-1).content
+    const cand = /aday_urunler: (.*)/.exec(last)?.[1] ?? ''
+    for (const id of [...SOLD_OUT, 401]) assert.ok(!cand.includes(`#${id} `), `#${id} offered`)
+    assert.ok(last.includes(turn.NOTES_W8.freeShipping))
+    assert.ok(K.systemMessage.includes(cb.SOLD_OUT_HEADING))
+    assert.match(K.systemMessage, /update_cart/)
+    // A sold-out product the model tries to show without being asked: no card with inStock false
+    const ai2 = mockAi({ chat: [[{ choices: [{ delta: { content: 'Şunu ekleyebilirsin.' } }] }, toolChunk('show_products', { ids: [635] })], textChunks('Masaüstü tutucuya bakabilirsin.')] })
+    const r2 = await runIt(ai2, { input: 'Kargo bedava için ne eklesem?', context: { cart: [{ id: 401, qty: 1 }] } })
+    assert.ok(!r2.events.some(e => e.t === 'products' && e.products.some(p => !p.inStock)))
+})
+
+test('runTurn: "Ödemeye geç" → the checkout link without a model call; small talk without a second introduction', async () => {
+    const ai = mockAi()
+    const { events, log } = await runIt(ai, { input: 'Ödemeye geç', context: { cart: CART3 } })
+    assert.equal(ai.calls.length, 0)
+    assert.equal(log.intent, 'checkout')
+    assert.deepEqual(events.find(e => e.t === 'links').items.map(i => i.href), ['/odeme/'])
+    assert.match(events.find(e => e.t === 'text').v, /^Sepetinde 2 ürün var \(3 adet\)/)
+    const empty = await runIt(mockAi(), { input: 'Ödemeye geç' })
+    assert.match(empty.events.find(e => e.t === 'text').v, /Sepetin şu an boş/)
+    const thanks = await runIt(mockAi({ answers: A({ intent: 'smalltalk', conf: 0.97 }) }), { input: 'Teşekkürler!', history: [{ role: 'user', text: 'kablo' }, { role: 'assistant', text: 'Şunlar uygun.' }] })
+    assert.equal(thanks.events.find(e => e.t === 'text').v, canned.CANNED.thanks)
+    assert.equal(canned.smallTalkText('selam', true), canned.CANNED.helloAgain)
+    assert.equal(canned.smallTalkText('selam', false), canned.CANNED.greeting)
+    assert.equal(canned.smallTalkText('nasılsın', false), canned.CANNED.howAreYou)
+    // No odd phrases in the fixed texts
+    for (const t of Object.values(canned.CANNED)) assert.ok(!/morallik|memnuniyet duyarım|harika soru/i.test(t), t)
+})
+
+test('suggestions after a cart answer; cart beacons are accepted; cart events are kept in transcripts', () => {
+    assert.deepEqual(suggestions.buildSuggestions({ kind: 'cart', empty: false }, { remaining: 130.03, waShown: true }).map(c => c.label), ['Kargo bedava için ne eklesem?', 'Ödemeye geç'])
+    assert.deepEqual(suggestions.buildSuggestions({ kind: 'cart', empty: false }, { remaining: 0, waShown: true }).map(c => c.label), ['Ödemeye geç'])
+    for (const type of ['cart_change', 'cart_undo']) assert.equal(request.parseUiEvent({ v: 1, conversationId: 'conv-12345678', type, productId: 617 }).type, type)
+    const cap = transcripts.createTurnCapture()
+    cap.onEvent({ t: 'cart_ops', ops: [{ id: 617, qty: 0 }], note: 'x' })
+    cap.onEvent(cart.cartEvent(cart.priceCart(CART3, K.byId, 500)))
+    assert.deepEqual(cap.result().events.map(e => e.t), ['cart_ops', 'cart'])
+})
+
+test('popular questions: chips are validated (length, digits, links, personal data, store questions)', () => {
+    assert.equal(popular.cleanQuestion('  iPhone 15 için şarj aleti?  '), 'iPhone 15 için şarj aleti?')
+    assert.equal(popular.cleanQuestion('ışıklı kablo var mı'), 'Işıklı kablo var mı')
+    assert.equal(popular.cleanQuestion('seramik ile 9D farkı ne?'), 'Seramik ile 9D farkı ne?')
+    assert.equal(popular.cleanQuestion('1. "Hızlı şarj kablosu öner"'), 'Hızlı şarj kablosu öner')
+    for (const bad of [
+        'Bu soru otuz iki karakterden kesinlikle daha uzun', 'ok', '0500 123 45 67 arar mısınız', 'Sipariş 123456 nerede?',
+        'onopostore.com indirim', 'mail@ornek.com', 'Siparişim nerede?', 'İade nasıl yapılır?', '[telefon] ara', 'Kargo bedava için ne eklesem?', 42, null,
+    ]) assert.equal(popular.cleanQuestion(bad), null, String(bad))
+    assert.deepEqual(popular.cleanQuestions(['Kablo öner', 'kablo öner', 'Powerbank öner', 'Kulaklık öner', 'Şarj aleti öner']), ['Kablo öner', 'Powerbank öner', 'Kulaklık öner'])
+    assert.deepEqual(popular.parseModelQuestions('İşte: ```json\n["Kablo öner", "Seramik mi 9D mi?", "Siparişim nerede?"]\n```'), ['Kablo öner', 'Seramik mi 9D mi?'])
+    assert.deepEqual(popular.parseModelQuestions('bilmiyorum'), [])
+    assert.deepEqual(popular.parsePopular('not json'), [])
+    assert.ok(popular.isIstanbulMonday(new Date('2026-10-26T07:00:00Z')))
+    assert.ok(!popular.isIstanbulMonday(new Date('2026-10-25T20:59:00Z')))
+    assert.ok(popular.isIstanbulMonday(new Date('2026-10-25T21:00:00Z')))
+})
+
+test('popular questions: weekly analysis with a mocked model and a fake D1', async () => {
+    transcripts.resetTranscriptMemo()
+    const store = new Map([[popular.POPULAR_QUESTIONS_KEY, JSON.stringify(['Eski soru'])]])
+    let messages = Array.from({ length: 25 }, (_, i) => ({ text: i % 2 ? 'iPhone 15 için şarj aleti var mı' : 'numaram [telefon] seramik mi 9d mi' }))
+    const db = recordingDb((q, args, kind) => {
+        if (q.startsWith('SELECT key, value FROM site_settings')) return [...store].map(([key, value]) => ({ key, value }))
+        if (q.startsWith('SELECT text FROM ai_messages')) return messages
+        if (q.startsWith('INSERT OR REPLACE INTO site_settings') && kind === 'run') store.set(args[0], args[1])
+        return undefined
+    })
+    const calls = []
+    const ai = { run: async (model, inputs) => { calls.push({ model, inputs }); return { choices: [{ message: { content: '["iPhone 15\'e hangi şarj?", "Seramik ile 9D farkı ne?", "0500 111 22 33"]' } }], usage: { prompt_tokens: 900, completion_tokens: 30 } } } }
+    const costs = []
+    const now = new Date('2026-10-26T07:00:00Z')
+    const r = await popular.analyzePopular({ db, ai, model: CHAT, now, budgetExceeded: async () => false, recordCost: async (n, c) => { costs.push([n, c]) } })
+    assert.equal(r.status, 'updated')
+    assert.deepEqual(r.questions, ["iPhone 15'e hangi şarj?", 'Seramik ile 9D farkı ne?'])
+    assert.deepEqual(JSON.parse(store.get(popular.POPULAR_QUESTIONS_KEY)), r.questions)
+    assert.equal(JSON.parse(store.get(popular.POPULAR_META_KEY)).source, 'auto')
+    assert.equal(calls[0].inputs.reasoning_effort, 'none')
+    assert.ok(calls[0].inputs.max_completion_tokens <= 200)
+    // Masked text only, deduplicated: the two distinct messages, never a raw number
+    const user = calls[0].inputs.messages[1].content
+    assert.equal((user.match(/^- /gm) ?? []).length, 2)
+    assert.ok(!/0500|\d{7,}/.test(user))
+    assert.equal(costs.length, 1)
+    assert.ok(costs[0][1] > 0)
+    // The 7-day window is asked of D1
+    const sel = db.sql.find(([q]) => q.startsWith('SELECT text FROM ai_messages'))
+    assert.equal(sel[1][0], '2026-10-19T07:00:00.000Z')
+    // Too few messages: the old value stays and no model call is made
+    messages = messages.slice(0, 5)
+    const few = await popular.analyzePopular({ db, ai, model: CHAT, now })
+    assert.equal(few.status, 'too_few')
+    assert.equal(calls.length, 1)
+    // Budget used up / unusable answer: the old value stays
+    messages = Array.from({ length: 30 }, (_, i) => ({ text: `soru ${i}` }))
+    const before = store.get(popular.POPULAR_QUESTIONS_KEY)
+    assert.equal((await popular.analyzePopular({ db, ai, model: CHAT, now, budgetExceeded: async () => true })).status, 'budget')
+    const junk = { run: async () => ({ choices: [{ message: { content: 'Bilemiyorum.' } }] }) }
+    assert.equal((await popular.analyzePopular({ db, ai: junk, model: CHAT, now })).status, 'no_valid')
+    const broken = { run: async () => { throw new Error('3040') } }
+    assert.equal((await popular.analyzePopular({ db, ai: broken, model: CHAT, now })).status, 'model_error')
+    assert.equal(store.get(popular.POPULAR_QUESTIONS_KEY), before)
+    transcripts.resetTranscriptMemo()
+})
+
+test('site settings: ai_popular_questions is public, its meta is admin-only', async () => {
+    const { settingsObject } = await import('../lib/siteSettings.ts')
+    const rows = [{ key: 'ai_popular_questions', value: '["Kablo öner"]' }, { key: 'ai_popular_questions_meta', value: '{}' }]
+    assert.deepEqual(Object.keys(settingsObject(rows, false)), ['ai_popular_questions'])
+    assert.deepEqual(Object.keys(settingsObject(rows, true)), ['ai_popular_questions', 'ai_popular_questions_meta'])
+})
