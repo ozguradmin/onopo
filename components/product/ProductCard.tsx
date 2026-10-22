@@ -4,11 +4,11 @@ import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Price } from '@/components/ui/Price'
-import { FallbackImage } from '@/components/ui/FallbackImage'
 import { FavoriteButton, QuickAddButton } from '@/components/product/ProductCardActions'
-import { brandOf, displayName, specChips } from '@/lib/search'
+import { ProductCardImages } from '@/components/product/ProductCardImages'
+import { brandOf, specChips, splitDisplayName } from '@/lib/search'
 import { discountPercent, displayPrice, MIN_DISCOUNT_BADGE_PERCENT } from '@/lib/format'
-import { originalImageUrl, productImageSrcSet, productImageUrl, PRODUCT_CARD_SIZES } from '@/lib/images'
+import { PRODUCT_CARD_SIZES } from '@/lib/images'
 
 /**
  * Anything product-shaped: a catalogue `Product` (lib/catalog), an /api/products row (images as a JSON
@@ -44,8 +44,10 @@ export interface ProductCardProps {
      *   undefined (not passed)          → no star row (the caller does not know the reviews)
      */
     rating?: ProductCardRating | null
-    /** Above the fold: eager load + fetchpriority=high (first 4 cards of a listing, first 2 of a row). */
+    /** Likely LCP: eager load + fetchpriority=high (first 2 cards of a listing or a rail). */
     priority?: boolean
+    /** Probably above the fold but not the LCP: eager load at the browser's normal priority. */
+    eager?: boolean
     /**
      * Free-shipping threshold (TL) for the "Kargo bedava" line. Server parents pass
      * (await getShippingSettings()).freeShippingThreshold; client parents useShippingSettings().
@@ -81,12 +83,14 @@ function imagesOf(p: ProductCardProduct): string[] {
  *
  * Layout: 1:1 white image well (object-contain, 8% padding), badges top-left (sold out / discount),
  * heart top-right, mobile quick-add bottom-right; eyebrow "ONOPO · <code>", 2-line title (brand word
- * stripped; full name in alt/title), up to 2 spec chips, price + strikethrough, free-shipping line,
+ * stripped; a generic leading "… Uyumlu" phrase moves to a muted line under it, see splitDisplayName;
+ * full name in alt/title/aria-label), up to 2 spec chips, price + strikethrough, free-shipping line,
  * desktop "Sepete Ekle". One stretched link (/<slug>/) covers the card; buttons sit above it.
  */
 export function ProductCard({
     product,
     priority = false,
+    eager = false,
     freeShippingThreshold = null,
     sizes = PRODUCT_CARD_SIZES,
     headingLevel = 'h3',
@@ -105,7 +109,7 @@ export function ProductCard({
     const brand = brandOf(product.name)
     const eyebrow = [brand, product.product_code ? product.product_code.toUpperCase() : null].filter(Boolean).join(' · ')
     const chips = specChips(product.name)
-    const title = displayName(product.name)
+    const { title, compat } = splitDisplayName(product.name)
     const href = `/${product.slug}/`
     const Heading = headingLevel
 
@@ -130,40 +134,7 @@ export function ProductCard({
         >
             {/* Image well */}
             <div className="relative aspect-square overflow-hidden rounded-t-card bg-white">
-                <FallbackImage
-                    src={productImageUrl(main, 400)}
-                    srcSet={productImageSrcSet(main, [200, 400, 800])}
-                    sizes={sizes}
-                    fallbackSrc={originalImageUrl(main)}
-                    alt={product.name}
-                    width={400}
-                    height={400}
-                    loading={priority ? 'eager' : 'lazy'}
-                    fetchPriority={priority ? 'high' : undefined}
-                    className={cn(
-                        'absolute inset-0 h-full w-full object-contain p-[8%] transition-opacity duration-200',
-                        second && 'lg:group-hover:opacity-0',
-                        soldOut && 'opacity-50',
-                    )}
-                />
-                {second && (
-                    <FallbackImage
-                        src={productImageUrl(second, 400)}
-                        srcSet={productImageSrcSet(second, [200, 400, 800])}
-                        sizes={sizes}
-                        fallbackSrc={originalImageUrl(second)}
-                        placeholderSrc={null}
-                        alt=""
-                        aria-hidden="true"
-                        width={400}
-                        height={400}
-                        loading="lazy"
-                        className={cn(
-                            'absolute inset-0 hidden h-full w-full object-contain p-[8%] opacity-0 transition-opacity duration-200 lg:block lg:group-hover:opacity-100',
-                            soldOut && 'lg:group-hover:opacity-50',
-                        )}
-                    />
-                )}
+                <ProductCardImages main={main} second={second} alt={product.name} sizes={sizes} priority={priority} eager={eager} soldOut={soldOut} />
 
                 {(soldOut || pct >= MIN_DISCOUNT_BADGE_PERCENT) && (
                     <div className="pointer-events-none absolute left-2 top-2 z-[1] flex flex-col items-start gap-1">
@@ -187,16 +158,23 @@ export function ProductCard({
                     <span className="block h-4" aria-hidden="true" />
                 )}
 
-                <Heading className="type-card-title mt-1 min-h-10 text-ink">
+                <Heading className={cn('type-card-title mt-1 text-ink', !compat && 'min-h-10')}>
                     <Link
                         href={href}
                         prefetch={false}
                         title={product.name}
+                        aria-label={compat ? product.name : undefined}
                         className="line-clamp-2 outline-none after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:after:ring-2 focus-visible:after:ring-brand-600"
                     >
                         {title}
                     </Link>
                 </Heading>
+                {compat && (
+                    // Part of the link's accessible name already (aria-label = full name)
+                    <p data-card-compat="" aria-hidden="true" className="mt-0.5 truncate text-[11px] leading-4 text-muted">
+                        {compat}
+                    </p>
+                )}
 
                 {chips.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">

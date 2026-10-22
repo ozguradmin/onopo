@@ -186,6 +186,9 @@ export async function ListingView({ data, h1, intro, breadcrumb, searchPlacehold
     const start = (result.page - 1) * pageSize
     const soldOut = result.total - result.inStockTotal
     const items: GridItem[] = []
+    // Above the fold on a first load: phones show one row of 2 cards (the LCP is one of them, so only
+    // those get fetchpriority=high); desktop rows hold up to 4, the other two still load eagerly.
+    const aboveFold = !isClientNavigation && result.page === state.page
     result.items.forEach((p, i) => {
         if (!p.in_stock && start + i === result.inStockTotal && result.inStockTotal > 0) {
             items.push({ key: 'divider-sold-out', wide: true, node: <SoldOutDivider count={soldOut} /> })
@@ -195,7 +198,8 @@ export async function ListingView({ data, h1, intro, breadcrumb, searchPlacehold
             node: (
                 <ProductCard
                     product={p}
-                    priority={!isClientNavigation && result.page === state.page && i < 4}
+                    priority={aboveFold && i < 2}
+                    eager={aboveFold && i < 4}
                     headingLevel="h2"
                     sizes={LISTING_CARD_SIZES}
                     freeShippingThreshold={shipping.freeShippingThreshold}
