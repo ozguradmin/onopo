@@ -119,9 +119,9 @@ test('chat-reducer: history holds finished text only, with shown products and th
 })
 
 test('chat-reducer: a local WhatsApp card masks the summary and never prints the number', () => {
-    const wa = reducer.localWhatsapp({ reason: 'product_request', summary: 'Numaram 0532 123 45 67', waBase: WA_BASE, product: card(5) })
+    const wa = reducer.localWhatsapp({ reason: 'product_request', summary: 'Numaram 0500 123 45 67', waBase: WA_BASE, product: card(5) })
     assert.equal(wa.t, 'whatsapp')
-    assert.ok(!wa.message.includes('0532'))
+    assert.ok(!wa.message.includes('0500 123'))
     assert.ok(wa.message.includes('[telefon]'))
     assert.ok(!wa.message.includes('900000000000'))
     assert.deepEqual(wa.productIds, [5])
