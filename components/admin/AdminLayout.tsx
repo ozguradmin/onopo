@@ -22,7 +22,8 @@ import {
     Image as ImageIcon,
     Share2,
     Mail,
-    Truck
+    Truck,
+    Sparkles
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -43,6 +44,7 @@ const navItems = [
     { href: '/admin/users', label: 'Kullanıcılar', icon: Users },
     { href: '/admin/email', label: 'E-posta', icon: Mail },
     { href: '/admin/settings', label: 'Site Ayarları', icon: Settings },
+    { href: '/admin/assistant', label: 'AI Asistan', icon: Sparkles },
     { href: '/admin/image-optimization', label: 'Görsel Optimizasyonu', icon: ImageIcon },
 ]
 
