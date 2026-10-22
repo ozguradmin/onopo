@@ -15,8 +15,9 @@ const AUTOPLAY_MS = 5000
  * Swipe slider for the campaign banners at the top of the home page (components/home/CampaignBanners).
  * The slides are server-rendered <li> children; this island adds the dots, the desktop arrows and a
  * gentle autoplay. Autoplay never runs with prefers-reduced-motion, while the slider is off screen or
- * the tab is hidden, while the pointer or focus is on it, and it stops for good once the visitor swipes
- * or uses a control. The pause button keeps it under the visitor's control (WCAG 2.2.2).
+ * the tab is hidden, or while the pointer or focus is on it. A swipe or a control does NOT stop it (owner):
+ * it only restarts the 5 s countdown, so the next slide comes a full interval later. The pause button keeps
+ * it under the visitor's control (WCAG 2.2.2).
  */
 export function CampaignCarousel({ count, label, children }: { count: number; label: string; children: React.ReactNode }) {
     const listRef = React.useRef<HTMLUListElement>(null)
@@ -26,6 +27,8 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
     const held = React.useRef(false)
     const visible = React.useRef(false)
     const programmatic = React.useRef(false)
+    /** When the slide last changed (by autoplay or by the visitor): the countdown runs from here. */
+    const lastMove = React.useRef(0)
 
     const slideAt = (el: HTMLUListElement, i: number) => el.children[i] as HTMLElement | undefined
 
@@ -52,6 +55,8 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
             setEdges({ start: el.scrollLeft <= 4, end: el.scrollLeft >= max - 4 })
         }
         const onScroll = () => {
+            // Any movement (a swipe, a dot, an arrow or autoplay itself) restarts the countdown
+            lastMove.current = Date.now()
             cancelAnimationFrame(frame)
             frame = requestAnimationFrame(update)
             clearTimeout(idle)
@@ -88,17 +93,27 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
 
     React.useEffect(() => {
         if (!playing) return
+        lastMove.current = Date.now()
+        // A short tick that waits until AUTOPLAY_MS have passed since the last movement
         const id = setInterval(() => {
             const el = listRef.current
-            if (!el || held.current || !visible.current || document.hidden) return
+            if (!el || held.current || !visible.current || document.hidden) {
+                lastMove.current = Date.now()
+                return
+            }
+            if (Date.now() - lastMove.current < AUTOPLAY_MS) return
+            lastMove.current = Date.now()
             const max = el.scrollWidth - el.clientWidth
-            // At the end (desktop shows two at once, so the end comes before the last index): back to the start
+            // At the end: back to the start
             scrollToSlide(el.scrollLeft >= max - 4 ? 0 : active + 1)
-        }, AUTOPLAY_MS)
+        }, 250)
         return () => clearInterval(id)
     }, [playing, active, scrollToSlide])
 
-    const takeOver = () => setPlaying(false)
+    /** The visitor moved the slider: keep autoplay on, just restart its countdown. */
+    const takeOver = () => {
+        lastMove.current = Date.now()
+    }
     const hold = (on: boolean) => () => {
         held.current = on
     }
@@ -108,9 +123,15 @@ export function CampaignCarousel({ count, label, children }: { count: number; la
     return (
         <div
             className="relative"
-            onPointerEnter={hold(true)}
+            // Mouse hover pauses; a finger does not (its pointer events would leave it paused after a tap)
+            onPointerEnter={e => {
+                if (e.pointerType === 'mouse') held.current = true
+            }}
             onPointerLeave={hold(false)}
-            onFocusCapture={hold(true)}
+            // Only keyboard focus pauses: a tapped dot keeps focus, which must not stop autoplay for good
+            onFocusCapture={e => {
+                if ((e.target as HTMLElement).matches?.(':focus-visible')) held.current = true
+            }}
             onBlurCapture={hold(false)}
         >
             <ul

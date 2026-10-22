@@ -147,6 +147,12 @@ export function MobileMenu() {
                                 </li>
                             ))}
                             <li>
+                                <Link href="/kategoriler/" prefetch={false} onClick={closeMenu} aria-current={current('/kategoriler/')} className={cn(ROW, 'font-semibold text-brand-600')}>
+                                    <span className="flex-1">Tüm kategorileri gör</span>
+                                    <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                </Link>
+                            </li>
+                            <li>
                                 <Link href="/products/" prefetch={false} onClick={closeMenu} aria-current={current('/products/')} className={cn(ROW, 'font-semibold text-brand-600')}>
                                     <span className="flex-1">Tüm ürünler</span>
                                     <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />

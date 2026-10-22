@@ -70,6 +70,10 @@ export async function POST(req: NextRequest) {
         if (!isFilled(customerInfo.district)) {
             return NextResponse.json({ error: 'Teslimat adresi için ilçe zorunlu' }, { status: 400 })
         }
+        // The cargo needs a street address too (owner decision 2026-10-22)
+        if (!isFilled(customerInfo.address)) {
+            return NextResponse.json({ error: 'Teslimat adresi zorunlu' }, { status: 400 })
+        }
         if (customerInfo.wantsDifferentBillingAddress) {
             if (!isFilled(customerInfo.billingCity)) {
                 return NextResponse.json({ error: 'Fatura ili zorunlu' }, { status: 400 })
