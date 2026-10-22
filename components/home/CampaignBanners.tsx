@@ -17,6 +17,8 @@ interface BannerSlide {
     theme: SlideTheme
     kicker?: string
     title: string
+    /** Big price under the title (live, e.g. the 9D line's single price). */
+    highlight?: string
     subtitle?: string
     cta?: string
     href: string
@@ -28,7 +30,7 @@ interface BannerSlide {
 }
 
 /** Banner colours. The photo prompts use the same palette, so the text colours work on both. */
-const THEMES: Record<SlideTheme, { bg: string; text: string; kicker: string; sub: string; cta: string; scrim: string; glow: string }> = {
+const THEMES: Record<SlideTheme, { bg: string; text: string; kicker: string; sub: string; cta: string; scrim: string; glow: string; accent: string }> = {
     sale: {
         bg: 'bg-[linear-gradient(115deg,#9F1239_0%,#DC2626_50%,#F97316_100%)]',
         text: 'text-white',
@@ -37,6 +39,7 @@ const THEMES: Record<SlideTheme, { bg: string; text: string; kicker: string; sub
         cta: 'bg-white text-ink',
         scrim: 'from-[#9F1239]/85',
         glow: 'bg-[#FDBA74]/45',
+        accent: 'text-white',
     },
     glass: {
         bg: 'bg-[linear-gradient(115deg,#F5FBFE_0%,#E3F3FB_50%,#A8DBF4_100%)]',
@@ -46,6 +49,7 @@ const THEMES: Record<SlideTheme, { bg: string; text: string; kicker: string; sub
         cta: 'bg-ink text-white',
         scrim: 'from-[#F5FBFE]/90',
         glow: 'bg-white/70',
+        accent: 'text-brand-600',
     },
     turbo: {
         bg: 'bg-[radial-gradient(60%_110%_at_78%_50%,#0E5A8A_0%,transparent_65%),linear-gradient(115deg,#0B1220_0%,#0B2340_55%,#0A3A66_100%)]',
@@ -55,6 +59,7 @@ const THEMES: Record<SlideTheme, { bg: string; text: string; kicker: string; sub
         cta: 'bg-white text-ink',
         scrim: 'from-[#0B1220]/85',
         glow: 'bg-[#00A3E0]/35',
+        accent: 'text-[#5CC8F0]',
     },
     shipping: {
         bg: 'bg-[linear-gradient(115deg,#FFF8EE_0%,#FDEFD9_50%,#D6EDFA_100%)]',
@@ -64,6 +69,7 @@ const THEMES: Record<SlideTheme, { bg: string; text: string; kicker: string; sub
         cta: 'bg-ink text-white',
         scrim: 'from-[#FFF8EE]/90',
         glow: 'bg-white/70',
+        accent: 'text-brand-600',
     },
     photo: {
         bg: 'bg-ink-2',
@@ -73,6 +79,7 @@ const THEMES: Record<SlideTheme, { bg: string; text: string; kicker: string; sub
         cta: 'bg-white text-ink',
         scrim: 'from-ink/80',
         glow: 'bg-white/10',
+        accent: 'text-white',
     },
 }
 
@@ -83,10 +90,11 @@ function fromCampaign(c: Campaign): BannerSlide {
         theme: c.theme,
         kicker: c.kicker,
         title: c.title,
+        highlight: c.highlight,
         subtitle: c.subtitle || undefined,
         cta: c.cta,
         href: c.href,
-        label: photo?.text || [c.title, c.subtitle].filter(Boolean).join('. '),
+        label: photo?.text || [[c.kicker && `${c.kicker}:`, c.title, c.highlight].filter(Boolean).join(' '), c.subtitle].filter(Boolean).join('. '),
         image: photo
             ? {
                 src: `/kampanya/${photo.name}-1600.webp`,
@@ -155,6 +163,63 @@ function Artwork({ images, glow, eager }: { images: string[]; glow: string; eage
     )
 }
 
+type Theme = (typeof THEMES)[SlideTheme]
+
+/**
+ * Text on a campaign photo, laid out like the printed banners (pill, two-line headline, big price,
+ * button). Sizes are in container units, so the proportions are the same on a 340px phone banner and
+ * a 600px desktop one; max() keeps the smallest text readable.
+ */
+function PosterText({ slide, t }: { slide: BannerSlide; t: Theme }) {
+    return (
+        <span aria-hidden="true" className={cn('relative flex h-full w-[44%] flex-col items-start justify-center pl-[3.6cqw]', t.text)}>
+            {slide.kicker && (
+                <span className={cn('rounded-full px-[1.8cqw] py-[0.7cqw] text-[max(10px,2.9cqw)] leading-none font-extrabold uppercase', t.kicker)}>{slide.kicker}</span>
+            )}
+            <span className="mt-[1.6cqw] text-[max(14px,5cqw)] leading-[1.02] font-extrabold tracking-[-0.035em] text-balance">{slide.title}</span>
+            {slide.highlight ? (
+                <span className={cn('mt-[1cqw] whitespace-nowrap text-[max(24px,9.4cqw)] leading-none font-extrabold tracking-[-0.045em]', t.accent)}>{slide.highlight}</span>
+            ) : (
+                slide.subtitle && <span className={cn('mt-[1.2cqw] text-[max(10px,2.5cqw)] leading-tight font-semibold', t.sub)}>{slide.subtitle}</span>
+            )}
+            {slide.cta && (
+                <span className={cn('mt-[2.4cqw] inline-flex h-[max(26px,6.2cqw)] items-center gap-[1cqw] rounded-full px-[2.8cqw] text-[max(11px,3cqw)] font-bold transition-transform duration-150 group-hover:translate-x-0.5', t.cta)}>
+                    {slide.cta}
+                    <ArrowRight className="h-[1.1em] w-[1.1em]" aria-hidden="true" />
+                </span>
+            )}
+        </span>
+    )
+}
+
+/** Text on the built-in artwork (no photo): kicker, title, price or subtitle, button. */
+function ArtworkText({ slide, t }: { slide: BannerSlide; t: Theme }) {
+    return (
+        <span aria-hidden="true" className={cn('relative flex h-full w-[58%] flex-col items-start justify-center gap-1.5 p-3.5 sm:p-5 lg:w-[56%] lg:gap-2 lg:p-6 xl:p-7', t.text)}>
+            {slide.kicker && (
+                <span className={cn('rounded-full px-2 py-0.5 text-[10px] leading-4 font-bold uppercase tracking-[0.06em] sm:text-[11px] lg:px-2.5 lg:text-xs', t.kicker)}>
+                    {slide.kicker}
+                </span>
+            )}
+            <span className="text-[17px] leading-[21px] font-extrabold tracking-[-0.02em] text-balance sm:text-[22px] sm:leading-[27px] lg:text-[24px] lg:leading-[29px] xl:text-[28px] xl:leading-[33px]">
+                {slide.title}
+                {slide.highlight && <span className={cn('block', t.accent)}>{slide.highlight}</span>}
+            </span>
+            {slide.subtitle && (
+                <span className={cn('hidden text-[11px] leading-[15px] font-medium min-[380px]:line-clamp-2 sm:text-[13px] sm:leading-[18px] lg:text-sm lg:leading-5', t.sub)}>
+                    {slide.subtitle}
+                </span>
+            )}
+            {slide.cta && (
+                <span className={cn('mt-0.5 inline-flex h-7 items-center gap-1 rounded-full px-3 text-xs font-semibold transition-transform duration-150 group-hover:translate-x-0.5 sm:h-8 sm:text-[13px] lg:mt-1 lg:h-9 lg:px-4 lg:text-sm', t.cta)}>
+                    {slide.cta}
+                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
+            )}
+        </span>
+    )
+}
+
 function Slide({ slide, index, count }: { slide: BannerSlide; index: number; count: number }) {
     const t = THEMES[slide.theme]
     const first = index === 0
@@ -167,7 +232,7 @@ function Slide({ slide, index, count }: { slide: BannerSlide; index: number; cou
                 // Listing variants (?sort=, ?f=) are noindex: nofollow, like the other links to them
                 rel={isNoindexListingHref(slide.href) ? 'nofollow' : undefined}
                 aria-label={slide.label}
-                className={cn('group relative block aspect-[2/1] overflow-hidden rounded-sheet outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2', t.bg)}
+                className={cn('group @container relative block aspect-[2/1] overflow-hidden rounded-sheet outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2', t.bg)}
             >
                 {img ? (
                     <FallbackImage
@@ -188,32 +253,13 @@ function Slide({ slide, index, count }: { slide: BannerSlide; index: number; cou
                     <Artwork images={slide.productImages} glow={t.glow} eager={first} />
                 )}
 
-                {!img?.hasText && (
+                {img && !img.hasText && (
                     <>
-                        {img && <span aria-hidden="true" className={cn('absolute inset-0 bg-linear-to-r via-transparent to-transparent', t.scrim)} />}
-                        <span aria-hidden="true" className={cn('relative flex h-full w-[58%] flex-col items-start justify-center gap-1.5 p-3.5 sm:p-5 lg:w-[56%] lg:gap-2 lg:p-6 xl:p-7', t.text)}>
-                            {slide.kicker && (
-                                <span className={cn('rounded-full px-2 py-0.5 text-[10px] leading-4 font-bold uppercase tracking-[0.06em] sm:text-[11px] lg:px-2.5 lg:text-xs', t.kicker)}>
-                                    {slide.kicker}
-                                </span>
-                            )}
-                            <span className="text-[17px] leading-[21px] font-extrabold tracking-[-0.02em] text-balance sm:text-[22px] sm:leading-[27px] lg:text-[24px] lg:leading-[29px] xl:text-[28px] xl:leading-[33px]">
-                                {slide.title}
-                            </span>
-                            {slide.subtitle && (
-                                <span className={cn('hidden text-[11px] leading-[15px] font-medium min-[380px]:line-clamp-2 sm:text-[13px] sm:leading-[18px] lg:text-sm lg:leading-5', t.sub)}>
-                                    {slide.subtitle}
-                                </span>
-                            )}
-                            {slide.cta && (
-                                <span className={cn('mt-0.5 inline-flex h-7 items-center gap-1 rounded-full px-3 text-xs font-semibold transition-transform duration-150 group-hover:translate-x-0.5 sm:h-8 sm:text-[13px] lg:mt-1 lg:h-9 lg:px-4 lg:text-sm', t.cta)}>
-                                    {slide.cta}
-                                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                                </span>
-                            )}
-                        </span>
+                        <span aria-hidden="true" className={cn('absolute inset-0 bg-linear-to-r via-transparent via-45% to-transparent', t.scrim)} />
+                        <PosterText slide={slide} t={t} />
                     </>
                 )}
+                {!img && <ArtworkText slide={slide} t={t} />}
             </Link>
         </li>
     )

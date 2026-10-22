@@ -19,6 +19,8 @@ export interface Campaign {
     theme: CampaignTheme
     kicker: string
     title: string
+    /** A price shown big under the title ("129,99 TL"), e.g. the screen-protector line's single price. */
+    highlight?: string
     subtitle: string
     cta: string
     href: string
@@ -84,12 +86,9 @@ export const CAMPAIGN_PHOTOS: PhotoMap = {
         text: "Fırsatlar: %41'e varan indirim, şarj aleti, kablo ve ekran koruyucuda. İndirimleri gör",
         claims: { minMaxDiscount: 41 },
     },
-    'ekran-koruyucu': {
-        name: 'ekran-koruyucu',
-        plain: 'ekran-koruyucu-yazisiz',
-        text: 'Tek fiyat: 9D cam ekran koruyucu 129,99 TL. Modelini bul',
-        claims: { onePrice: 129.99 },
-    },
+    // The 9D price follows the USD rate, so this banner uses the text-free photo and draws the live
+    // price itself (no printed text that could go stale)
+    'ekran-koruyucu': { name: 'ekran-koruyucu-yazisiz' },
     'turbo-sarj': {
         name: 'turbo-sarj',
         plain: 'turbo-sarj-yazisiz',
@@ -158,6 +157,11 @@ function firstImages(list: CampaignProduct[], n: number): string[] {
     return list.filter(withImage).slice(0, n).map(p => p.images[0])
 }
 
+/** "129,99 TL": banner prices in TL like the printed banners (the site elsewhere uses ₺). */
+function amountTL(n: number): string {
+    return formatAmount(n).replace(/\s*₺$/, ' TL')
+}
+
 /** "%41'e varan indirim" etc. */
 function upTo(pct: number): string {
     return `%${pct}'${dativeSuffixTr(pct)} varan indirim`
@@ -208,7 +212,8 @@ function screenProtectorCampaign(inStock: CampaignProduct[], photos: PhotoMap): 
         return {
             ...base,
             kicker: 'Tek fiyat',
-            title: `9D cam ekran koruyucu ${formatAmount(glassPrice)}`,
+            title: '9D cam ekran koruyucu',
+            highlight: amountTL(glassPrice),
             subtitle: ceramic.length ? `${glass.length} telefon modeli · Seramik ${formatAmount(minPrice(ceramic))}'den` : `${glass.length} telefon modeli`,
         }
     }
@@ -216,14 +221,16 @@ function screenProtectorCampaign(inStock: CampaignProduct[], photos: PhotoMap): 
         return {
             ...base,
             kicker: 'Tek fiyat',
-            title: `Seramik ekran koruyucu ${formatAmount(ceramicPrice)}`,
+            title: 'Seramik ekran koruyucu',
+            highlight: amountTL(ceramicPrice),
             subtitle: `${ceramic.length} telefon modeli`,
         }
     }
     return {
         ...base,
         kicker: 'Ekran koruyucu',
-        title: `Ekran koruyucular ${formatAmount(minPrice(all))}'den`,
+        title: 'Ekran koruyucular',
+        highlight: `${amountTL(minPrice(all))}'den`,
         subtitle: `${all.length} telefon modeli`,
     }
 }

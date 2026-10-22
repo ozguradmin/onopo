@@ -48,7 +48,8 @@ test('all four banners from real data, in slider order', () => {
     assert.equal(c.firsatlar.subtitle, `${ALL.filter(x => x.discount_percent >= 10).length} üründe indirim`)
     assert.equal(c.firsatlar.href, '/products/?sort=discount')
     assert.equal(c['ekran-koruyucu'].kicker, 'Tek fiyat')
-    assert.equal(c['ekran-koruyucu'].title, '9D cam ekran koruyucu 129,99 ₺')
+    assert.equal(c['ekran-koruyucu'].title, '9D cam ekran koruyucu')
+    assert.equal(c['ekran-koruyucu'].highlight, '129,99 TL')
     assert.equal(c['ekran-koruyucu'].subtitle, "6 telefon modeli · Seramik 79,99 ₺'den")
     assert.equal(c['turbo-sarj'].title, "120W'a kadar hızlı şarj")
     assert.equal(c['turbo-sarj'].subtitle, "Şarj aletleri 259,99 ₺'den")
@@ -61,7 +62,8 @@ test('no "tek fiyat" when one 9D model costs more', () => {
     const products = [...GLASS.slice(0, 5), p('Onopo İphone 16 Pro Anti Static 9D Tam Ekran Cam Ekran Koruyucu', 149.99), ...CERAMIC]
     const c = byKey(buildCampaigns({ products, freeShippingThreshold: 0 }))
     assert.equal(c['ekran-koruyucu'].kicker, 'Ekran koruyucu')
-    assert.equal(c['ekran-koruyucu'].title, "Ekran koruyucular 79,99 ₺'den")
+    assert.equal(c['ekran-koruyucu'].title, 'Ekran koruyucular')
+    assert.equal(c['ekran-koruyucu'].highlight, "79,99 TL'den")
 })
 
 test('sold-out products and too few discounts never make a banner', () => {
