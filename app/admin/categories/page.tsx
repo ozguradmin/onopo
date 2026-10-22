@@ -12,7 +12,7 @@ import {
     Utensils, Armchair, Dumbbell, Dog, Flower2,
     Briefcase, Hammer, Baby, Scissors, Anchor, Sun,
     Moon, Cloud, Umbrella, Key, Lock, Map, Compass,
-    Globe, Award, Medal, Crown, Trophy, Jewel
+    Globe, Award, Medal, Crown, Trophy
 } from 'lucide-react'
 
 // Icon options for category selection
