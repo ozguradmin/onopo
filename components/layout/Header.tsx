@@ -302,10 +302,10 @@ const ICON_BTN =
 
 /**
  * "Giriş yap" (/login/) in the server HTML, which the edge cache shares between all anonymous visitors.
- * After hydration, and again after each navigation (logout is a client navigation), the readable session
- * hint (lib/session-hint) switches it to "Hesabım" (/profile/). Decided in an effect, so the server and
- * the first client render match. The label box always reserves the width of the longer label (the
- * other one sits in an invisible ::after), so the swap never moves the header.
+ * After hydration, again after each navigation (logout is a client navigation) and after a back/forward
+ * cache restore, the readable session hint (lib/session-hint) switches it to "Hesabım" (/profile/).
+ * Decided in an effect, so the server and the first client render match. The label box always reserves
+ * the width of the longer label (the other one sits in an invisible ::after), so the swap never moves the header.
  */
 function AccountLink() {
     const pathname = usePathname()
@@ -313,6 +313,15 @@ function AccountLink() {
     React.useEffect(() => {
         setSignedIn(hasSessionHint())
     }, [pathname])
+    // A page restored from the back/forward cache keeps the label it had when it was left: check again
+    // (the visitor may have logged in or out on another page meanwhile)
+    React.useEffect(() => {
+        const onPageShow = (e: PageTransitionEvent) => {
+            if (e.persisted) setSignedIn(hasSessionHint())
+        }
+        window.addEventListener('pageshow', onPageShow)
+        return () => window.removeEventListener('pageshow', onPageShow)
+    }, [])
     const label = signedIn ? 'Hesabım' : 'Giriş yap'
     return (
         <Link href={signedIn ? '/profile/' : '/login/'} prefetch={false} aria-label={label} className={ICON_BTN}>

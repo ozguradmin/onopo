@@ -4,7 +4,8 @@
  * Client islands used by ProductCard (and reusable on the product page):
  *   <QuickAddButton>  adds to the cart with the unchanged cart-store payload
  *   <FavoriteButton>  toggles a favourite through the existing /api/favorites API
- *   useFavorites()    shared favourites state (one GET /api/favorites per page load, lazily; none for guests)
+ *   useFavorites()    shared favourites state (one GET /api/favorites per page load, lazily, and again after a
+ *                     back/forward cache restore; none for guests)
  */
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
@@ -189,6 +190,14 @@ function subscribe(listener: () => void) {
  */
 function loadFavorites() {
     if (favState.status !== 'idle') return
+    fetchFavorites()
+}
+
+// Only the latest request may set the state (a reload can start while an earlier one is still running)
+let favRequest = 0
+
+function fetchFavorites() {
+    const request = ++favRequest
     if (!hasSessionHint()) {
         setFavState({ status: 'ready', ids: new Set() })
         return
@@ -197,14 +206,33 @@ function loadFavorites() {
     fetch('/api/favorites', { credentials: 'same-origin' })
         .then(r => (r.ok ? r.json() : { favorites: [] }))
         .then((d: { favorites?: { product_id?: number; id?: number }[] }) => {
+            if (request !== favRequest) return
             const ids = new Set((d.favorites ?? []).map(f => Number(f.product_id ?? f.id)).filter(Number.isFinite))
             setFavState({ status: 'ready', ids })
         })
-        .catch(() => setFavState({ status: 'ready', ids: new Set() }))
+        .catch(() => {
+            if (request === favRequest) setFavState({ status: 'ready', ids: new Set() })
+        })
+}
+
+/**
+ * A page restored from the back/forward cache still shows the favourites it had when it was left, although
+ * the visitor may have logged in or out (or changed favourites) on another page meanwhile: load them again.
+ * The hearts keep their old state until the answer arrives. One listener per page, added on first use.
+ */
+let reloadOnRestoreAdded = false
+
+function reloadFavoritesOnRestore() {
+    if (reloadOnRestoreAdded) return
+    reloadOnRestoreAdded = true
+    window.addEventListener('pageshow', e => {
+        if (e.persisted && favState.status !== 'idle') fetchFavorites()
+    })
 }
 
 /** Forget the cached favourites (call after login/logout so the next render reloads them). */
 export function resetFavorites() {
+    favRequest++ // an answer still on its way belongs to the old session
     setFavState({ status: 'idle', ids: new Set() })
 }
 
@@ -212,6 +240,7 @@ export function useFavorites() {
     const state = React.useSyncExternalStore(subscribe, () => favState, () => SERVER_STATE)
 
     React.useEffect(() => {
+        reloadFavoritesOnRestore()
         if (favState.status !== 'idle') return
         const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }
         if (w.requestIdleCallback) w.requestIdleCallback(loadFavorites, { timeout: 2500 })
