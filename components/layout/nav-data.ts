@@ -3,6 +3,7 @@
  * Isomorphic; no React.
  */
 import type { MenuItem } from '@/lib/catalog'
+import { LEGACY_CATEGORY_TARGETS } from '@/lib/seo'
 
 export interface NavLinkItem {
     label: string
@@ -40,8 +41,13 @@ export const SUPPORT_LINKS: NavLinkItem[] = [
     { label: 'Kullanım koşulları', href: '/page/terms/' },
 ]
 
-/** Old internal URLs that only redirect (or no longer exist) → their current target. */
+/**
+ * Old internal URLs that only redirect (or no longer exist) → their current target. The old listings
+ * (/new/ "Yeni Gelenler" → /products/?sort=newest, /tech/, /beauty/, /gaming/) come from the table the
+ * server redirects use, so a menu link never takes the 308 hop.
+ */
 const LEGACY_TARGETS: Record<string, string> = {
+    ...Object.fromEntries(Object.entries(LEGACY_CATEGORY_TARGETS).map(([slug, target]) => [`/${slug}/`, target])),
     '/help/': '/page/help/',
     '/shipping/': '/page/shipping/',
     '/policy/': '/page/policy/',
@@ -70,8 +76,10 @@ export function normalizeHref(raw: string | null | undefined): string {
     let path = m ? m[1] : absolute
     const rest = m ? m[2] : ''
     if (!path.endsWith('/') && !/\.[a-z0-9]{2,5}$/i.test(path)) path += '/'
-    path = LEGACY_TARGETS[path.toLowerCase()] ?? path
-    return path + rest
+    const target = LEGACY_TARGETS[path.toLowerCase()]
+    if (!target) return path + rest
+    // '/new?x=1' → '/products/?sort=newest&x=1'
+    return target.includes('?') && rest.startsWith('?') ? `${target}&${rest.slice(1)}` : target + rest
 }
 
 /** Same path (ignores trailing slash and query). */
@@ -80,12 +88,15 @@ export function samePath(a: string, b: string): boolean {
     return clean(a) === clean(b)
 }
 
-/** Flat admin menus (Admin › Menüler) → top-level items with children (one level). */
+/**
+ * Flat admin menus (Admin › Menüler, active items only) → top-level items with children (one level).
+ * A child whose parent is not in the list (deactivated or deleted) is dropped with it, not promoted to the top level.
+ */
 export function buildMenuTree(flat: MenuItem[]): MenuItem[] {
     const items = flat.map(m => ({ ...m, children: [] as MenuItem[] }))
     const byId = new Map(items.map(m => [m.id, m]))
-    for (const m of items) if (m.parent_id != null) byId.get(m.parent_id)?.children.push(m)
-    return items.filter(m => m.parent_id == null || !byId.has(m.parent_id))
+    for (const m of items) if (m.parent_id) byId.get(m.parent_id)?.children.push(m)
+    return items.filter(m => !m.parent_id)
 }
 
 /** "500 ₺" for whole amounts, "499,90 ₺" otherwise (deterministic, no ICU). */

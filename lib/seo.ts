@@ -256,6 +256,19 @@ export function cmsPagePath(slug: string): string {
 }
 
 /**
+ * Replacements for the old hard-coded listings /tech/ /beauty/ /gaming/ /new/ (they have 0 products).
+ * "Yeni Gelenler" (/new) is the listing sorted newest first. The server redirects (lib/seo-routing.ts) and the
+ * menu links (components/layout/nav-data.ts) both read this table. Kept here, not in seo-routing.ts, because the
+ * menus are client code and seo-routing.ts imports the D1 layer.
+ */
+export const LEGACY_CATEGORY_TARGETS: Readonly<Record<string, string>> = {
+    tech: '/products/',
+    beauty: '/products/',
+    new: '/products/?sort=newest',
+    gaming: '/kategori/oyun-ve-oyuncu-aksesuarlari/',
+}
+
+/**
  * Absolute canonical URL: apex https host, path with a trailing slash, and only the query
  * parameters passed explicitly (e.g. { page: 2 }); empty, null, "1"-pages and others are dropped.
  */
@@ -391,10 +404,14 @@ export function cleanDescriptionText(html: string | null | undefined): string {
     const beforeSpecs = html.split(/Teknik Özellikler/i)[0]
     let text = stripHtml(beforeSpecs, 100000)
         .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+        .replace(/&le;/gi, '≤')
+        .replace(/&ge;/gi, '≥')
         .replace(/&[a-z]+;/gi, ' ')
         .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ') // emoji and other astral symbols
         .replace(/[←-⇿⌀-⏿☀-➿⬀-⯿️‍]/g, ' ') // ✅ ➝ ★ etc.
         .replace(/([a-zçğıöşü0-9)%])([.!?])([A-ZÇĞİÖŞÜ])/g, '$1$2 $3')
+        // "kablo.30 watt" / "kablo.220 volt": a sentence that starts with a number (not "3.4A", where a digit precedes the dot)
+        .replace(/([a-zçğıöşü])\.(\d)/g, '$1. $2')
     text = collapseWs(text)
     return text
 }
@@ -447,6 +464,7 @@ export function fitDescription(lead: string, tail: string, opts: { min?: number;
     }
     for (const f of opts.fillers || []) {
         if (result.length >= min) break
+        if (result.includes(f)) continue // the lead already says it ("… uygun fiyatla Onopo Store'da.")
         if (result.length + 1 + f.length <= max) result = `${result} ${f}`
     }
     return result
@@ -528,7 +546,7 @@ const TITLE_TYPES: Array<{ re: RegExp; forms: string[]; cable?: boolean }> = [
     { re: /Şarj Adaptörü Başlığı/g, forms: ['Şarj Adaptörü'] },
     { re: /(?:Hızlı\s+)?Şarj Adaptörü/g, forms: ['Şarj Adaptörü'] },
     { re: /Şarj Başlığı/g, forms: [] },
-    { re: /(?:AUX |Data )?Kablosu/g, forms: [], cable: true },
+    { re: /(?:AUX |Data )?Kablosu(?![a-zçğıöşü])/g, forms: [], cable: true }, // not the "Kablosu" in "Kablosuz"
     { re: /Kablosuz Kulaklık|Kulaklık|Powerbank|El Süpürgesi|Hepa Filtre|Toz Haznesi Aparatı|Oyun Konsolu|Oyun Kumandası|Fiş Yazıcı/g, forms: [] },
 ]
 
@@ -553,7 +571,23 @@ const TITLE_CASE_FIXES: Rewrite[] = [
     [/(\d)\s?MM\b/g, '$1 mm'],
     [/(\d)\s?CM\b/g, '$1 cm'],
     [/\bTurbu\b/g, 'Turbo'],
+    [/\bPubg\b/g, 'PUBG'],
+    [/(\d\s)In(?=\s+\d)/g, '$1in'], // "5 In 1" -> "5 in 1"
+    [/(^|\s)İn[cç](?=\s|$)/g, '$1inç'], // "9.6 İnc" -> "9.6 inç"
 ]
+
+/** A unit right after a number ("3.5 mm", "1 Metre", "20 W"): the two are never separated by a cut. */
+const UNIT_AFTER_NUMBER = /^\s?(?:mAh|mm|cm|m|M|Metre|metre|W|A|V|inç)(?=\s|$|[,/)])/
+
+/** truncateWords for titles that never ends on a number whose unit was cut off ("… 3.5" from "… 3.5 mm"). */
+function truncateTitleWords(s: string, max: number): string {
+    const full = collapseWs(s)
+    let cut = truncateWords(full, max)
+    if (/\d$/.test(cut) && full.startsWith(cut) && UNIT_AFTER_NUMBER.test(full.slice(cut.length))) {
+        cut = cut.replace(/\s*\S+$/, '').replace(DANGLING, '').replace(/[\s,;:(\-–—|/]+$/, '')
+    }
+    return cut
+}
 
 /** Strips the leading brand ("onopo ", "ONOPO - ") from a product name. */
 export function stripBrandPrefix(name: string): string {
@@ -627,7 +661,7 @@ export function productTitle(name: string, max: number = PRODUCT_TITLE_MAX): str
             if (s.length <= budget) break
             s = collapseWs(s.replace(re, rep))
         }
-        return finish(s.length > budget ? truncateWords(s, budget) : s)
+        return finish(s.length > budget ? truncateTitleWords(s, budget) : s)
     }
 
     let before = s.slice(0, type.index).trim()
@@ -651,11 +685,12 @@ export function productTitle(name: string, max: number = PRODUCT_TITLE_MAX): str
     // "Kablolu Kulaklık … Kulaklık": the head noun already appears earlier, do not repeat it
     if (before.includes(head)) head = ''
     if (total() > budget) {
-        const room = budget - [head, after].filter(Boolean).join(' ').length - 1
-        before = room >= 8 ? truncateWords(before, room) : ''
+        const rest = [head, after].filter(Boolean).join(' ')
+        const room = budget - (rest ? rest.length + 1 : 0)
+        before = room >= 8 ? truncateTitleWords(before, room) : ''
     }
     let result = [before, head, after].filter(Boolean).join(' ')
-    if (result.length > budget) result = truncateWords(result, budget)
+    if (result.length > budget) result = truncateTitleWords(result, budget)
     return finish(result)
 }
 
@@ -708,14 +743,18 @@ export function productBrand(p: Pick<ProductSeoInput, 'name' | 'description'>): 
     return undefined
 }
 
+/** Brand words written with a lowercase first letter: "iPhone …" starts a sentence, it is not a cut mid-sentence. */
+const LOWERCASE_BRAND_WORD = 'i(?:Phone|Pad|Pod|OS|Mac|Cloud|Watch)(?![a-zçğıöşü])'
+const LOWERCASE_BRAND = new RegExp(`^${LOWERCASE_BRAND_WORD}`)
+
 /** Lead sentence(s) of a product description without the repeated product name / category label. */
 export function productDescriptionLead(p: Pick<ProductSeoInput, 'name' | 'description'>): string {
     // Imported descriptions look like "Ürün Açıklaması<title>Detaylı Bilgi<body>Teknik Özellikler<specs>": use the body
     const raw = String(p.description || '')
     const bodyAt = raw.search(/Detaylı Bilgi/i)
     const text = cleanDescriptionText(bodyAt >= 0 ? raw.slice(bodyAt + 'Detaylı Bilgi'.length) : raw)
-        .replace(/(^|\s)[İI]phone(?=\s|$|[,.])/g, '$1iPhone')
-        .replace(/(^|\s)[İI]pad(?=\s|$|[,.])/g, '$1iPad')
+        .replace(/(^|\s)[İIi][Pp]hone(?=\s|$|[,.'’])/g, '$1iPhone')
+        .replace(/(^|\s)[İIi][Pp]ad(?=\s|$|[,.'’])/g, '$1iPad')
     if (!text) return ''
     const folded = foldTr(text)
     const nameCore = stripBrandPrefix(p.name).split(/\s+[|–—]\s+|\s+-\s+/)[0]
@@ -749,22 +788,111 @@ export function productDescriptionLead(p: Pick<ProductSeoInput, 'name' | 'descri
             .trim()
         start = start || 1
     }
+    // "Model - F1 Yüksek kaliteli …": a spec-table fragment left in front of the text
+    const modelLabel = rest.match(/^Model\s*[-–:]\s*[A-Z]{1,3}\d{1,3}[A-Z]?(?=\s|$)\s*/)
+    if (modelLabel) { rest = rest.slice(modelLabel[0].length); start = start || 1 }
+    // "Adaptör Şarj Kablosu M2 Android ve …": the rest of the echoed title, up to the model code
+    if (code && start > 0) {
+        const echo = rest.match(new RegExp(`^(?:[A-ZÇĞİÖŞÜ0-9+&/][^\\s.!?]*\\s+){1,8}?${code}\\s+(?=[A-ZÇĞİÖŞÜ]|${LOWERCASE_BRAND_WORD})`))
+        if (echo) rest = rest.slice(echo[0].length)
+    }
 
-    // A cut in the middle of a sentence: continue from the next sentence
-    if (start > 0 && /^[a-zçğıöşü]/.test(rest)) {
+    // A cut in the middle of a sentence: continue from the next sentence ("iPhone …" is a sentence start)
+    if (start > 0 && /^[a-zçğıöşü]/.test(rest) && !LOWERCASE_BRAND.test(rest)) {
         const next = rest.search(/[.!?]\s+[A-ZÇĞİÖŞÜ0-9]/)
         rest = next >= 0 ? rest.slice(next + 1).trim() : ''
     }
     return rest
 }
 
+const MODEL_BRAND = /^(?:iPhone|iPad|Galaxy|Samsung|Xiaomi|Redmi|Infinix|Huawei|Media|Mediapad|MediaPad|Mate|Matepad|MatePad)$/
+const MODEL_WORD = /^(?:Pro|Max|Plus|Ultra|Lite|Mini|Note|Air|FE|Mi|Pad|Tab|TAB|\/|[A-Z]{0,3}\d{1,4}[A-Za-z]{0,2})$/
+/** Specs that look like model numbers: "20W", "12D", "100cm" ("10A" stays: Redmi 10A). */
+const SPEC_WORD = /^\d+(?:W|w|V|mAh|mm|cm|m|M|D|Hz)$/
+/** A screen size ("11 inç", "7''") ends the device model. */
+const SCREEN_SIZE_UNIT = /^(?:inç|inc|İnc|İnç|''|")$/i
+
+/**
+ * What tells a product apart from its siblings that share the same template text: the device it fits
+ * ("iPhone 13 Pro Max", "Redmi Note 12 Pro Plus", "Samsung Galaxy Tab S6 Lite") and its model code
+ * ("Q8" from "… - Q8", "BT1" from "BT1 Gürültü Önleyici …").
+ */
+export function productModelTokens(name: string): { device?: string; code?: string } {
+    let s = stripBrandPrefix(name)
+    for (const [re, rep] of TITLE_CASE_FIXES) s = s.replace(re, rep)
+    s = collapseWs(s)
+    const code = (s.match(/[-–]\s*([A-Z]{1,3}\d{1,3}[A-Z]?)\s*$/) || s.match(/^([A-Z]{1,3}\d{1,4}[A-Z]?)(?=\s)/) || [])[1]
+    const words = s.split(' ')
+    let device: string | undefined
+    for (let i = 0; i < words.length && !device; i++) {
+        if (!MODEL_BRAND.test(words[i])) continue
+        let j = i + 1
+        while (
+            j < words.length
+            && (MODEL_WORD.test(words[j]) || MODEL_BRAND.test(words[j]))
+            && !SPEC_WORD.test(words[j])
+            && !SCREEN_SIZE_UNIT.test(words[j + 1] || '')
+        ) j++
+        const phrase = words.slice(i, j)
+        while (phrase[phrase.length - 1] === '/') phrase.pop()
+        if (phrase.slice(1).some((w) => /\d/.test(w))) device = phrase.join(' ')
+    }
+    return { ...(device ? { device } : {}), ...(code ? { code } : {}) }
+}
+
+/**
+ * Whole-word containment, ignoring case and Turkish accents. A longer model does not count:
+ * "iPhone 13 Pro" is not mentioned by "iPhone 13 Pro Max modeliyle".
+ */
+function mentions(text: string, token: string): boolean {
+    const norm = (s: string) => foldTr(collapseWs(s)).replace(/\s*\/\s*/g, '/')
+    const t = norm(token).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`(^|[^a-z0-9])${t}(?![a-z0-9]|\\s+(?:pro|max|plus|ultra|lite|mini|fe)(?![a-z]))`).test(norm(text))
+}
+
+/** "ekran koruyucu", "şarj kablosu", "kablosuz kulaklık": the product type of a name, for running text. */
+function productTypeLabel(name: string): string {
+    let s = stripBrandPrefix(name)
+    for (const [re, rep] of TITLE_CASE_FIXES) s = s.replace(re, rep)
+    const t = findTitleType(collapseWs(s))
+    if (!t) return ''
+    const label = t.forms[t.forms.length - 1] || t.text
+    if (label === 'Kablosu') return 'kablo'
+    return label.split(' ').map((w) => (/^[A-ZÇĞİÖŞÜ][a-zçğıöşü]+$/.test(w) ? w.toLocaleLowerCase('tr-TR') : w)).join(' ')
+}
+
+/**
+ * Many descriptions come from one template per product family and never name the model
+ * ("Apple marka cihazlarınız için …" on ten iPhone screen protectors). When the text that is shown (`shown`, the
+ * fitted description; default the lead) does not mention the device or the model code, the lead gets a short model
+ * phrase in front, so every product page has its own description:
+ * "iPhone 13 Pro Max ekran koruyucu: Apple marka …", "Onopo Q8 şarj kablosu: Apple cihazlarınız …".
+ */
+export function withModelPhrase(p: Pick<ProductSeoInput, 'name' | 'description'>, lead: string, shown: string = lead): string {
+    const { device, code } = productModelTokens(p.name)
+    // The device as descriptions name it: without the maker ("Galaxy Tab S7", "Redmi Note 12") and only the first
+    // of a list ("iPhone 13" for "iPhone 13 / 13 Pro").
+    const deviceCore = device && device.replace(/^(?:(?:Samsung|Xiaomi|Huawei)\s+)+/, '').split(/\s*\/\s*/)[0]
+    const missing: string[] = []
+    if (device && deviceCore && !mentions(shown, deviceCore)) missing.push(device)
+    if (code && !mentions(shown, code)) missing.push(code)
+    if (!missing.length) return lead
+    const brand = !missing.includes(device as string) && productBrand(p) === 'Onopo' ? 'Onopo' : ''
+    const phrase = [brand, ...missing, productTypeLabel(p.name)].filter(Boolean).join(' ')
+    return `${phrase}: ${lead}`
+}
+
 /** Meta description for a product page (Turkish, about 140–160 chars, from the real description and shop facts). */
 export function productMetaDescription(p: ProductSeoInput, site: SiteSeo = DEFAULT_SITE_SEO): string {
     const price = roundPrice(p.price)
-    const lead = productDescriptionLead(p) || `${productTitle(p.name)} uygun fiyatla Onopo Store'da.`
     const stockFact = Number(p.stock) > 0 ? null : 'Şu an stokta yok.'
     const tail = [stockFact, factsTail(site, price, Boolean(Number(p.free_shipping)))].filter(Boolean).join(' ')
-    return fitDescription(lead, tail, { fillers: ["Onopo Store'da."] })
+    const fit = (lead: string) => fitDescription(lead, tail, { fillers: ["Onopo Store'da."] })
+    const own = productDescriptionLead(p)
+    if (!own) return fit(`${productTitle(p.name)} uygun fiyatla Onopo Store'da.`)
+    const plain = fit(own)
+    const lead = withModelPhrase(p, own, plain)
+    return lead === own ? plain : fit(lead)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -806,11 +934,15 @@ function pageSuffix(page?: number): string {
     return page && page > 1 ? ` - Sayfa ${page}` : ''
 }
 
-/** "<Category> Modelleri ve Fiyatları" when it fits, else shorter. */
+/** Category names that are a selection, not a kind of product ("Çok Satanlar", "Yeni Gelenler", "İndirimli Ürünler"). */
+const MERCHANDISING_CATEGORY = /(^|\s)(cok satan|en cok|yeni gelen|yeni urun|indirim|kampanya|firsat|outlet|one cikan|populer|trend)/
+
+/** "<Category> Modelleri ve Fiyatları" when it fits, else shorter; a selection like "Çok Satanlar" keeps its plain name. */
 export function categoryTitle(name: string, page?: number): string {
     const suffix = pageSuffix(page)
     const max = PRODUCT_TITLE_MAX - suffix.length
-    for (const t of [`${name} Modelleri ve Fiyatları`, `${name} Fiyatları`, name]) {
+    const forms = MERCHANDISING_CATEGORY.test(foldTr(name)) ? [name] : [`${name} Modelleri ve Fiyatları`, `${name} Fiyatları`, name]
+    for (const t of forms) {
         if (t.length <= max) return `${t}${suffix}`
     }
     return `${truncateWords(name, max)}${suffix}`
@@ -825,27 +957,28 @@ export interface ListingFacts {
     productNames?: string[]
 }
 
+/**
+ * Lead of a listing description: "<Name>[ - Sayfa N]: <count> ürün, <min price> TL'den başlayan fiyatlarla. <Types> Onopo'da."
+ * The page marker sits in the name, in front, so a cut never drops it and page N never repeats page 1's description.
+ */
+function listingLead(name: string, facts: ListingFacts, maxTypes: number, page?: number): string {
+    const types = detectProductTypes(facts.productNames || []).slice(0, maxTypes).map((t) => t.plural)
+    const price = facts.minPrice && facts.minPrice > 0 ? `, ${formatTL(roundPrice(facts.minPrice))} TL'den başlayan fiyatlarla` : ''
+    return `${name}${pageSuffix(page)}: ${facts.count} ürün${price}${types.length ? `. ${capitalizeTr(joinTr(types))} Onopo'da` : ''}.`
+}
+
 /** Meta description for a category page, from the real product count, price range and product types. */
 export function categoryMetaDescription(name: string, facts: ListingFacts, site: SiteSeo = DEFAULT_SITE_SEO, page?: number): string {
-    const types = detectProductTypes(facts.productNames || []).slice(0, 3).map((t) => t.plural)
-    const price = facts.minPrice && facts.minPrice > 0 ? `, ${formatTL(roundPrice(facts.minPrice))} TL'den başlayan fiyatlarla` : ''
-    const lead = `${name}: ${facts.count} ürün${price}${types.length ? `. ${capitalizeTr(joinTr(types))} Onopo'da` : ''}.${page && page > 1 ? ` Sayfa ${page}.` : ''}`
-    return fitDescription(lead, factsTail(site), { fillers: ["Onopo Store'da."] })
+    return fitDescription(listingLead(name, facts, 3, page), factsTail(site), { fillers: ["Onopo Store'da."] })
 }
 
 /** Meta description for /products/ (all products) or a search result page. */
 export function listingMetaDescription(facts: ListingFacts, site: SiteSeo = DEFAULT_SITE_SEO, opts: { query?: string; page?: number } = {}): string {
-    const types = detectProductTypes(facts.productNames || []).slice(0, 4).map((t) => t.plural)
     if (opts.query) {
         const q = truncateWords(opts.query, 40)
         return fitDescription(`"${q}" araması için ${facts.count} ürün bulundu.`, factsTail(site), { min: 120, fillers: ["Onopo Store'da."] })
     }
-    const price = facts.minPrice && facts.minPrice > 0 ? ` ${formatTL(roundPrice(facts.minPrice))} TL'den başlayan fiyatlar.` : ''
-    const lead = `Tüm ürünler: ${types.length ? `${joinTr(types)}, ` : ''}toplam ${facts.count} ürün.${price}${page_(opts.page)}`
-    return fitDescription(lead, factsTail(site), { fillers: ["Onopo Store'da."] })
-}
-function page_(page?: number): string {
-    return page && page > 1 ? ` Sayfa ${page}.` : ''
+    return fitDescription(listingLead('Tüm ürünler', facts, 4, opts.page), factsTail(site), { fillers: ["Onopo Store'da."] })
 }
 
 /** Home page <title> (absolute, no template) from the product types actually sold. */
@@ -1204,6 +1337,7 @@ export function productJsonLd(p: ProductSeoInput, opts: { site?: SiteSeo; review
  * The hidden #product-info block that Akakçe's crawler parses (in addition to the Product JSON-LD).
  * Byte-for-byte the markup app/[slug]/page.tsx renders today (see docs/SEO.md, "Akakçe crawl contract"):
  * element ids, tr-TR price format with " ₺", "Stokta"/"Tükendi", image order and the two legacy links.
+ * The only addition is loading="lazy" at the end of each <img>, so the hidden images are never downloaded.
  * Render it with components/seo/ProductMachineData.tsx; do not edit the format without checking Akakçe.
  */
 export function productInfoHtml(p: ProductSeoInput): string {
@@ -1224,7 +1358,9 @@ export function productInfoHtml(p: ProductSeoInput): string {
         `  <span id="product-stock">${Number(p.stock) > 0 ? 'Stokta' : 'Tükendi'}</span>`,
         `  <span id="product-category">${String(p.category || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')}</span>`,
         ...images.map((img, i) =>
-            `  <img id="product-image-${i + 1}" src="${resolveImageUrl(img) || DEFAULT_OG_IMAGE.url}" alt="${name.replace(/"/g, '&quot;')}" />`,
+            // loading="lazy" (last attribute, everything before it unchanged): the block is display:none, so browsers
+            // never fetch these originals (up to 32 MB per page); Akakçe reads the src attribute from the HTML.
+            `  <img id="product-image-${i + 1}" src="${resolveImageUrl(img) || DEFAULT_OG_IMAGE.url}" alt="${name.replace(/"/g, '&quot;')}" loading="lazy" />`,
         ),
         `  <a id="add-to-cart" href="/cart?add=${p.id}">Sepete Ekle</a>`,
         `  <a id="buy-now" href="/checkout?product=${p.id}">Hemen Al</a>`,

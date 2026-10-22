@@ -11,7 +11,7 @@
  *                                listingSeo('/products/', searchParams, …) -> robots/canonical/out-of-range page
  */
 import { cache } from 'react'
-import { categoryPath, cmsPagePath, foldTr, LISTING_NOINDEX_PARAMS, productPath, type D1Like } from './seo'
+import { categoryPath, cmsPagePath, foldTr, LEGACY_CATEGORY_TARGETS, LISTING_NOINDEX_PARAMS, productPath, type D1Like } from './seo'
 
 export type RedirectKind = 'permanent' | 'temporary'
 
@@ -24,6 +24,8 @@ export type SlugResolution =
     | { kind: 'legacy-category'; slug: string; path: string; redirect: 'permanent' }
     /** A CMS page slug at the root (/help/ once app/help is removed): 308 to /page/<slug>/. */
     | { kind: 'page'; slug: string; path: string; redirect: 'permanent' }
+    /** A URL of the old shop platform from LEGACY_PATH_REDIRECTS (/sepet/, /uye-giris/): 308 to its replacement. */
+    | { kind: 'legacy-path'; slug: string; path: string; redirect: 'permanent' }
 
 /** Top-level paths owned by static routes. A product slug must never be one of these (the static route wins). */
 export const RESERVED_SLUGS = [
@@ -33,20 +35,17 @@ export const RESERVED_SLUGS = [
 ] as const
 
 /**
- * Replacements for the old hard-coded listings (VALID_CATEGORIES). They have 0 products today;
- * the newest-first order of /new/ is the default order of /products/.
+ * Replacements for the old hard-coded listings (VALID_CATEGORIES), defined in lib/seo.ts so the client menus can
+ * use the same table. They have 0 products today; /new/ ("Yeni Gelenler") is /products/ sorted newest first.
  * If a category with the same slug gets products later, /kategori/<slug>/ is used instead (see legacyCategoryTarget).
  */
-export const LEGACY_CATEGORY_TARGETS: Record<string, string> = {
-    tech: '/products/',
-    beauty: '/products/',
-    new: '/products/',
-    gaming: '/kategori/oyun-ve-oyuncu-aksesuarlari/',
-}
+export { LEGACY_CATEGORY_TARGETS }
 
 /**
- * Static 308s for next.config.ts redirects() (or the equivalent permanentRedirect() in the route files).
- * Sources are written without the trailing slash; with trailingSlash:true verify each with curl after the change.
+ * Old URLs and their replacements (permanent). resolveSlug() answers the ones that reach app/[slug]
+ * (/sepet/, /uye-giris/; /tech/ /beauty/ /new/ /gaming/ through LEGACY_CATEGORY_TARGETS). /help/ /policy/
+ * /shipping/ /terms/ have their own route files with the same permanentRedirect(). Next's trailingSlash
+ * redirect runs first, so /sepet takes /sepet → /sepet/ → /odeme/.
  * /help /policy /shipping /terms duplicate the CMS pages (and carry placeholder contacts): canonical is /page/<slug>/.
  * /sepet and /uye-giris are URLs of the old shop platform still requested from search engines.
  */
@@ -55,13 +54,19 @@ export const LEGACY_PATH_REDIRECTS: ReadonlyArray<{ source: string; destination:
     { source: '/policy', destination: '/page/policy/', permanent: true },
     { source: '/shipping', destination: '/page/shipping/', permanent: true },
     { source: '/terms', destination: '/page/terms/', permanent: true },
-    { source: '/tech', destination: '/products/', permanent: true },
-    { source: '/beauty', destination: '/products/', permanent: true },
-    { source: '/new', destination: '/products/', permanent: true },
-    { source: '/gaming', destination: '/kategori/oyun-ve-oyuncu-aksesuarlari/', permanent: true },
+    { source: '/tech', destination: LEGACY_CATEGORY_TARGETS.tech, permanent: true },
+    { source: '/beauty', destination: LEGACY_CATEGORY_TARGETS.beauty, permanent: true },
+    { source: '/new', destination: LEGACY_CATEGORY_TARGETS.new, permanent: true },
+    { source: '/gaming', destination: LEGACY_CATEGORY_TARGETS.gaming, permanent: true },
     { source: '/sepet', destination: '/odeme/', permanent: true },
     { source: '/uye-giris', destination: '/login/', permanent: true },
 ]
+
+/** Lower-case root slug ("sepet") → its LEGACY_PATH_REDIRECTS destination. */
+function legacyPathTarget(slug: string): string | null {
+    const hit = LEGACY_PATH_REDIRECTS.find((r) => r.source.slice(1).toLowerCase() === slug)
+    return hit ? hit.destination : null
+}
 
 async function getDb(db?: D1Like): Promise<D1Like> {
     if (db) return db
@@ -105,6 +110,7 @@ function escapeLike(s: string): string {
  * Resolves the root segment /<slug>/:
  * 1. active product with exactly this slug -> render (redirect null)
  * 2. a category (real slug -> /kategori/<slug>/; legacy tech/gaming/beauty/new -> replacement)
+ *    or an old shop URL from LEGACY_PATH_REDIRECTS (sepet -> /odeme/, uye-giris -> /login/)
  * 3. a CMS page -> /page/<slug>/
  * 4. active product whose slug differs only in case -> permanent redirect
  * 5. fuzzy match of an old/renamed product slug (same rule the client used: up to 3 words of >2 chars,
@@ -133,6 +139,9 @@ export async function resolveSlug(raw: string, dbArg?: D1Like): Promise<SlugReso
         const target = await legacyCategoryTarget(lower, db)
         if (target) return { kind: 'legacy-category', slug: lower, path: target, redirect: 'permanent' }
     }
+
+    const legacy = legacyPathTarget(lower)
+    if (legacy) return { kind: 'legacy-path', slug: lower, path: legacy, redirect: 'permanent' }
 
     const page = await db.prepare('SELECT slug FROM pages WHERE slug = ? OR LOWER(slug) = ? LIMIT 1').bind(slug, lower).first<{ slug: string }>()
     if (page) return { kind: 'page', slug: page.slug, path: cmsPagePath(page.slug), redirect: 'permanent' }
@@ -212,7 +221,10 @@ export async function resolveListingCategory(param: string | string[] | null | u
     const db = await getDb(dbArg)
     const cat = await resolveCategory(value, db)
     if (cat && cat.productCount > 0) return cat.path
-    return legacyCategoryTarget(cat ? cat.slug : value, db)
+    // Path only: app/products appends the visitor's own listing query (a legacy target such as
+    // '/products/?sort=newest' would otherwise end up as '/products/?sort=newest?page=2').
+    const target = await legacyCategoryTarget(cat ? cat.slug : value, db)
+    return target ? target.split('?')[0] : null
 }
 
 export interface CmsPage {
