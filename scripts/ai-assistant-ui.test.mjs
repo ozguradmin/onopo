@@ -525,3 +525,27 @@ test('launcher: 52 px circle on phones, pill on desktop, one entrance that reduc
     assert.match(css, /body:has\(\[data-sonner-toast\]\) \[data-assistant-launcher\]/)
     assert.match(css, /body:has\(\[data-hide-bottom-nav\]\[aria-hidden="true"\]\) \[data-assistant-launcher\]/)
 })
+
+test('panel: the phone sheet is dragged by the handle, the header and the transcript top', () => {
+    const panel = src('components/assistant/AssistantPanel.tsx')
+    const hook = src('components/assistant/useSheetDrag.ts')
+    assert.match(panel, /useSheetDrag\(\{ enabled: isSheet, visible, frameRef, backdropRef, scrollRef, onClose: minimize \}\)/)
+    assert.match(panel, /<DragHandle handlers=\{drag\.handle\} \/>/)
+    assert.match(panel, /\{\.\.\.\(isSheet \? drag\.header : \{\}\)\}/)
+    assert.ok(!panel.includes('SWIPE_CLOSE_PX'))
+    // no transition while dragging, a non-passive touchmove for the transcript, reduced motion skips the animation
+    assert.match(hook, /el\.style\.transition = 'none'/)
+    assert.match(hook, /addEventListener\('touchmove', onMove, \{ passive: false \}\)/)
+    assert.match(hook, /prefers-reduced-motion: reduce/)
+})
+
+test('cards: in-cart products show the stepper, sold-out products have no add button', () => {
+    const cards = src('components/assistant/parts/ProductCards.tsx')
+    assert.match(cards, /Sepette · \{qty\}/)
+    assert.ok(!cards.includes('Stokta yok'))
+    assert.match(cards, /if \(!p\.inStock\) return <SoldOutAction/)
+    assert.match(cards, /<Badge variant="soldout">Tükendi<\/Badge>/)
+    const list = src('components/assistant/parts/MessageList.tsx')
+    assert.match(list, /case 'cart':\s*return <CartCard card=\{card\} \/>/)
+    assert.match(list, /<CartReceiptRow receipt=\{r\} messageId=\{m\.id\} index=\{i\} \/>/)
+})

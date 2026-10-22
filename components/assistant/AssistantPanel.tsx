@@ -6,9 +6,12 @@
  * the conversation stays while the panel is minimised or closed; only the frame is hidden then.
  *
  * Phone sheet: a fixed div (not <dialog>, so the cart drawer at 60 and toasts at 70 still sit above it),
- * scroll lock, focus trap, Escape / backdrop tap / swipe down on the handle minimise, and the phone keyboard
- * is followed through visualViewport (--kb) so it never covers the composer. Desktop: no backdrop, no trap;
- * focus goes to the composer on open, Escape closes and focus returns to the launcher.
+ * scroll lock, focus trap, Escape / backdrop tap / a tap on the handle minimise, and the phone keyboard is
+ * followed through visualViewport (--kb) so it never covers the composer. The whole sheet follows the finger
+ * when it is dragged down by the handle or the header, or pulled down from the top of the transcript, and
+ * closes past 30% of its height or on a fast flick; otherwise it springs back (useSheetDrag.ts, w8).
+ * Desktop: no backdrop, no trap; focus goes to the composer on open, Escape closes and focus returns to the
+ * launcher.
  *
  * Header (kept calm on purpose, the owner found the first version cluttered): title with a small
  * "Yapay zekâ" tag, a WhatsApp button (only when a wa.me base is known), the ⋯ menu (Yeni sohbet, Telefon
@@ -28,13 +31,13 @@ import { useAssistantStore } from './assistant-store'
 import { AssistantIcon, WhatsAppGlyph } from './icons'
 import { AssistantUiContext, useAssistantChat, type AssistantUi } from './useAssistantChat'
 import { useStickToBottom } from './useStickToBottom'
+import { useSheetDrag, type SheetDragHandlers } from './useSheetDrag'
 import { MessageList } from './parts/MessageList'
 import { EmptyState } from './parts/EmptyState'
 import { Composer } from './parts/Composer'
 import { CartStrip } from './parts/CartStrip'
 
 const PHONE_QUERY = '(max-width: 767px)'
-const SWIPE_CLOSE_PX = 80
 
 function subscribePhone(cb: () => void) {
     const mq = window.matchMedia(PHONE_QUERY)
@@ -58,6 +61,7 @@ export default function AssistantPanel() {
     const { freeShippingThreshold } = useShippingSettings()
 
     const frameRef = React.useRef<HTMLDivElement>(null)
+    const backdropRef = React.useRef<HTMLDivElement>(null)
     const composerRef = React.useRef<HTMLTextAreaElement>(null)
     const { scrollRef, contentRef, away, scrollToBottom } = useStickToBottom()
     const [draft, setDraft] = React.useState('')
@@ -98,6 +102,7 @@ export default function AssistantPanel() {
         requestAnimationFrame(() => document.querySelector<HTMLElement>('button[aria-controls="onopo-assistant"]')?.focus())
     }, [])
     const dismiss = isSheet ? minimize : closeDesktop
+    const drag = useSheetDrag({ enabled: isSheet, visible, frameRef, backdropRef, scrollRef, onClose: minimize })
 
     useScrollLock(visible && isSheet)
     useFocusTrap(frameRef, visible && isSheet, composerRef, { restore: true })
@@ -184,10 +189,13 @@ export default function AssistantPanel() {
     // blockedUntil goes back to 0 when a rate-limit wait is over (useAssistantChat)
     const blocked = chat.offline || chat.blockedUntil > 0
     const empty = chat.messages.length === 0
+    // The cart card of the latest reply already shows the cart and its buttons: no strip under it then
+    const last = chat.messages[chat.messages.length - 1]
+    const cartCardShown = last?.role === 'assistant' && last.cards.some(c => c.t === 'cart')
 
     return (
         <AssistantUiContext.Provider value={ui}>
-            {visible && isSheet && <div aria-hidden="true" onClick={minimize} className="fixed inset-0 z-assistant bg-ink/40" />}
+            {visible && isSheet && <div ref={backdropRef} aria-hidden="true" onClick={minimize} className="fixed inset-0 z-assistant bg-ink/40" />}
             <div
                 ref={frameRef}
                 id="onopo-assistant"
@@ -205,10 +213,10 @@ export default function AssistantPanel() {
                     isSheet && !entered && 'translate-y-full motion-reduce:translate-y-0 motion-reduce:opacity-0',
                 )}
             >
-                {isSheet && <DragHandle onClose={minimize} />}
+                {isSheet && <DragHandle handlers={drag.handle} />}
 
-                {/* ---- header ---- */}
-                <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-line/70 pl-4 pr-1.5">
+                {/* ---- header (on phones also a drag handle) ---- */}
+                <div {...(isSheet ? drag.header : {})} className={cn('flex h-14 shrink-0 items-center gap-2.5 border-b border-line/70 pl-4 pr-1.5', isSheet && 'touch-none select-none')}>
                     <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
                         <AssistantIcon className="h-[18px] w-[18px]" />
                     </span>
@@ -289,7 +297,7 @@ export default function AssistantPanel() {
                     )}
                 </div>
 
-                {chat.addedFromChat && <CartStrip />}
+                {chat.addedFromChat && !cartCardShown && <CartStrip />}
                 <Composer
                     value={draft}
                     onChange={setDraft}
@@ -306,32 +314,13 @@ export default function AssistantPanel() {
     )
 }
 
-/** 36 × 4 bar in a 12 px zone: a tap or a swipe down of more than 80 px minimises the sheet. */
-function DragHandle({ onClose }: { onClose: () => void }) {
-    const start = React.useRef<number | null>(null)
-    const [dy, setDy] = React.useState(0)
+/** 36 × 4 bar in a 20 px zone: drag it (useSheetDrag) or tap it to minimise the sheet. */
+function DragHandle({ handlers }: { handlers: SheetDragHandlers }) {
     return (
         <div
             aria-hidden="true"
-            onPointerDown={e => {
-                start.current = e.clientY
-                e.currentTarget.setPointerCapture(e.pointerId)
-            }}
-            onPointerMove={e => {
-                if (start.current != null) setDy(Math.max(0, e.clientY - start.current))
-            }}
-            onPointerUp={e => {
-                const moved = start.current != null ? e.clientY - start.current : 0
-                start.current = null
-                setDy(0)
-                if (moved > SWIPE_CLOSE_PX || Math.abs(moved) < 6) onClose()
-            }}
-            onPointerCancel={() => {
-                start.current = null
-                setDy(0)
-            }}
-            style={dy ? { transform: `translateY(${dy}px)` } : undefined}
-            className="flex h-3 shrink-0 cursor-grab touch-none items-center justify-center pt-1.5"
+            {...handlers}
+            className="flex h-5 shrink-0 cursor-grab touch-none select-none items-center justify-center pt-1.5 active:cursor-grabbing"
         >
             <span className="h-1 w-9 rounded-full bg-line-strong" />
         </div>

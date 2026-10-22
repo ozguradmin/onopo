@@ -1,15 +1,16 @@
 'use client'
 
 /**
- * First screen of a new chat (SPEC §10.5): a greeting without a bubble, up to 4 starter chips that fit the
- * page, the cart and the time of day (starters.ts), a quiet WhatsApp alternative and one muted line that
- * says this is an AI and opens the Aydınlatma Metni (w7: it replaced the notice box and the composer footer).
+ * First screen of a new chat (SPEC §10.5): a greeting without a bubble, up to 4 starter chips (starters.ts: the
+ * fixed free-shipping chip, the week's popular questions, then chips for the page and the time of day), a quiet
+ * WhatsApp alternative and one muted line that says this is an AI and opens the Aydınlatma Metni (w7: it
+ * replaced the notice box and the composer footer).
  */
 import * as React from 'react'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { itemsTotal } from '@/lib/pricing'
-import { useShippingSettings } from '@/components/layout/store-data'
+import { useShippingSettings, useSiteSettings } from '@/components/layout/store-data'
 import { useCartStore } from '@/store/cart-store'
 import type { Suggestion } from '@/lib/assistant/contract'
 import { pageContext } from '../page-context'
@@ -21,6 +22,8 @@ export function EmptyState({ onChip, onNotice }: { onChip: (s: Suggestion) => vo
     const pathname = usePathname() || '/'
     const items = useCartStore(s => s.items)
     const { freeShippingThreshold } = useShippingSettings()
+    // Public setting ai_popular_questions (lib/catalog), read like ai_assistant_enabled; starters() validates it
+    const popular = useSiteSettings().ai_popular_questions
     const chips = React.useMemo(
         () => starters({
             page: pageContext(pathname, typeof window !== 'undefined' ? window.location.search : ''),
@@ -28,8 +31,9 @@ export function EmptyState({ onChip, onNotice }: { onChip: (s: Suggestion) => vo
             cartHasFreeShipping: items.some(i => i.free_shipping),
             freeThreshold: freeShippingThreshold,
             now: new Date(),
+            popular,
         }),
-        [pathname, items, freeShippingThreshold],
+        [pathname, items, freeShippingThreshold, popular],
     )
 
     return (

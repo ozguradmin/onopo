@@ -120,6 +120,12 @@ export interface PublicSiteSettings {
      * error rows that never get a `meta` event. Every wa.me link the chat shows contains it anyway.
      */
     ai_whatsapp_number: string
+    /**
+     * The questions visitors asked the assistant most last week (site_settings.ai_popular_questions, a JSON
+     * string array written by the weekly analysis); the empty chat shows up to 3 of them as chips. Strings only
+     * here; the chat UI (components/assistant/starters.ts) checks each one again before showing it.
+     */
+    ai_popular_questions?: string[]
 }
 
 export interface ShippingSettings {
@@ -361,6 +367,10 @@ function toPublicSettings(rows: Record<string, any>[]): PublicSiteSettings {
         : []
     const top = parseJson<unknown>(kv.topbar_messages, null)
     s.topbar_messages = Array.isArray(top) ? top.map(str).map(t => t.trim()).filter(Boolean) : null
+    const popular = parseJson<unknown>(kv.ai_popular_questions, [])
+    s.ai_popular_questions = Array.isArray(popular)
+        ? popular.filter((q): q is string => typeof q === 'string').map(q => q.trim()).filter(Boolean).slice(0, 3)
+        : []
     return s
 }
 

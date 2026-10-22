@@ -2,7 +2,8 @@
 
 /**
  * The transcript (SPEC §10.6, §10.10): user bubbles on the right, assistant turns full width without a
- * bubble, in a fixed order: steps → text → cards (event order) → WhatsApp card → error row → follow-up chips.
+ * bubble, in a fixed order: steps → text → cards (event order) → cart change receipts → WhatsApp card → error row
+ * → follow-up chips.
  *
  * Why the typewriter: the server sends whole validated sentences, which would otherwise land in jumps. The
  * client reveals what it has with requestAnimationFrame, max(2, ceil(remaining / 8)) characters a frame, so
@@ -21,6 +22,7 @@ import { LinkCards } from './LinkCards'
 import { StoreInfoCard } from './StoreInfoCard'
 import { WhatsAppCard, WhatsAppRow } from './WhatsAppCard'
 import { ErrorRow } from './ErrorRow'
+import { CartCard, CartReceiptRow } from './CartCard'
 import { ChipRow } from './EmptyState'
 
 function prefersReducedMotion(): boolean {
@@ -85,6 +87,8 @@ function Card({ card, stale }: { card: CardEvent; stale?: Record<number, 'price'
             return <LinkCards items={card.items} />
         case 'store_info':
             return <StoreInfoCard rows={card.rows} href={card.href} />
+        case 'cart':
+            return <CartCard card={card} />
         default:
             return null
     }
@@ -139,6 +143,11 @@ function AssistantTurn({ m, isLast, restored, onChip }: { m: UiMessage; isLast: 
             {m.cards.map((c, i) => (
                 <div key={i} className="mt-3">
                     <Card card={c} stale={m.stale} />
+                </div>
+            ))}
+            {m.receipts?.map((r, i) => (
+                <div key={`r${i}`} className="mt-3">
+                    <CartReceiptRow receipt={r} messageId={m.id} index={i} />
                 </div>
             ))}
             {m.whatsapp && (

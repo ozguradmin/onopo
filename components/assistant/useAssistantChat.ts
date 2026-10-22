@@ -22,6 +22,7 @@ import {
     stepLabel,
     type AssistantEvent,
     type CardProduct,
+    type CartOp,
     type ChatRequest,
     type ChipAction,
     type ErrorCode,
@@ -29,7 +30,7 @@ import {
     type UiEventBody,
     type UiEventType,
 } from '@/lib/assistant/contract'
-import { useCartStore } from '@/store/cart-store'
+import { useCartStore, type CartItem } from '@/store/cart-store'
 import { useSiteSettings } from '@/components/layout/store-data'
 import { loadSearchIndex } from '@/components/search/search-index'
 import { assistantVisible, useAssistantStore, type AssistantSource } from './assistant-store'
@@ -39,14 +40,20 @@ import {
     lastUserText,
     localCardMessage,
     localWhatsapp,
+    markUndone,
     mobileWaBase,
     patchStaleCards,
+    settleReceipt,
     settleSteps,
+    shownProducts,
     toHistory,
     userMessage,
+    type SavedCartLine,
     type UiErrorCode,
     type UiMessage,
 } from './chat-reducer'
+import { planCartOps, planUndo } from './cart-ops'
+import { cardCartItem, runCartSteps } from './cart-actions'
 import { clearChat, loadChat, saveChat, type StorageLike } from './persist'
 import { cartContext, pageContext } from './page-context'
 
@@ -120,6 +127,10 @@ export interface AssistantChat {
     insertWhatsapp: (reason: HandoffReason, opts?: { product?: CardProduct | null; summary?: string }) => void
     beacon: (type: UiEventType, extra?: { productId?: number; reason?: HandoffReason; source?: AssistantSource }) => void
     noteAddToCart: (productId: number) => void
+    /** the visitor changed the cart from a chat card (stepper, Kaldır) */
+    noteCartChange: (productId: number) => void
+    /** "Geri al" on a cart change the assistant made (receipt `index` of message `messageId`) */
+    undoCart: (messageId: string, index: number) => void
     /** messages restored from storage at mount (their WhatsApp cards were already beaconed) */
     restoredIds: ReadonlySet<string>
 }
@@ -234,11 +245,33 @@ export function useAssistantChat(): AssistantChat {
         [update, fallbackWaBase],
     )
 
+    /**
+     * A `cart_ops` from the server: change the cart at once (cart-ops.ts rules: only products in the cart, or
+     * shown in this conversation and addable) and keep the earlier lines for "Geri al". Live events only; a
+     * chat restored from storage never changes the cart again.
+     */
+    const applyCartOps = React.useCallback((ops: CartOp[], note: string, batch: AssistantEvent[]) => {
+        const shown = shownProducts(chatRef.current.messages)
+        for (const ev of batch) if (ev.t === 'products' || ev.t === 'compare') for (const p of ev.products) shown.set(p.id, p)
+        const plan = planCartOps<CartItem>(useCartStore.getState().items, ops, pid => {
+            const p = shown.get(pid)
+            return p && p.inStock && !p.hasVariations ? cardCartItem(p) : null
+        })
+        runCartSteps(plan.steps)
+        if (plan.touched.length > 0) {
+            setAddedFromChat(true)
+            setAnnouncement(note || 'Sepetin güncellendi')
+        }
+        return { touched: plan.touched, before: plan.before as SavedCartLine[] }
+    }, [])
+
     const handleEvents = React.useCallback(
         (id: string, events: AssistantEvent[]) => {
+            const cartResults: { touched: number[]; before: SavedCartLine[] }[] = []
             for (const ev of events) {
                 if (ev.t === 'meta' && ev.waBase) commit({ waBase: ev.waBase })
                 else if (ev.t === 'device') useAssistantStore.setState({ device: ev.v.slice(0, 40) })
+                else if (ev.t === 'cart_ops') cartResults.push(applyCartOps(ev.ops, ev.note, events))
                 else if (ev.t === 'step' && ev.state === 'active') {
                     const label = stepLabel(ev.id, 'active', ev.n)
                     const now = Date.now()
@@ -248,9 +281,13 @@ export function useAssistantChat(): AssistantChat {
                     }
                 }
             }
-            update(id, m => events.reduce(applyEvent, m))
+            let k = 0
+            update(id, m => events.reduce((x, ev) => {
+                const next = applyEvent(x, ev)
+                return ev.t === 'cart_ops' && cartResults[k] ? settleReceipt(next, cartResults[k++]) : next
+            }, m))
         },
-        [commit, update],
+        [applyCartOps, commit, update],
     )
 
     const finishTurn = React.useCallback(
@@ -418,6 +455,27 @@ export function useAssistantChat(): AssistantChat {
         [beacon],
     )
 
+    const noteCartChange = React.useCallback(
+        (productId: number) => {
+            setAnnouncement('Sepetin güncellendi')
+            beacon('cart_change', { productId })
+        },
+        [beacon],
+    )
+
+    const undoCart = React.useCallback<AssistantChat['undoCart']>(
+        (messageId, index) => {
+            const r = chatRef.current.messages.find(m => m.id === messageId)?.receipts?.[index]
+            if (!r || r.state !== 'applied') return
+            runCartSteps(planUndo<CartItem>(useCartStore.getState().items, r.before as CartItem[], r.touched))
+            update(messageId, m => markUndone(m, index))
+            setAnnouncement('Sepet eski haline döndü')
+            beacon('cart_undo', r.touched.length === 1 ? { productId: r.touched[0] } : {})
+            scheduleSave()
+        },
+        [beacon, scheduleSave, update],
+    )
+
     // A first message handed over by an entry point (search row, PDP chips): send it once the panel can
     const pending = useAssistantStore(s => s.pendingPrompt)
     React.useEffect(() => {
@@ -441,6 +499,8 @@ export function useAssistantChat(): AssistantChat {
         insertWhatsapp,
         beacon,
         noteAddToCart,
+        noteCartChange,
+        undoCart,
         restoredIds,
     }
 }
