@@ -31,6 +31,10 @@ and carry no query string. The only exception is `?page=N` (N ≥ 2) on listings
 | `/cart/`, `/checkout/` | 404 | | Only linked from the hidden Akakçe block; disallowed in robots.txt |
 | Guides hub | `/rehber/` | `GUIDES_PATH` | Shopping guides ("Alışveriş rehberleri"); see §12 |
 | Guide | `/rehber/<slug>/` | `guidePath(slug)` | Text in code (`lib/guides`); unknown slug 404, other case 308 |
+| `/llms.txt` | (a text file, no canonical) | | Store summary for AI assistants (§13). Not in the sitemap; reserved slug, live redirect target |
+| `/<INDEXNOW_KEY>.txt` | (a text file) | | IndexNow key file, answered by `worker.ts` (§13) |
+| Devices hub | `/cihaz/` | `DEVICES_PATH` | "Cihaza göre": brands and models with counts; see §14 |
+| Device page | `/cihaz/<slug>/` | `devicePath(slug)` | Brand or model with ≥ 3 active products (`lib/devices`); unknown slug 404, other case 308; noindex (200) without an in-stock product, or a model page with < 3 products naming the model |
 | Utility pages | (no canonical, noindex) | `privatePageMetadata` | `/odeme/ /profile/ /orders/ /login/ /register/ /siparis-basarili/ /siparis-hata/ /maintenance/ /admin/*`. `/admin` and `/admin/*` also send `X-Robots-Tag: noindex, nofollow` (`next.config.ts`), because the admin client app has no page metadata |
 
 `LEGACY_CATEGORY_TARGETS` lives in `lib/seo.ts` (client-safe, so the menus can use it) and is re-exported from
@@ -180,12 +184,14 @@ Render with `<JsonLd data={…} />` from `components/seo/JsonLd.tsx`, on the ser
 | Page | JSON-LD |
 |---|---|
 | Root layout (every page) | `organizationJsonLd(site)` (OnlineStore, with the return policy) + `websiteJsonLd(site)` (SearchAction → `/products/?q={search_term_string}`) |
-| Product | `<ProductMachineData product={row} site={site} reviews={{ count, average }} />` + `breadcrumbJsonLd([...])` |
+| Product | `<ProductMachineData product={row} site={site} reviews={{ count, average }} />` + `breadcrumbJsonLd([...])` + `faqPageJsonLd` of the visible "Sık sorulan sorular" (§13; only when it has items) |
 | Category | `breadcrumbJsonLd` + `itemListJsonLd(productsOnThisPage.map(p => ({ path: productPath(p.slug), name: p.name })), { startIndex })` |
 | /products/ (page 1, no filters) | `itemListJsonLd(...)` (optional) |
 | CMS | `breadcrumbJsonLd` |
 | Guide (`/rehber/<slug>/`) | `breadcrumbJsonLd` (Anasayfa › Rehberler › title) + `articleJsonLd` (publisher/author = the store's Organization `@id`, datePublished/dateModified) + `faqPageJsonLd` (only the FAQ shown on the page) + `itemListJsonLd` of the related products shown |
 | Guides hub | `breadcrumbJsonLd` + `itemListJsonLd` of the guides |
+| Device page (`/cihaz/<slug>/`) | `breadcrumbJsonLd` (Anasayfa › Cihazlar › [brand ›] page) + `itemListJsonLd` of the products shown (left out when noindex) |
+| Devices hub | `breadcrumbJsonLd` + `itemListJsonLd` of the indexable device pages |
 
 `productJsonLd` (used by `ProductMachineData`) builds the following, from real data only:
 
@@ -338,6 +344,8 @@ return buildMetadata({ title, description, path: '/products/', query: ls.canonic
   - **every active product, in stock or not**, at `/<slug>/`, lastmod = `updated_at`, else `created_at`
   - CMS pages at `/page/<slug>/`, lastmod = `pages.updated_at`
   - `/rehber/` and every guide at `/rehber/<slug>/`, lastmod = the guide's `dateModified` (`guideSitemapEntries()`)
+  - `/cihaz/` and every device page with an in-stock product, lastmod = newest product change on the page
+    (`deviceSitemapEntries()`)
 - No utility pages and no query strings.
 - Same XML shape as before (`<url><loc><lastmod><changefreq><priority>`), because Akakçe reads it.
 - Image entries are implemented but switched off (`INCLUDE_IMAGES`).
@@ -473,7 +481,7 @@ Contract details:
   no includeSubDomains, no preload: worker.ts `withHsts`, static assets via `public/_headers`); do not also switch
   it on in the Cloudflare SSL/TLS settings with includeSubDomains (printfast.onopostore.com is another service).
 - The regression harness (`onopo-tasarim-yedek/regresyon`, `sitemapAdditionKind`) must allow the new sitemap URLs
-  `/rehber/` and `/rehber/<slug>/`, or it warns about them as unexpected additions.
+  `/rehber/`, `/rehber/<slug>/`, `/cihaz/` and `/cihaz/<slug>/`, or it warns about them as unexpected additions.
 
 ## 11. Google Merchant feed (`/api/feeds/google`, items in `lib/google-feed.ts`)
 
@@ -508,3 +516,72 @@ Contract details:
   fuzzy match to a product).
 - Tests: `node --test scripts/guides.test.mjs` (data, rules against `scripts/fixtures/guide-catalog.json` = the
   active products' public names, sitemap, edge cache, redirects).
+
+## 13. IndexNow, /llms.txt and the product FAQ
+
+**IndexNow** (`lib/indexnow.ts`, admin hooks in `lib/indexnow-server.ts`, https://www.indexnow.org/documentation).
+One POST to `https://api.indexnow.org/indexnow` reaches Bing, Yandex, Seznam, Naver …; ChatGPT search reads Bing.
+
+- Key: `INDEXNOW_KEY` in `wrangler.toml` `[vars]` (public by design). `worker.ts` answers `/<key>.txt` with exactly
+  the key (`text/plain`) before the edge cache and the old-URL resolver; www 301s to the apex like any page. An empty
+  or invalid key switches IndexNow off.
+- Body: `{ host: 'onopostore.com', key, keyLocation: 'https://onopostore.com/<key>.txt', urlList }`. Only canonical
+  `https://onopostore.com/…/` URLs (trailing slash, no query; no `/api`, `/admin`, files), de-duplicated, ≤ 10 000.
+- Admin saves (one POST per save, in `ctx.waitUntil`): product create (page, category listing, `/products/`), product
+  save (page, its listing and the listing it left), product delete (page, listing, `/products/`), bulk import, category
+  rename (its listing) and delete, CMS page save. Variation saves are not sent separately (they belong to the same save).
+- Daily cron (`/api/cron/automation/?job=indexnow`): `app/sitemap.ts` is the list. Sent: URLs never sent, URLs whose
+  `lastmod` is newer than their last submission, and URLs that left the sitemap (their row is then dropped). What was
+  sent is in D1 `indexnow_urls (url, submitted_at)`; admin saves record theirs too, so the cron does not repeat them.
+  Pages added to the sitemap later (guides, device pages) are sent once by themselves; the first run sends the whole
+  sitemap once.
+- Off unless the key is valid, the host is onopostore.com / www and `NODE_ENV` is not development. Never throws; a
+  refused (4xx/5xx) or failed POST is a system-log row (source `indexnow`, de-duplicated per day). 200 and 202 count as
+  accepted. The USD price cron does not touch `updated_at`, so exchange-rate price changes are not sent.
+
+**`/llms.txt`** (https://llmstxt.org; `app/llms.txt/route.ts`, text in `lib/llms-txt.ts`): H1 store name, a blockquote
+summary (product types from the catalogue), the store facts (shipping rule from `shipping_settings`, handling days and
+return window from the CMS shipping page, card payment and max installments, contact from `site_settings`; each left
+out when its data is missing), then link sections: categories with product counts, the guides, "Cihaza göre" (the
+indexable device pages with counts, §14), the 30 most viewed in-stock products with the price checkout charges, the CMS
+pages, and an "Optional" section (all products, sitemap). Edge-cached like the sitemap (cache_version); 500 on a
+catalogue read failure. Allowed by the robots `/` rule; not in the sitemap.
+
+**Product FAQ** (`lib/product-faq.ts`, `components/pdp/ProductFaq.tsx`): a "Sık sorulan sorular" block between the
+details and the reviews, native `<details>` rows (no client JS), 4–6 questions from real data only: compatibility
+(only when the product name itself lists the device model(s); the answer repeats them), stock (live flag, no
+quantity), handling (the page's own delivery line when the product or the store setting has one, so the two
+never disagree; else the CMS days), shipping cost (settings + the product's free-shipping flag / price), returns, payment and
+installments. A question whose data is missing is left out. The FAQPage JSON-LD carries exactly the visible items.
+Tests: `node --test scripts/indexnow.test.mjs scripts/product-faq.test.mjs`.
+## 14. Device pages (`/cihaz/`)
+
+- Pages come from the ACTIVE product names, not from a list in code: `lib/devices/match.ts` (`buildDeviceCatalog`).
+  Brands: iPhone, Samsung (phones), Xiaomi ve Redmi, Infinix, iPad, Samsung Galaxy Tab (Tab and SM-T/SM-P codes),
+  Huawei (MediaPad/MatePad). A brand or model gets a page with at least `MIN_DEVICE_PRODUCTS` (3) products; a smaller
+  model is only listed on its brand page (search link, nofollow), a smaller brand only on the hub.
+- A product names a model when the brand/series word is followed by it; the next word must not make it another model
+  ("iPhone 15" is not "iPhone 15 Pro", "Redmi Note 12" is not "12 Pro" or "12S"); a list names each model ("iPhone 13 /
+  13 Pro"). Screen sizes and numbers with units are never models. A brand: its brand word, or Lightning for iPhone.
+- Connector rules only where the port is certain: iPhone up to 14 (and SE/X/XR/XS) Lightning, iPhone 15+ and Galaxy S8+
+  USB-C. Chargers, cables and car chargers (`lib/product-type.ts`) whose name has that connector as the phone plug and
+  no other phone connector are listed on those model pages, and the intro says why. A charger whose Type-C is its own
+  port ("Girişli", "Çıkışlı", "Başlığı", "Adaptör") is not: it needs a separate cable and fits a Lightning iPhone too.
+  Android brands as a whole get no rule.
+- Page: H1 "<label> aksesuarları", 2–3 sentences from real counts and types (no prices, no promises), breadcrumbs, models
+  (brand pages), products grouped by type (ekran koruyucu, şarj aleti, kablo, araç şarjı, powerbank, diğer; in stock
+  first; compact `ProductCard`), sibling models, related guides (`guideForProduct` tally). Title: label + product types
+  (≤ 52); description: `categoryMetaDescription`.
+- Indexable (`isIndexableDevicePage`; sitemap, llms.txt, IndexNow, hub ItemList): at least one in-stock product, and on a
+  model page at least 3 products whose NAME names the model. Otherwise noindex,follow (200), out of the sitemap. A model
+  page filled by the connector rule is nearly the same list on every model with that port (iPhone 15 … 16 Pro Max share
+  ~18 USB-C products and differ by 2 protectors): useful from the product page, near-duplicates for a search engine.
+  Today (2026-10-22) no model reaches 3 named products, so only the 5 brand pages and the hub are indexed.
+- Product pages link one device page ("Bu cihaz için diğer ürünler"): the single model page the name names, else the
+  single brand page; connector rules never pick a page. `/kategoriler/` has a "Cihaza göre" block (brand pages).
+- Edge cache: `/cihaz/` and `/cihaz/<slug>/` are on the allowlist (admin writes bump `cache_version` as usual). Old-URL
+  resolver: both are live targets (same rules on the index's product names); `/cihaz/<slug>.html` → the page; any other
+  path under `/cihaz/` stays a 404 (no fuzzy match to a product). `cihaz` is a reserved slug everywhere.
+- URL list for other consumers: `devicePagePaths(products)` (pure) or `getDevicePageUrls()` (server, absolute).
+  `/llms.txt` lists the same pages ("Cihaza göre", `deviceLlmsLinks`); IndexNow's daily sweep gets them from the
+  sitemap. Tests: `node --test scripts/devices.test.mjs` (rules on `scripts/fixtures/guide-catalog.json`).

@@ -71,10 +71,14 @@ const PAGE_ALLOW = [
     /^\/page\/[a-z0-9-]+\/?$/,
     // Shopping guides: the hub and the articles (text in code, related products from D1)
     /^\/rehber\/([a-z0-9-]+\/?)?$/,
+    // Device pages: the hub and the brand/model pages (product lists from D1, lib/devices)
+    /^\/cihaz\/([a-z0-9-]+\/?)?$/,
     /^\/(help|policy|shipping|terms)\/?$/,
     /^\/product\/\d+\/?$/,
     /^\/sitemap\.xml$/,
     /^\/robots\.txt$/,
+    // The store summary for AI assistants (app/llms.txt/route.ts), built from live data like the sitemap
+    /^\/llms\.txt$/,
 ]
 
 // Product pages /<slug>/ (slugs are lowercase a-z, 0-9 and '-')
@@ -82,7 +86,7 @@ const PRODUCT_SLUG = /^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/
 
 // Single-segment pages that are not product pages (stored without the product-page marker check). kategoriler:
 // the /kategoriler/ hub was never stored before, because the check wanted id="product-info" in it
-const NON_PRODUCT_PAGES = new Set(['products', 'help', 'policy', 'shipping', 'terms', 'rehber', 'kategoriler'])
+const NON_PRODUCT_PAGES = new Set(['products', 'help', 'policy', 'shipping', 'terms', 'rehber', 'kategoriler', 'cihaz'])
 
 const API_ALLOW = [
     /^\/api\/categories\/?$/,

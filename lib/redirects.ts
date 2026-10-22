@@ -27,6 +27,7 @@
  * are at the end of the file.
  */
 import { BOT_USER_AGENT } from './bot-user-agent'
+import { buildDeviceCatalog, DEVICES_PATH, devicePath } from './devices/match'
 import { isTrackingParam } from './edge-cache'
 import { GUIDES_PATH, guidePath, isGuideSlug } from './guides/slugs'
 import { imageKey, R2_PUBLIC_HOST } from './images'
@@ -58,7 +59,7 @@ export const SUGGEST_MIN_SCORE = 0.4
 /** Pages that exist without a database row. /help/ … redirect to /page/<slug>/ themselves (lib/seo-routing.ts). */
 const STATIC_LIVE = new Set([
     '/', '/products/', '/categories/', '/kategoriler/', '/odeme/', '/login/', '/register/', '/profile/', '/orders/',
-    '/help/', '/policy/', '/shipping/', '/terms/', GUIDES_PATH,
+    '/help/', '/policy/', '/shipping/', '/terms/', GUIDES_PATH, DEVICES_PATH, '/llms.txt',
 ])
 
 const PRODUCT_PREFIXES = new Set(['urun', 'urunler', 'product', 'products', 'p', 'item', 'items', 'shop', 'magaza'])
@@ -483,6 +484,18 @@ export interface ResolveDeps {
     assetExists?: (path: string) => Promise<boolean>
 }
 
+const deviceSlugs = new WeakMap<RedirectIndex, ReadonlySet<string>>()
+
+/** Whether /cihaz/<slug>/ is a live device page (lib/devices rules on the index's active product names). */
+function isDevicePageSlug(slug: string, index: RedirectIndex): boolean {
+    let slugs = deviceSlugs.get(index)
+    if (!slugs) {
+        slugs = new Set(buildDeviceCatalog(index.products.map(p => ({ id: p.id, name: p.name }))).pages.map(p => p.slug))
+        deviceSlugs.set(index, slugs)
+    }
+    return slugs.has(slug)
+}
+
 /** Whether a (safe) target is a page that answers today, judged from the index. */
 export function isLiveTarget(target: string, index: RedirectIndex): boolean {
     if (target.startsWith(`${R2_PUBLIC_HOST}/`)) return true
@@ -497,6 +510,9 @@ export function isLiveTarget(target: string, index: RedirectIndex): boolean {
     // Shopping guides: the texts are in code (lib/guides), so the slug list is the index
     m = /^\/rehber\/([^/]+)\/$/.exec(p)
     if (m) return isGuideSlug(m[1])
+    // Device pages: the same rules as the pages, on the active product names of the index
+    m = /^\/cihaz\/([^/]+)\/$/.exec(p)
+    if (m) return isDevicePageSlug(m[1], index)
     m = /^\/product\/(\d{1,10})\/$/.exec(p)
     if (m) return index.productsById.has(Number(m[1]))
     m = /^\/([^/]+)\/$/.exec(p)
@@ -695,6 +711,12 @@ async function resolveRules(parsed: ParsedPath, deps: ResolveDeps): Promise<Reso
     // other path under /rehber/ stays a 404 (logged for the admin), never a guess at a product
     if (first === 'rehber') {
         return segments.length === 2 && isGuideSlug(last) ? { target: guidePath(last), via: 'pattern', rule: 'guide' } : null
+    }
+
+    // /cihaz/…: our own device pages, the same way. A model too small for a page (or gone) stays a 404: its
+    // name would fuzzy-match one product, which is not what the URL promised
+    if (first === 'cihaz') {
+        return segments.length === 2 && isDevicePageSlug(last, index) ? { target: devicePath(last), via: 'pattern', rule: 'device' } : null
     }
 
     // /kategori/<x>/ (old or nested slug), /category/<x>/, /collections/<x>/

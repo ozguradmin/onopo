@@ -13,9 +13,11 @@
 //     in not_found_log for Admin › Yönlendirmeler,
 //   - Strict-Transport-Security (lib/edge-cache.ts hstsHeader) on every HTTPS response returned here, the
 //     redirects and edge-cache HITs included (one place: withHsts in fetch below),
-//   - the cron (scheduled) handler (daily price update, review-request e-mails, image variants and assistant
-//     product facts; on Mondays also the assistant's popular questions). Failures are written to the system
-//     log (Admin › Sistem kayıtları).
+//   - the IndexNow key file /<INDEXNOW_KEY>.txt (lib/indexnow.ts), answered before the edge cache and the
+//     old-URL lookup,
+//   - the cron (scheduled) handler (daily price update, review-request e-mails, IndexNow, image variants and
+//     assistant product facts; on Mondays also the assistant's popular questions). Failures are written to the
+//     system log (Admin › Sistem kayıtları).
 // See https://opennext.js.org/cloudflare/howtos/custom-worker
 //
 // .open-next/worker.js already imports the 8 MB Next server handler lazily, so a cache HIT answered
@@ -62,6 +64,7 @@ import {
     toLocation,
 } from './lib/redirects'
 import { SESSION_HINT_COOKIE } from './lib/session-hint'
+import { indexNowKeyFileResponse } from './lib/indexnow'
 import { logSystemEvent, type SystemLogDb } from './lib/system-log'
 
 type D1Stmt = {
@@ -74,6 +77,7 @@ type D1Like = { prepare(sql: string): D1Stmt }
 type Env = {
     CRON_SECRET?: string
     NEXT_PUBLIC_BASE_URL?: string
+    INDEXNOW_KEY?: string
     DB?: D1Like
     ASSETS?: { fetch(request: Request): Promise<Response> }
     BUCKET?: { head(key: string): Promise<unknown | null> }
@@ -391,6 +395,10 @@ async function handleFetch(request: Request, env: Env, ctx: Ctx): Promise<Respon
         })
     }
 
+    // IndexNow key file: a static answer from the key in wrangler.toml (the engines fetch it on the apex)
+    const keyFile = indexNowKeyFileResponse(url.pathname, method, env.INDEXNOW_KEY)
+    if (keyFile) return keyFile
+
     // Writes (checkout, PayTR/BirFatura callbacks, admin saves) are passed through untouched
     if (method !== 'GET' && method !== 'HEAD') {
         const response: Response = await handler.fetch(request, env, ctx)
@@ -507,10 +515,11 @@ const worker = {
         }
 
         // Automatic upkeep (app/api/cron/automation): review-request e-mails (short, so they never run out of
-        // time), missing image variants, then the assistant's product facts. Each job gets the time left (the
+        // time), IndexNow (one POST with the sitemap URLs that changed since the last run), missing image
+        // variants, then the assistant's product facts. Each job gets the time left (the
         // route caps it); a job's own failures are logged by the job.
         const CRON_WALL_MS = 14 * 60_000
-        const automation = async (job: 'reviews' | 'images' | 'facts', maxMs: number) => {
+        const automation = async (job: 'reviews' | 'indexnow' | 'images' | 'facts', maxMs: number) => {
             const left = CRON_WALL_MS - (Date.now() - startedAt) - 30_000
             const ms = Math.min(maxMs, left)
             if (ms < 15_000) {
@@ -533,6 +542,7 @@ const worker = {
             }
         }
         await automation('reviews', 2 * 60_000)
+        await automation('indexnow', 60_000)
         await automation('images', 4 * 60_000)
         await automation('facts', 9 * 60_000)
 
