@@ -1,19 +1,23 @@
 /**
  * GET /api/admin/assistant/: usage of the Onopo Asistan for the last 7 days (admin only, SPEC 8.3).
- * Everything comes from the content-free tables: ai_usage_daily (global row) and ai_chat_events.
- * There is no chat text to show, because none is stored.
+ * The day table comes from the content-free tables (ai_usage_daily global row, ai_chat_events; a day's
+ * `conversations` is its distinct conversation hashes). `conversations` holds the counts of stored
+ * transcripts (today, 7 and 30 days, all kept); the transcripts themselves are under ./conversations/.
  */
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { getDB } from '@/lib/db'
 import { ensureTables, type D1Lite } from '@/lib/assistant/limits'
 import { istanbulDay } from '@/lib/assistant/facts'
+import { conversationCounts } from '@/lib/assistant/transcripts'
 
 export const dynamic = 'force-dynamic'
 
 interface AssistantUsageDay {
     day: string
     turns: number
+    /** distinct conversations with a turn that day */
+    conversations: number
     modelCalls: number
     costUsd: number
     modes: Record<string, number>
@@ -34,22 +38,23 @@ function median(values: number[]): number | null {
 export async function GET() {
     const denied = await requireAdmin()
     if (denied) return denied
-    const headers = { 'Cache-Control': 'no-store' }
+    const headers = { 'Cache-Control': 'private, no-store' }
     try {
         const db = await getDB()
         await ensureTables(db as unknown as D1Lite)
         const now = new Date()
         const days = Array.from({ length: 7 }, (_, i) => istanbulDay(now, 6 - i))
         const from = days[0]
-        const [usage, turnStats, uiStats, firstText] = await db.batch([
+        const [usage, turnStats, uiStats, firstText, convStats] = await db.batch([
             db.prepare("SELECT day, turns, model_calls, cost_micro_usd FROM ai_usage_daily WHERE bucket = 'global' AND day >= ?").bind(from),
             db.prepare(`SELECT day, mode, outcome, COUNT(*) AS n, SUM(CASE WHEN handoff IS NOT NULL THEN 1 ELSE 0 END) AS handoffs
 FROM ai_chat_events WHERE kind = 'turn' AND day >= ? GROUP BY day, mode, outcome`).bind(from),
             db.prepare("SELECT day, outcome, COUNT(*) AS n FROM ai_chat_events WHERE kind = 'ui' AND day >= ? AND outcome IN ('add_to_cart', 'wa_click') GROUP BY day, outcome").bind(from),
             db.prepare("SELECT day, first_text_ms FROM ai_chat_events WHERE kind = 'turn' AND day >= ? AND first_text_ms IS NOT NULL ORDER BY id DESC LIMIT 2000").bind(from),
+            db.prepare("SELECT day, COUNT(DISTINCT conv_hash) AS n FROM ai_chat_events WHERE kind = 'turn' AND day >= ? GROUP BY day").bind(from),
         ])
         const byDay = new Map<string, AssistantUsageDay>(days.map(day => [day, {
-            day, turns: 0, modelCalls: 0, costUsd: 0, modes: {},
+            day, turns: 0, conversations: 0, modelCalls: 0, costUsd: 0, modes: {},
             outcomes: { fallback: 0, busy: 0, error: 0, timeout: 0, blocked: 0 },
             handoffs: 0, addToCart: 0, waClicks: 0, firstTextP50: null,
         }]))
@@ -86,7 +91,13 @@ FROM ai_chat_events WHERE kind = 'turn' AND day >= ? GROUP BY day, mode, outcome
             const d = byDay.get(day)
             if (d) d.firstTextP50 = median(list)
         }
-        return NextResponse.json({ days: [...byDay.values()] }, { headers })
+        for (const r of (convStats.results ?? []) as { day: string; n: number }[]) {
+            const d = byDay.get(r.day)
+            if (d) d.conversations = Number(r.n) || 0
+        }
+        // Transcript counts are a bonus: a failure there must not hide the usage table
+        const conversations = await conversationCounts(db as unknown as D1Lite, now).catch(() => null)
+        return NextResponse.json({ days: [...byDay.values()], conversations }, { headers })
     } catch (err) {
         console.error('ai_admin_usage_failed', err instanceof Error ? err.name : 'error')
         return NextResponse.json({ error: 'Kullanım verisi alınamadı.' }, { status: 500, headers })

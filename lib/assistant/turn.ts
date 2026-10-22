@@ -3,8 +3,9 @@
  *
  * Why it is pure: the route handler only does guards and the SSE plumbing; this module holds all the
  * decisions (router, canned answers, model calls with fallback, tools, validator, server-added cards,
- * suggestions), and `node --test` runs it against a mocked `ai.run`. It never logs or stores any text:
- * it returns a content-free TurnLog for the usage tables.
+ * suggestions), and `node --test` runs it against a mocked `ai.run`. It never logs or stores any text
+ * itself: it returns a content-free TurnLog for the usage tables, and the route stores the masked
+ * transcript from the emitted events (transcripts.ts).
  *
  * Order of one turn (SPEC section 2): meta + "Sorunu anlıyorum…" → router (≤ 700 ms, in parallel with the
  * knowledge memo) → canned answer, or candidates + DeepSeek stream (≤ 3 calls, validated sentence by
@@ -303,10 +304,15 @@ type OpenResult =
 // The turn
 // ---------------------------------------------------------------------------------------------
 
+/** The visitor's message as the model sees it (and as the transcript stores it): sanitized, masked, ≤ 800. */
+export function maskInput(input: string): string {
+    return maskPII(sanitize(input)).slice(0, 800)
+}
+
 export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: AssistantEvent) => void, signal?: AbortSignal): Promise<TurnLog> {
     const started = Date.now()
     const timeouts = { ...DEFAULT_TIMEOUTS, ...deps.timeouts }
-    const masked = maskPII(sanitize(req.input)).slice(0, 800)
+    const masked = maskInput(req.input)
     const flags = new Set<string>()
     /** The validator's flags (price_mismatch, validator_drop, …), merged into the log at the end. */
     let guardFlags: readonly string[] = []

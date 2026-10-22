@@ -4,14 +4,17 @@
  *
  * This file is only the adapter: guards that answer with a JSON error before any stream (origin, bots,
  * body, kill switch, maintenance, rate limits, the daily per-IP cap), then runTurn (lib/assistant/turn.ts)
- * writes events into a TransformStream while ctx.waitUntil keeps the Worker alive. No chat text is logged
- * or stored anywhere; only the content-free TurnLog goes to D1.
+ * writes events into a TransformStream while ctx.waitUntil keeps the Worker alive. No chat text is logged.
+ * After the stream is closed, the content-free TurnLog goes to the usage tables and the masked transcript
+ * (masked user text, validated answer, cards; no IP, no WhatsApp number) to ai_conversations/ai_messages
+ * (owner decision, lib/assistant/transcripts.ts), then a few product facts lines may be refreshed.
  */
 import { NextResponse } from 'next/server'
 import { isBotUserAgent } from '@/lib/bot-user-agent'
 import { ERROR_STATUS, encodeEvent, type AssistantEvent, type ErrorCode } from '@/lib/assistant/contract'
 import { parseChatRequest } from '@/lib/assistant/request'
-import { runTurn } from '@/lib/assistant/turn'
+import { maskInput, runTurn, sha16, type TurnLog } from '@/lib/assistant/turn'
+import { createTurnCapture, pageLabel, recordTranscript } from '@/lib/assistant/transcripts'
 import { clientIp, getAssistantSettings, isAssistantEnabled, isMaintenance, makeTurnDeps, refreshFactsInBackground, type AssistantSettings } from '@/lib/assistant/data'
 import { countIpTurn, IP_DAILY_TURNS, ipKey, recordTurn, type D1Lite } from '@/lib/assistant/limits'
 import { secondsUntilIstanbulMidnight } from '@/lib/assistant/facts'
@@ -104,12 +107,15 @@ export async function POST(req: Request) {
         writer.write(enc.encode(encodeEvent(ev))).catch(() => turnAbort.abort())
     }
     ctx.waitUntil((async () => {
+        const started = Date.now()
+        const capture = createTurnCapture()
+        let log: TurnLog | null = null
         try {
-            const log = await runTurn(parsed.req, deps, emit, turnAbort.signal)
+            log = await runTurn(parsed.req, deps, ev => {
+                capture.onEvent(ev)
+                emit(ev)
+            }, turnAbort.signal)
             console.log(`ai_turn outcome=${log.outcome} ms=${log.totalMs} calls=${log.modelCalls}`)
-            await recordTurn(db as unknown as D1Lite, log)
-            // A few product facts lines whose description changed (throttled per isolate, never throws)
-            await refreshFactsInBackground(env, settings)
         } catch (err) {
             console.error('ai_turn_failed', err instanceof Error ? err.name : 'error')
             emit({ t: 'error', code: 'upstream' })
@@ -117,6 +123,22 @@ export async function POST(req: Request) {
         } finally {
             await writer.close().catch(() => {})
         }
+        // The stream is closed: the visitor never waits for these writes (each one never throws)
+        if (log) await recordTurn(db as unknown as D1Lite, log)
+        const r = parsed.req
+        await recordTranscript(db as unknown as D1Lite, {
+            convId: log?.convHash ?? (await sha16(r.conversationId)),
+            turn: r.context.turn,
+            userText: maskInput(r.input),
+            capture: capture.result(),
+            outcome: log?.outcome ?? 'error',
+            model: log?.model ?? null,
+            totalMs: log?.totalMs ?? Date.now() - started,
+            page: pageLabel(r.context.page),
+            device: r.context.device,
+        })
+        // A few product facts lines whose description changed (throttled per isolate)
+        await refreshFactsInBackground(env, settings)
     })())
     return new Response(readable, {
         headers: {

@@ -38,6 +38,7 @@ const canned = await import('../lib/assistant/canned.ts')
 const suggestions = await import('../lib/assistant/suggestions.ts')
 const limits = await import('../lib/assistant/limits.ts')
 const pf = await import('../lib/assistant/product-facts.ts')
+const transcripts = await import('../lib/assistant/transcripts.ts')
 const { foldTr: foldTrTest } = await import('../lib/search.ts')
 
 // ---------------------------------------------------------------------------------------------
@@ -1341,4 +1342,192 @@ test('product facts: generation with a mocked model, cleaned and stored by hash'
     const upsert = sql.find(([q]) => q.startsWith('INSERT INTO ai_product_facts'))
     assert.deepEqual(upsert[1], [7, 'aaaaaaaaaaaaaaaa', 'Kutu: yalnızca adaptör; Güç: 20W; bilgi için', CHAT, '2026-10-22T10:00:00.000Z'])
     pf.resetFactsMemo()
+})
+
+// ---------------------------------------------------------------------------------------------
+// Transcripts (ai_conversations / ai_messages)
+// ---------------------------------------------------------------------------------------------
+
+/** Fake D1 that records every statement; `answer(sql, args, kind)` may return rows. */
+function recordingDb(answer = () => undefined) {
+    const sql = []
+    const stmt = q => {
+        const s = {
+            q,
+            args: [],
+            bind(...v) { s.args = v; return s },
+            async run() { sql.push([q, s.args]); return answer(q, s.args, 'run') ?? {} },
+            async first() { sql.push([q, s.args]); return answer(q, s.args, 'first') ?? null },
+            async all() { sql.push([q, s.args]); return { results: answer(q, s.args, 'all') ?? [] } },
+        }
+        return s
+    }
+    return {
+        sql,
+        prepare: stmt,
+        async batch(list) { for (const s of list) await s.run(); return [] },
+    }
+}
+
+test('transcripts: the capture keeps text and cards, drops steps and the WhatsApp number', () => {
+    const cap = transcripts.createTurnCapture()
+    const p = tools.buildWhatsappCard(K, { pageProduct: null, maskedInput: 'x' }, { reason: 'return', summary: 'iade', productIds: [], variant: 'full' })
+    const events = [
+        { t: 'meta', turnId: 't', mode: 'llm', waBase: 'https://wa.me/905000000000' },
+        { t: 'step', id: 'search', state: 'active' },
+        { t: 'text', v: 'Şunlar ' },
+        { t: 'text', v: 'uygun.' },
+        { t: 'device', v: 'iPhone 15' },
+        { t: 'products', layout: 'carousel', products: [cb.toCardProduct(row(401)), cb.toCardProduct(row(413))], moreHref: null, total: 2 },
+        p,
+        { t: 'suggestions', chips: [{ label: 'a' }] },
+        { t: 'error', code: 'timeout' },
+        { t: 'done', finish: 'cards', productIds: [401, 413], wa: true },
+    ]
+    events.forEach(cap.onEvent)
+    const r = cap.result()
+    assert.equal(r.text, 'Şunlar uygun.')
+    assert.deepEqual(r.events.map(e => e.t), ['products', 'whatsapp', 'suggestions'])
+    assert.equal(r.device, 'iPhone 15')
+    assert.deepEqual(r.productIds, [401, 413])
+    assert.equal(r.waFull, true)
+    assert.equal(r.events[1].waBase, '')
+    assert.ok(!JSON.stringify(r).includes('905000000000'))
+})
+
+test('transcripts: a turn is stored masked, with outcome buckets, and old rows are pruned', async () => {
+    transcripts.resetTranscriptMemo()
+    const db = recordingDb()
+    const cap = transcripts.createTurnCapture()
+    cap.onEvent({ t: 'text', v: 'Tamam.' })
+    cap.onEvent({ t: 'whatsapp', variant: 'compact', reason: 'other', message: 'Merhaba', waBase: 'https://wa.me/905000000000', productIds: [] })
+    const now = new Date('2026-10-22T11:00:00Z')
+    const userText = turn.maskInput('Numaram 0500 123 45 67, kartım 4111 1111 1111 1111')
+    assert.equal(userText, 'Numaram [telefon], kartım [kart]')
+    await transcripts.recordTranscript(db, {
+        convId: 'abcdef0123456789', turn: 2, userText, capture: cap.result(), outcome: 'timeout', model: CHAT, totalMs: 1234.4,
+        page: transcripts.pageLabel({ type: 'product', slug: 'onopo-67w' }), device: 'iPhone 15',
+    }, now, () => 0)
+    assert.ok(db.sql.some(([q]) => q.startsWith('CREATE TABLE IF NOT EXISTS ai_conversations')))
+    assert.ok(db.sql.some(([q]) => q.startsWith('CREATE TABLE IF NOT EXISTS ai_messages')))
+    const conv = db.sql.find(([q]) => q.startsWith('INSERT INTO ai_conversations'))
+    assert.deepEqual(conv[1], ['abcdef0123456789', '2026-10-22', now.toISOString(), now.toISOString(), userText, 'iPhone 15', 'ürün: /onopo-67w/', 0, null, 0, 1, 0])
+    const msgs = db.sql.filter(([q]) => q.startsWith('INSERT INTO ai_messages'))
+    assert.equal(msgs.length, 2)
+    assert.deepEqual(msgs[0][1].slice(0, 4), ['abcdef0123456789', 2, 'user', 'Numaram [telefon], kartım [kart]'])
+    assert.deepEqual(msgs[1][1].slice(0, 4), ['abcdef0123456789', 2, 'assistant', 'Tamam.'])
+    assert.equal(msgs[1][1][5], 'timeout')
+    assert.equal(msgs[1][1][7], 1234)
+    const all = JSON.stringify(db.sql)
+    assert.ok(!all.includes('0500 123') && !all.includes('4111') && !all.includes('905000000000'))
+    // random() < 1/50 → old rows go (365 days)
+    const del = db.sql.filter(([q]) => q.startsWith('DELETE FROM ai_'))
+    assert.equal(del.length, 2)
+    assert.equal(del[0][1][0], new Date(now.getTime() - 365 * 86_400_000).toISOString())
+    assert.equal(transcripts.outcomeBucket('busy'), 'busy')
+    assert.equal(transcripts.outcomeBucket('canned'), 'ok')
+    assert.equal(transcripts.outcomeBucket('aborted'), 'ok')
+    // A D1 failure never reaches the caller
+    await transcripts.recordTranscript({ prepare() { throw new Error('D1 down') } }, { convId: 'x', turn: 1, userText: '', capture: cap.result(), outcome: 'ok', model: null, totalMs: 0, page: null, device: null })
+    transcripts.resetTranscriptMemo()
+})
+
+test('transcripts: summaries, list query (search escaped), detail and delete', async () => {
+    transcripts.resetTranscriptMemo()
+    const base = { id: 'abcdef0123456789', started_at: '2026-10-22T08:00:00.000Z', last_at: '2026-10-22T08:05:00.000Z', turns: 3, first_message: 'merhaba', device: null, page: 'anasayfa', wa_shown: 1, product_ids: '401,413,401', n_ok: 2, n_error: 0, n_busy: 0 }
+    assert.deepEqual(transcripts.toSummary(base), {
+        id: 'abcdef0123456789', startedAt: '2026-10-22T08:00:00.000Z', lastAt: '2026-10-22T08:05:00.000Z', turns: 3, firstMessage: 'merhaba',
+        device: null, page: 'anasayfa', waShown: true, productIds: [401, 413], outcome: 'ok',
+    })
+    assert.equal(transcripts.toSummary({ ...base, n_ok: 0, n_error: 2 }).outcome, 'error')
+    assert.equal(transcripts.toSummary({ ...base, n_ok: 0, n_busy: 1 }).outcome, 'busy')
+    assert.equal(transcripts.toSummary({ ...base, n_error: 1 }).outcome, 'mixed')
+
+    const now = new Date('2026-10-22T11:00:00Z')
+    const p = transcripts.parseListParams(new URLSearchParams('from=2026-10-30&to=2026-10-01&q=  50%_ indirim  &page=2'), now)
+    assert.deepEqual(p, { from: '2026-10-01', to: '2026-10-30', q: '50%_ indirim', page: 2 })
+    assert.deepEqual(transcripts.parseListParams(new URLSearchParams('from=bad&page=-3'), now), { from: transcripts.parseListParams(new URLSearchParams(), now).from, to: '2026-10-22', q: '', page: 1 })
+    const w = transcripts.whereFor(p)
+    assert.deepEqual(w.args, ['2026-10-01', '2026-10-30', '%50\\%\\_ indirim%'])
+    assert.match(w.where, /LIKE \? ESCAPE '\\'/)
+
+    const db = recordingDb((q, args, kind) => {
+        if (q.startsWith('SELECT COUNT(*) AS n FROM ai_conversations')) return { n: 31 }
+        if (q.includes('FROM ai_conversations c WHERE c.day') && kind === 'all') return [base]
+        if (q.includes('FROM ai_conversations c WHERE c.id = ?')) return args[0] === base.id ? base : null
+        if (q.startsWith('SELECT role, text, events, created_at FROM ai_messages')) return [
+            { role: 'user', text: 'iPhone 15 için şarj', events: null, created_at: '2026-10-22T08:00:00.000Z' },
+            { role: 'assistant', text: 'Şunlar uygun.', events: JSON.stringify([{ t: 'products', layout: 'single', products: [cb.toCardProduct(row(401))], moreHref: null, total: 1 }, { t: 'step', id: 'x' }]), created_at: '2026-10-22T08:00:02.000Z' },
+            { role: 'assistant', text: 'Bozuk', events: '{not json', created_at: '2026-10-22T08:01:00.000Z' },
+        ]
+    })
+    const list = await transcripts.listConversations(db, p)
+    assert.deepEqual({ ...list, rows: list.rows.length }, { rows: 1, total: 31, page: 2, pageSize: 30 })
+    const select = db.sql.find(([q]) => q.includes('ORDER BY c.last_at DESC LIMIT ? OFFSET ?'))
+    assert.deepEqual(select[1].slice(-2), [30, 30])
+
+    const detail = await transcripts.getConversation(db, base.id)
+    assert.equal(detail.summary.id, base.id)
+    assert.deepEqual(detail.messages.map(m => [m.role, m.events.map(e => e.t)]), [['user', []], ['assistant', ['products']], ['assistant', []]])
+    assert.equal(await transcripts.getConversation(db, '0000000000000000'), null)
+    assert.equal(await transcripts.getConversation(db, "x' OR 1=1 --"), null)
+
+    assert.equal(await transcripts.deleteConversation(db, 'not-an-id'), false)
+    assert.equal(await transcripts.deleteConversation(db, base.id), true)
+    const dels = db.sql.filter(([q]) => q.startsWith('DELETE FROM'))
+    assert.deepEqual(dels.map(([q, a]) => [q.split(' WHERE')[0], a]), [['DELETE FROM ai_messages', [base.id]], ['DELETE FROM ai_conversations', [base.id]]])
+    transcripts.resetTranscriptMemo()
+})
+
+test('transcripts: counts for the admin page', async () => {
+    transcripts.resetTranscriptMemo()
+    const db = recordingDb((q) => {
+        if (q.includes('FROM ai_conversations')) return { today: 2, last7: 9, last30: 20, total: 44 }
+        if (q.includes('FROM ai_messages')) return { n: 57 }
+    })
+    const c = await transcripts.conversationCounts(db, new Date('2026-10-22T11:00:00Z'))
+    assert.deepEqual(c, { today: 2, last7: 9, last30: 20, total: 44, messages30: 57 })
+    const q = db.sql.find(([s]) => s.includes('FROM ai_conversations'))
+    assert.deepEqual(q[1], ['2026-10-22', '2026-10-16', '2026-09-23'])
+    transcripts.resetTranscriptMemo()
+})
+
+test('transcripts: CSV export for Turkish Excel (BOM, ";", quoting, no formulas) and JSON export', () => {
+    const wa = { t: 'whatsapp', variant: 'full', reason: 'return', message: 'm', waBase: '', productIds: [] }
+    const rows = [
+        { conv_id: 'abcdef0123456789', created_at: '2026-10-22T08:00:00.000Z', turn: 1, role: 'user', text: '=HYPERLINK("x") çğış; "tırnak"', events: null, device: 'iPhone 15', page: 'anasayfa' },
+        { conv_id: 'abcdef0123456789', created_at: '2026-10-22T08:00:02.000Z', turn: 1, role: 'assistant', text: 'Şunlar\nuygun.', events: JSON.stringify([
+            { t: 'products', layout: 'carousel', products: [cb.toCardProduct(row(401)), cb.toCardProduct(row(413))], moreHref: null, total: 2 },
+            { t: 'compare', products: [cb.toCardProduct(row(401))], rows: [] },
+            wa,
+        ]), device: 'iPhone 15', page: 'anasayfa' },
+        { conv_id: '0123456789abcdef', created_at: '2026-10-23T21:30:00.000Z', turn: 1, role: 'user', text: 'selam', events: null, device: null, page: null },
+    ]
+    const csv = transcripts.toCsv(rows)
+    assert.ok(csv.startsWith('\uFEFFSohbet;Zaman;Tur;Kim;Mesaj;Gösterilen ürünler;WhatsApp\r\n'))
+    const lines = csv.slice(1).trimEnd().split('\r\n')
+    assert.equal(lines.length, 4)
+    assert.equal(lines[1], `abcdef0123456789;2026-10-22 11:00;1;Müşteri;"'=HYPERLINK(""x"") çğış; ""tırnak""";;`)
+    assert.equal(lines[2], `abcdef0123456789;2026-10-22 11:00;1;Asistan;Şunlar uygun.;401 ${cb.toCardProduct(row(401)).name} | 413 ${cb.toCardProduct(row(413)).name};İade / değişim (kart)`)
+    assert.ok(lines[3].startsWith('0123456789abcdef;2026-10-24 00:30;1;Müşteri;selam'))
+    assert.equal(transcripts.csvCell('-5'), "'-5")
+    assert.equal(transcripts.csvCell(null), '')
+
+    const json = transcripts.toJsonExport(rows)
+    assert.deepEqual(json.map(c => [c.id, c.messages.length, c.device]), [['abcdef0123456789', 2, 'iPhone 15'], ['0123456789abcdef', 1, null]])
+    assert.deepEqual(json[0].messages[1].events.map(e => e.t), ['products', 'compare', 'whatsapp'])
+    assert.equal(json[0].messages[1].turn, 1)
+})
+
+test('transcripts: a whole runTurn captured the way the chat route stores it', async () => {
+    const cap = transcripts.createTurnCapture()
+    const ai = mockAi({ chat: [[{ choices: [{ delta: { content: 'İki seçenek var.' } }] }, toolChunk('show_products', { ids: [401, 413] })]] })
+    turn.resetCircuit()
+    await turn.runTurn(request0({ input: 'iPhone 15 şarj, numaram 0500 123 45 67' }), depsFor(ai), ev => cap.onEvent(ev))
+    const r = cap.result()
+    assert.equal(r.text, 'İki seçenek var.')
+    assert.deepEqual(r.productIds, [401, 413])
+    assert.equal(r.waFull, false)
+    assert.deepEqual(r.events.map(e => e.t), ['products', 'whatsapp', 'suggestions'])
+    assert.ok(!JSON.stringify(r).includes('0500 123') && !JSON.stringify(r).includes('wa.me'))
 })

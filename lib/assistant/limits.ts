@@ -2,7 +2,8 @@
  * Onopo Asistan: daily limits, the global budget and content-free usage logging (D1).
  *
  * Why D1 and not KV: the counters are tiny, the shop already has D1, and one UPSERT … RETURNING gives an
- * exact per-IP daily count in a single round trip. Privacy (KVKK option A): no chat text is ever written.
+ * exact per-IP daily count in a single round trip. Privacy: no chat text is ever written here (the masked
+ * transcripts the owner chose to keep live in transcripts.ts).
  * IPs are stored only as an HMAC whose key includes the day, so a value cannot be linked across days, and
  * those rows are deleted after two days. ai_chat_events holds codes, counts and durations only.
  *

@@ -177,7 +177,7 @@ CREATE INDEX IF NOT EXISTS idx_login_failures_ip ON login_failures(ip_hash, atte
 CREATE INDEX IF NOT EXISTS idx_login_failures_attempted_at ON login_failures(attempted_at);
 
 -- AI assistant (Onopo Asistan). Additive only: older code simply never reads these tables.
--- No chat text is ever stored (KVKK option A): only daily counters and content-free events.
+-- These two hold no chat text: only daily counters and content-free events (transcripts: ai_messages below).
 CREATE TABLE IF NOT EXISTS ai_usage_daily (
     day TEXT NOT NULL,                       -- 'YYYY-MM-DD', Europe/Istanbul
     bucket TEXT NOT NULL,                    -- 'global' or 'ip:<daily HMAC>' (ip rows deleted after 2 days)
@@ -221,3 +221,39 @@ CREATE TABLE IF NOT EXISTS ai_product_facts (
     model TEXT,
     created_at TEXT NOT NULL                 -- ISO time (UTC)
 );
+
+-- Onopo Asistan transcripts (owner decision, w7): kept 365 days for review and analysis, deletable from
+-- /admin/assistant/sohbetler/. Only the MASKED user text (what the model saw), the validated answer and its
+-- cards (WhatsApp card without the number). No IP, user agent or raw input (lib/assistant/transcripts.ts).
+CREATE TABLE IF NOT EXISTS ai_conversations (
+    id TEXT PRIMARY KEY,                     -- sha256(conversationId), 16 hex chars (= ai_chat_events.conv_hash)
+    day TEXT NOT NULL,                       -- 'YYYY-MM-DD' of the first message, Europe/Istanbul
+    started_at TEXT NOT NULL,                -- ISO time (UTC)
+    last_at TEXT NOT NULL,
+    turns INTEGER NOT NULL DEFAULT 0,
+    first_message TEXT,                      -- masked
+    device TEXT,                             -- phone model pill (masked)
+    page TEXT,                               -- 'anasayfa', 'ürün: /slug/', 'arama: …'
+    wa_shown INTEGER NOT NULL DEFAULT 0,     -- a full WhatsApp card was shown
+    product_ids TEXT,                        -- comma list of products shown on cards
+    n_ok INTEGER NOT NULL DEFAULT 0,
+    n_error INTEGER NOT NULL DEFAULT 0,
+    n_busy INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_ai_conversations_last ON ai_conversations(last_at);
+CREATE INDEX IF NOT EXISTS idx_ai_conversations_day ON ai_conversations(day);
+
+CREATE TABLE IF NOT EXISTS ai_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conv_id TEXT NOT NULL,                   -- ai_conversations.id
+    turn INTEGER NOT NULL,
+    role TEXT NOT NULL,                      -- 'user' | 'assistant'
+    text TEXT NOT NULL,                      -- user: masked; assistant: the validated answer
+    events TEXT,                             -- assistant: JSON card events (products, compare, links, store_info, whatsapp, suggestions)
+    outcome TEXT,
+    model TEXT,
+    total_ms INTEGER,
+    created_at TEXT NOT NULL                 -- ISO time (UTC)
+);
+CREATE INDEX IF NOT EXISTS idx_ai_messages_conv ON ai_messages(conv_id, id);
+CREATE INDEX IF NOT EXISTS idx_ai_messages_created ON ai_messages(created_at);
