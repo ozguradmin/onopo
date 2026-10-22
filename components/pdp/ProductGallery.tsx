@@ -24,7 +24,7 @@ export interface ProductGalleryProps {
     soldOut?: boolean
 }
 
-const MAIN_SIZES = '(max-width: 767px) 100vw, (max-width: 1023px) 50vw, (max-width: 1279px) 560px, 620px'
+const MAIN_SIZES = '(max-width: 767px) 100vw, (max-width: 1279px) 50vw, 620px'
 
 export function ProductGallery({ images: rawImages, name, badges, soldOut = false }: ProductGalleryProps) {
     const images = rawImages.length ? rawImages : ['']

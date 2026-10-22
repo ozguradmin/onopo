@@ -182,7 +182,7 @@ export function BuyBox({ product, variations, freeShippingThreshold, maxInstallm
             )}
 
             {/* Stock, shipping, delivery */}
-            <ul className="mt-4 flex flex-col gap-2.5 border-t border-line pt-4 text-sm leading-5">
+            <ul className="mt-4 flex flex-col gap-2.5 border-t border-line pt-4 text-sm leading-5 lg:mt-3 lg:pt-3 xl:mt-4 xl:pt-4">
                 <li className="flex items-center gap-2">
                     {soldOut ? (
                         <>
@@ -268,7 +268,7 @@ export function BuyBox({ product, variations, freeShippingThreshold, maxInstallm
             )}
 
             {/* Actions */}
-            <div ref={ctaRef} className="mt-5 flex flex-col gap-2">
+            <div ref={ctaRef} className="mt-5 flex flex-col gap-2 lg:mt-4 xl:mt-5">
                 <div className="flex items-stretch gap-2">
                     {!soldOut && (
                         <div className="flex h-12 shrink-0 items-center rounded-card border border-line-strong bg-white" role="group" aria-label="Adet">
