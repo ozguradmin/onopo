@@ -261,7 +261,8 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                                         <SpecsTable rows={specRows} />
                                     </InfoSection>
                                 )}
-                                <InfoSection id="kargo-iade" title="Kargo ve iade">
+                                {/* The last row: the reviews section's top border closes it (no double hairline) */}
+                                <InfoSection id="kargo-iade" title="Kargo ve iade" className="border-b-0">
                                     <dl className="flex flex-col gap-4 text-sm leading-6 text-ink-2">
                                         {deliveryText && (
                                             <div>
