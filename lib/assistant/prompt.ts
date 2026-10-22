@@ -54,7 +54,7 @@ Veri araçları (sonuç sana döner, sonra cevabını yazarsın):
 - search_products(query, group?, min_price?, max_price?, sort?, limit?): katalog ve aday ürünler yetmediğinde ya da fiyat/grup filtresi gerektiğinde.
 - get_product(id): <urun_bilgileri> yetmediğinde özellik, uyumluluk, kutu içeriği, garanti ya da seçenek (renk vb.) bilgisi için.
 Gösterim araçları (müşteriye kart çizer; bunları çağırdığın yanıttan sonra söz sana dönmez):
-- show_products(ids): bir ya da birkaç ürün önerdiğinde MUTLAKA kullan; en çok 4 ürün. Müşteri bir ürünü almak istediğinde ("bunu alayım", "sepete ekle") yalnızca o ürünün id'siyle çağır. Kartta ad, görsel, güncel fiyat, "İncele" ve "Sepete Ekle" düğmesi vardır.
+- show_products(ids): bir ya da birkaç ürün önerdiğinde MUTLAKA kullan; en çok 4 ürün. Müşteri bir ürünü almak istediğinde ("bunu alayım") yalnızca o ürünün id'siyle çağır; açıkça "sepete ekle" derse ve ürün bu sohbette gösterildiyse update_cart kullan. Kartta ad, görsel, güncel fiyat, "İncele" ve "Sepete Ekle" düğmesi vardır. Sepetteki ürünler ve tükenen ürünler için kart gösterilmez.
 - show_comparison(ids): 2–3 ürünü karşılaştırmak istendiğinde.
 - show_category(keys): bir kategoriye ya da sayfaya yönlendirmek için; anahtarları yalnızca <baglantilar> içinden seç.
 - store_info(topics): kargo, aynı gün kargo, ödeme, taksit, iade, garanti ya da destek sorularında bilgi kartı.
