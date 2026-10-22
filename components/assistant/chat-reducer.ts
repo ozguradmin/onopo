@@ -17,6 +17,7 @@ import {
     LIMITS,
     type AssistantEvent,
     type CardProduct,
+    type CartOp,
     type ChipAction,
     type ErrorCode,
     type HandoffReason,
@@ -26,7 +27,8 @@ import {
 } from '@/lib/assistant/contract'
 import { displayPrice } from '@/lib/format'
 
-export type CardEvent = Extract<AssistantEvent, { t: 'products' | 'compare' | 'links' | 'store_info' }>
+export type CardEvent = Extract<AssistantEvent, { t: 'products' | 'compare' | 'links' | 'store_info' | 'cart' }>
+export type CartEvent = Extract<AssistantEvent, { t: 'cart' }>
 export type WhatsappEvent = Extract<AssistantEvent, { t: 'whatsapp' }>
 export type UiErrorCode = ErrorCode | 'network' | 'offline'
 
@@ -34,6 +36,30 @@ export interface UiStep {
     id: StepId
     state: 'active' | 'done'
     n?: number
+}
+
+/** A cart line as the chat keeps it for "Geri al" (the cart store's own line shape). */
+export interface SavedCartLine {
+    id: number | string
+    quantity: number
+    name: string
+    price: number
+    image: string
+    category?: string
+    slug?: string
+    free_shipping?: boolean
+}
+
+/**
+ * `cart_ops` in a message: the change the assistant made to the cart, shown as "<note> · Geri al".
+ * 'pending' until the hook applied it; 'none' when nothing in the cart had to change; 'undone' after Geri al.
+ */
+export interface CartReceipt {
+    note: string
+    ops: CartOp[]
+    state: 'pending' | 'applied' | 'none' | 'undone'
+    touched: number[]
+    before: SavedCartLine[]
 }
 
 export interface UiMessage {
@@ -54,6 +80,8 @@ export interface UiMessage {
     chip?: ChipAction
     /** assistant: a card the UI added itself (header button, sold out, chip); never sent as history */
     local?: boolean
+    /** assistant: cart changes the assistant made in this turn (v2 `cart_ops`) */
+    receipts?: CartReceipt[]
 }
 
 let seq = 0
@@ -104,7 +132,18 @@ export function applyEvent(msg: UiMessage, ev: AssistantEvent): UiMessage {
         case 'compare':
         case 'links':
         case 'store_info':
+        case 'cart':
             return { ...msg, cards: [...msg.cards, ev] }
+        case 'cart_ops': {
+            const receipt: CartReceipt = {
+                note: String(ev.note ?? '').replace(/\s+/g, ' ').trim().slice(0, 140),
+                ops: Array.isArray(ev.ops) ? ev.ops.slice(0, LIMITS.cartMaxLines) : [],
+                state: 'pending',
+                touched: [],
+                before: [],
+            }
+            return { ...msg, receipts: [...(msg.receipts ?? []), receipt] }
+        }
         case 'whatsapp':
             return msg.whatsapp ? msg : { ...msg, whatsapp: ev, wa: true }
         case 'suggestions':
@@ -123,6 +162,45 @@ export function applyEvent(msg: UiMessage, ev: AssistantEvent): UiMessage {
             // meta and device are handled by the hook (waBase, the phone model pill)
             return msg
     }
+}
+
+/** The hook applied the last pending receipt to the cart: what changed and what the lines were before. */
+export function settleReceipt(msg: UiMessage, result: { touched: number[]; before: SavedCartLine[] }): UiMessage {
+    const list = msg.receipts ?? []
+    const i = list.map(r => r.state).lastIndexOf('pending')
+    if (i < 0) return msg
+    const receipts = list.slice()
+    receipts[i] = {
+        ...receipts[i],
+        state: result.touched.length > 0 ? 'applied' : 'none',
+        touched: result.touched.slice(),
+        before: result.before.map(l => ({ ...l })),
+    }
+    return { ...msg, receipts }
+}
+
+/** "Geri al" was used on receipt `index`. */
+export function markUndone(msg: UiMessage, index: number): UiMessage {
+    const r = msg.receipts?.[index]
+    if (!r || r.state !== 'applied') return msg
+    const receipts = msg.receipts!.slice()
+    receipts[index] = { ...r, state: 'undone' }
+    return { ...msg, receipts }
+}
+
+/**
+ * Products shown in this conversation (product, compare and cart cards), newest last: a `cart_ops` may add
+ * one of them to the cart, nothing else.
+ */
+export function shownProducts(messages: readonly UiMessage[]): Map<number, CardProduct> {
+    const out = new Map<number, CardProduct>()
+    for (const m of messages) {
+        for (const c of m.cards) {
+            if (c.t === 'products' || c.t === 'compare') for (const p of c.products) out.set(p.id, p)
+            else if (c.t === 'cart') for (const l of c.lines) out.set(l.product.id, l.product)
+        }
+    }
+    return out
 }
 
 /** The last finished messages as request history (SPEC §10.8 step 2): text only, oldest first. */
