@@ -5,8 +5,9 @@
  *   - "Hangi modellerle uyumlu?": only when the product NAME itself lists the device model(s) ("iPhone 13 / 13 Pro");
  *     the answer repeats what the name says, nothing is inferred
  *   - stock: the live stock flag (products.stock > 0), never a quantity
- *   - "Siparişim ne zaman kargoya verilir?": the handling days parsed from the CMS shipping page (lib/seo.ts
- *     parseHandlingTime)
+ *   - "Siparişim ne zaman kargoya verilir?": the delivery text the page itself shows when the product (or the
+ *     store's "features" setting) has one, so the two never disagree; otherwise the handling days parsed from the
+ *     CMS shipping page (lib/seo.ts parseHandlingTime)
  *   - shipping cost: shipping_settings (threshold, cost) and the product's own free_shipping flag / price
  *   - returns: the return window parsed from the CMS shipping page (parseReturnPolicy)
  *   - payment and installments: lib/catalog getMaxInstallments (null = no card payment configured: left out)
@@ -29,6 +30,11 @@ export interface ProductFaqInput {
         /** Admin text that replaces the installment line (Ürünler › Taksit bilgisi), already plain text. */
         installment_info?: string | null
     }
+    /**
+     * The delivery line the product page shows, when it comes from the product's own "Teslimat" text or the
+     * store's delivery setting (plain text). It answers the handling question instead of the CMS days.
+     */
+    deliveryText?: string | null
     /** shipping_settings; null when the row could not be read (the shipping question is then left out). */
     shipping: { freeShippingThreshold: number | null; shippingCost: number | null } | null
     handlingTime: { minDays: number; maxDays: number } | null
@@ -124,7 +130,10 @@ export function buildProductFaq(input: ProductFaqInput): ProductFaqItem[] {
         ? { question: 'Stokta var mı?', answer: 'Evet, bu ürün şu an stokta. Sepete ekleyip hemen sipariş verebilirsin.' }
         : { question: 'Stokta var mı?', answer: 'Bu ürün şu an stokta yok, bu yüzden şu anda sipariş verilemiyor.' })
 
-    if (handlingTime) {
+    const delivery = String(input.deliveryText || '').replace(/\s+/g, ' ').trim()
+    if (delivery) {
+        items.push({ question: 'Siparişim ne zaman kargoya verilir?', answer: /[.!?]$/.test(delivery) ? delivery : `${delivery}.` })
+    } else if (handlingTime) {
         items.push({
             question: 'Siparişim ne zaman kargoya verilir?',
             answer: `Siparişin, ödeme onayından sonra ${handlingTime.minDays}-${handlingTime.maxDays} iş günü içinde hazırlanıp kargoya verilir.`,

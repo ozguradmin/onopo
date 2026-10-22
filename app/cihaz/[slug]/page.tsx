@@ -18,6 +18,7 @@ import {
     devicePath,
     deviceTitle,
     groupDeviceProducts,
+    isIndexableDevicePage,
     relatedDeviceGuides,
     siblingDevicePages,
 } from '@/lib/devices'
@@ -30,7 +31,8 @@ import { normalizeSlugParam } from '@/lib/seo-routing'
 /**
  * /cihaz/<slug>/: a brand ("iphone", "samsung", "xiaomi-redmi" …) or a model ("iphone-15-pro-max") with at least
  * MIN_DEVICE_PRODUCTS active products (lib/devices; the list follows the live catalogue). Products grouped by type,
- * in stock first. A page whose products are all sold out still answers 200, with noindex.
+ * in stock first. A page whose products are all sold out, or a model page filled mostly by the connector rule,
+ * still answers 200, with noindex (isIndexableDevicePage).
  * An unknown slug is a real 404 (lib/redirects.ts never guesses under /cihaz/); another case of a known slug is
  * a 308 to it. No loading.tsx / Suspense: the status is decided first.
  */
@@ -59,7 +61,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
         description: categoryMetaDescription(deviceH1(page), { count: products.length, minPrice: prices.length ? Math.min(...prices) : undefined, productNames: products.map(p => p.name) }, site),
         path: devicePath(page.slug),
         images: image ? [image] : undefined,
-        noindex: !products.some(p => p.in_stock),
+        noindex: !isIndexableDevicePage(page, data.products),
         site,
     })
 }
@@ -75,7 +77,7 @@ export default async function DevicePage({ params }: { params: Params }) {
     const brand = deviceBrandOf(data.catalog, page)
     const siblings = page.kind === 'model' ? siblingDevicePages(data.catalog, page) : []
     const guides = relatedDeviceGuides(products)
-    const indexable = products.some(p => p.in_stock)
+    const indexable = isIndexableDevicePage(page, data.products)
     const [shipping, ratings] = await Promise.all([getShippingSettings(), getReviewStatsMapSafe()])
 
     const crumbs: BreadcrumbItem[] = [{ label: 'Anasayfa', href: '/' }, { label: DEVICES_HUB.crumb, href: DEVICES_PATH }]

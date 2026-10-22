@@ -34,7 +34,7 @@ and carry no query string. The only exception is `?page=N` (N ≥ 2) on listings
 | `/llms.txt` | (a text file, no canonical) | | Store summary for AI assistants (§13). Not in the sitemap; reserved slug, live redirect target |
 | `/<INDEXNOW_KEY>.txt` | (a text file) | | IndexNow key file, answered by `worker.ts` (§13) |
 | Devices hub | `/cihaz/` | `DEVICES_PATH` | "Cihaza göre": brands and models with counts; see §14 |
-| Device page | `/cihaz/<slug>/` | `devicePath(slug)` | Brand or model with ≥ 3 active products (`lib/devices`); unknown slug 404, other case 308; no in-stock product → noindex (200) |
+| Device page | `/cihaz/<slug>/` | `devicePath(slug)` | Brand or model with ≥ 3 active products (`lib/devices`); unknown slug 404, other case 308; noindex (200) without an in-stock product, or a model page with < 3 products naming the model |
 | Utility pages | (no canonical, noindex) | `privatePageMetadata` | `/odeme/ /profile/ /orders/ /login/ /register/ /siparis-basarili/ /siparis-hata/ /maintenance/ /admin/*`. `/admin` and `/admin/*` also send `X-Robots-Tag: noindex, nofollow` (`next.config.ts`), because the admin client app has no page metadata |
 
 `LEGACY_CATEGORY_TARGETS` lives in `lib/seo.ts` (client-safe, so the menus can use it) and is re-exported from
@@ -542,15 +542,16 @@ One POST to `https://api.indexnow.org/indexnow` reaches Bing, Yandex, Seznam, Na
 **`/llms.txt`** (https://llmstxt.org; `app/llms.txt/route.ts`, text in `lib/llms-txt.ts`): H1 store name, a blockquote
 summary (product types from the catalogue), the store facts (shipping rule from `shipping_settings`, handling days and
 return window from the CMS shipping page, card payment and max installments, contact from `site_settings`; each left
-out when its data is missing), then link sections: categories with product counts, the guides, an extra-sections hook
-for other modules (device pages), the 30 most viewed in-stock products with the price checkout charges, the CMS
+out when its data is missing), then link sections: categories with product counts, the guides, "Cihaza göre" (the
+indexable device pages with counts, §14), the 30 most viewed in-stock products with the price checkout charges, the CMS
 pages, and an "Optional" section (all products, sitemap). Edge-cached like the sitemap (cache_version); 500 on a
 catalogue read failure. Allowed by the robots `/` rule; not in the sitemap.
 
 **Product FAQ** (`lib/product-faq.ts`, `components/pdp/ProductFaq.tsx`): a "Sık sorulan sorular" block between the
 details and the reviews, native `<details>` rows (no client JS), 4–6 questions from real data only: compatibility
 (only when the product name itself lists the device model(s); the answer repeats them), stock (live flag, no
-quantity), handling days, shipping cost (settings + the product's free-shipping flag / price), returns, payment and
+quantity), handling (the page's own delivery line when the product or the store setting has one, so the two
+never disagree; else the CMS days), shipping cost (settings + the product's free-shipping flag / price), returns, payment and
 installments. A question whose data is missing is left out. The FAQPage JSON-LD carries exactly the visible items.
 Tests: `node --test scripts/indexnow.test.mjs scripts/product-faq.test.mjs`.
 ## 14. Device pages (`/cihaz/`)
@@ -563,16 +564,24 @@ Tests: `node --test scripts/indexnow.test.mjs scripts/product-faq.test.mjs`.
   ("iPhone 15" is not "iPhone 15 Pro", "Redmi Note 12" is not "12 Pro" or "12S"); a list names each model ("iPhone 13 /
   13 Pro"). Screen sizes and numbers with units are never models. A brand: its brand word, or Lightning for iPhone.
 - Connector rules only where the port is certain: iPhone up to 14 (and SE/X/XR/XS) Lightning, iPhone 15+ and Galaxy S8+
-  USB-C. Chargers, cables and car chargers (`lib/product-type.ts`) whose name has that connector and no other phone
-  connector are listed on those model pages, and the intro says why. Android brands as a whole get no rule.
+  USB-C. Chargers, cables and car chargers (`lib/product-type.ts`) whose name has that connector as the phone plug and
+  no other phone connector are listed on those model pages, and the intro says why. A charger whose Type-C is its own
+  port ("Girişli", "Çıkışlı", "Başlığı", "Adaptör") is not: it needs a separate cable and fits a Lightning iPhone too.
+  Android brands as a whole get no rule.
 - Page: H1 "<label> aksesuarları", 2–3 sentences from real counts and types (no prices, no promises), breadcrumbs, models
   (brand pages), products grouped by type (ekran koruyucu, şarj aleti, kablo, araç şarjı, powerbank, diğer; in stock
   first; compact `ProductCard`), sibling models, related guides (`guideForProduct` tally). Title: label + product types
-  (≤ 52); description: `categoryMetaDescription`. No in-stock product → noindex,follow (200) and not in the sitemap.
+  (≤ 52); description: `categoryMetaDescription`.
+- Indexable (`isIndexableDevicePage`; sitemap, llms.txt, IndexNow, hub ItemList): at least one in-stock product, and on a
+  model page at least 3 products whose NAME names the model. Otherwise noindex,follow (200), out of the sitemap. A model
+  page filled by the connector rule is nearly the same list on every model with that port (iPhone 15 … 16 Pro Max share
+  ~18 USB-C products and differ by 2 protectors): useful from the product page, near-duplicates for a search engine.
+  Today (2026-10-22) no model reaches 3 named products, so only the 5 brand pages and the hub are indexed.
 - Product pages link one device page ("Bu cihaz için diğer ürünler"): the single model page the name names, else the
   single brand page; connector rules never pick a page. `/kategoriler/` has a "Cihaza göre" block (brand pages).
 - Edge cache: `/cihaz/` and `/cihaz/<slug>/` are on the allowlist (admin writes bump `cache_version` as usual). Old-URL
   resolver: both are live targets (same rules on the index's product names); `/cihaz/<slug>.html` → the page; any other
   path under `/cihaz/` stays a 404 (no fuzzy match to a product). `cihaz` is a reserved slug everywhere.
-- URL list for other consumers (llms.txt, IndexNow): `devicePagePaths(products)` (pure) or `getDevicePageUrls()`
-  (server, absolute). Tests: `node --test scripts/devices.test.mjs` (rules on `scripts/fixtures/guide-catalog.json`).
+- URL list for other consumers: `devicePagePaths(products)` (pure) or `getDevicePageUrls()` (server, absolute).
+  `/llms.txt` lists the same pages ("Cihaza göre", `deviceLlmsLinks`); IndexNow's daily sweep gets them from the
+  sitemap. Tests: `node --test scripts/devices.test.mjs` (rules on `scripts/fixtures/guide-catalog.json`).

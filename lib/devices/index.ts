@@ -8,7 +8,7 @@
 import { guideForProduct, type Guide } from '../guides'
 import { classifyProduct } from '../product-type'
 import { d1DateToIso, PRODUCT_TITLE_MAX } from '../seo'
-import { buildDeviceCatalog, DEVICES_PATH, devicePath, type DeviceBrandEntry, type DeviceCatalog, type DevicePage } from './match'
+import { buildDeviceCatalog, DEVICES_PATH, devicePath, MIN_DEVICE_PRODUCTS, type DeviceBrandEntry, type DeviceCatalog, type DevicePage } from './match'
 
 export * from './match'
 
@@ -164,19 +164,45 @@ export function deviceBrandOf(catalog: DeviceCatalog, page: Pick<DevicePage, 'br
 
 // ---- indexing: page URLs and sitemap ---------------------------------------------------------------------
 
-/** Whether a page is indexable: at least one in-stock product (otherwise it answers 200 with noindex). */
+/**
+ * Whether a page is indexable (otherwise it answers 200 with noindex and stays out of the sitemap, llms.txt and
+ * IndexNow): at least one in-stock product, and on a model page at least MIN_DEVICE_PRODUCTS products whose name
+ * names the model. A model page filled mostly by the connector rule is the same list on every model with that
+ * port ("iPhone 15" … "iPhone 16 Pro Max" differ by two screen protectors): useful from the product page, but
+ * near-duplicates for a search engine.
+ */
 export function isIndexableDevicePage(page: DevicePage, products: readonly DeviceProduct[]): boolean {
+    if (page.kind === 'model' && page.namedIds.length < MIN_DEVICE_PRODUCTS) return false
     const ids = new Set(page.productIds)
     return products.some(p => ids.has(p.id) && isInStock(p))
 }
 
+/** The indexable pages in catalogue order (per brand: the brand page, then its model pages). */
+export function indexableDevicePages(products: readonly DeviceProduct[], catalog: DeviceCatalog = buildDeviceCatalog(products)): DevicePage[] {
+    return catalog.pages.filter(p => isIndexableDevicePage(p, products))
+}
+
 /**
- * Paths of the indexable device pages (the hub first, then every brand and model page with an in-stock product)
- * for ACTIVE products: the sitemap, and later llms.txt / IndexNow. Empty when there is none.
+ * Paths of the indexable device pages (the hub first, then every indexable brand and model page) for ACTIVE
+ * products: the sitemap (and through it IndexNow's daily sweep) and llms.txt. Empty when there is none.
  */
 export function devicePagePaths(products: readonly DeviceProduct[], catalog: DeviceCatalog = buildDeviceCatalog(products)): string[] {
-    const pages = catalog.pages.filter(p => isIndexableDevicePage(p, products))
+    const pages = indexableDevicePages(products, catalog)
     return pages.length ? [DEVICES_PATH, ...pages.map(p => devicePath(p.slug))] : []
+}
+
+/**
+ * The llms.txt section links (app/llms.txt/route.ts): the hub, then every indexable page with its product count
+ * ("36 ürün"). Same pages as the sitemap. Empty when there is none.
+ */
+export function deviceLlmsLinks(products: readonly DeviceProduct[], catalog: DeviceCatalog = buildDeviceCatalog(products)): Array<{ label: string; path: string; note: string }> {
+    const pages = indexableDevicePages(products, catalog)
+    if (!pages.length) return []
+    const total = new Set(pages.flatMap(p => p.productIds)).size
+    return [
+        { label: DEVICES_HUB.h1, path: DEVICES_PATH, note: `${pages.length} cihaz sayfası, ${total} ürün` },
+        ...pages.map(p => ({ label: deviceH1(p), path: devicePath(p.slug), note: `${p.productIds.length} ürün` })),
+    ]
 }
 
 export interface DeviceSitemapProduct extends DeviceProduct {
@@ -196,7 +222,7 @@ export function deviceSitemapEntries(products: readonly DeviceSitemapProduct[]):
         }
         return d1DateToIso(best) ?? undefined
     }
-    const pages = catalog.pages.filter(p => isIndexableDevicePage(p, products))
+    const pages = indexableDevicePages(products, catalog)
     if (!pages.length) return []
     const row = (path: string, ids: readonly number[]) => {
         const lastModified = newest(ids)

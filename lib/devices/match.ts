@@ -13,9 +13,10 @@
  *   both), or a connector that only that brand uses (Lightning: iPhone). Samsung tablets (Tab, SM-T/SM-P codes)
  *   are a brand page of their own.
  * - Connector rules, only where the port is certain: iPhone up to 14 (and SE, X, XR, XS) has Lightning, iPhone 15
- *   and later USB-C, Galaxy S8 and later USB-C. A charger, cable or car charger whose name has that connector (and
- *   not another phone connector) is listed for those models. Android brands as a whole get no connector rule:
- *   their phones mix Micro USB and USB-C.
+ *   and later USB-C, Galaxy S8 and later USB-C. A charger, cable or car charger whose name has that connector as
+ *   its plug (not another phone connector, and not a charger's own port: "Type-C Girişli … Başlığı") is listed
+ *   for those models. Android brands as a whole get no connector rule: their phones mix Micro USB and USB-C.
+ *   Such a model page is only indexable once enough products name the model (lib/devices isIndexableDevicePage).
  * - A page exists when at least MIN_DEVICE_PRODUCTS active products belong to it (no thin pages); a smaller model
  *   is only listed on its brand page.
  */
@@ -252,7 +253,15 @@ export function productConnector(name: string): DeviceConnector | 'micro-usb' | 
 /** Product types a connector rule may add: chargers, cables and car chargers (lib/product-type). */
 const CONNECTOR_TYPES = new Set(['Şarj Aleti', 'Şarj ve Data Kablosu', 'Araç Şarj Cihazı'])
 
+/**
+ * A charger whose connector is its own port, not a plug for the phone: "Type-C Girişli Şarj Adaptörü Başlığı",
+ * "Çift USB + Type-C Çıkışlı Araç Şarjı", "PD Type-C Hızlı Şarj Cihazı Adaptör + Şarj Kablosu" (the cable's
+ * phone end is not named). It needs a separate cable, so it fits a Lightning iPhone as well as a USB-C one.
+ */
+const PORT_WORDS = /\b(?:girisli|cikisli|baslig|baslik|adaptor)/
+
 export function isConnectorProduct(name: string): boolean {
+    if (PORT_WORDS.test(foldTr(String(name ?? '')))) return false
     return CONNECTOR_TYPES.has(classifyProduct(name)?.type ?? '')
 }
 

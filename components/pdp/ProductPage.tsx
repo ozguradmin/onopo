@@ -139,7 +139,8 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
     const hasDescription = parsed.blocks.length > 0 || !!parsed.tagline
 
     // ---- "Sık sorulan sorular": only questions the data answers (lib/product-faq.ts); the FAQPage JSON-LD
-    // carries exactly the visible items. Shipping from shipping_settings as read (no defaults), like the JSON-LD.
+    // carries exactly the visible items. Shipping from shipping_settings as read (no defaults), like the JSON-LD;
+    // the handling answer repeats the delivery line above when the product or the store setting has one.
     const faq = buildProductFaq({
         product: {
             name: product.name,
@@ -148,6 +149,7 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
             free_shipping: product.free_shipping,
             installment_info: infoText(product.installment_info) || null,
         },
+        deliveryText: infoText(product.delivery_info) || data.featuresDelivery || null,
         shipping: { freeShippingThreshold: site.freeShippingThreshold, shippingCost: site.shippingCost },
         handlingTime: site.handlingTime,
         returnPolicy,

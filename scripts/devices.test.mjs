@@ -114,9 +114,15 @@ test('connectors: the phone end decides; ports only where certain', () => {
     // Redmi phones mix Micro USB and USB-C, tablets are not charged by the rule: no connector rule
     assert.equal(D.modelConnector({ brand: 'xiaomi-redmi', slug: 'redmi-note-12' }), null)
     assert.equal(D.modelConnector({ brand: 'samsung-tablet', slug: 'samsung-galaxy-tab-s7' }), null)
-    // Only chargers, cables and car chargers (lib/product-type, shared with the Google feed)
-    assert.equal(D.isConnectorProduct('Onopo iPhone ve Android Uyumlu 20W Type-C Girişli Şarj Başlığı - M3'), true)
-    assert.equal(D.isConnectorProduct('Onopo 3.4A Type-C (PD) ve Çift USB Girişli Turbo Hızlı Araç Şarjı 55W - A8'), true)
+    // Only chargers, cables and car chargers (lib/product-type, shared with the Google feed) whose connector is the
+    // plug for the phone: a charger's own Type-C port needs a separate cable (it fits a Lightning iPhone as well)
+    assert.equal(D.isConnectorProduct('Onopo 22W USB Hızlı Şarj Aleti Seti Esnek Type-C Kablo - M9'), true)
+    assert.equal(D.isConnectorProduct('Onopo Android Xiaomi ve Samsung Uyumlu Type-C to Type-C PD 25W Hızlı Şarj ve Data Kablosu 100CM - P5'), true)
+    assert.equal(D.isConnectorProduct('Onopo iPhone ve Android Uyumlu 20W Type-C Girişli Şarj Başlığı - M3'), false)
+    assert.equal(D.isConnectorProduct('Onopo 48W Type-C ve USB Girişli Turbo Şarj Adaptörü Başlığı - M5'), false)
+    assert.equal(D.isConnectorProduct('Onopo 3.4A Type-C (PD) ve Çift USB Girişli Turbo Hızlı Araç Şarjı 55W - A8'), false)
+    assert.equal(D.isConnectorProduct('Onopo 3.4A Çift USB + Type-C Çıkışlı Metal Hızlı Araç Şarjı 40W - A9'), false)
+    assert.equal(D.isConnectorProduct('Onopo 30W Turbo PD Type-C Hızlı Şarj Cihazı Adaptör + Şarj Kablosu - M2'), false)
     assert.equal(D.isConnectorProduct('Onopo iPhone 15 Anti Static 9D Tam Ekran Cam Ekran Koruyucu'), false)
     assert.equal(D.isConnectorProduct('Onopo 20000 mAh Şarj Edilebilir Led Göstergeli Taşınabilir Powerbank'), false)
     assert.deepEqual(gf.classifyProduct('Onopo iPhone ve Android Uyumlu 20W Type-C Girişli Şarj Başlığı - M3'), { type: 'Şarj Aleti', google: 505295 })
@@ -157,9 +163,10 @@ test('iPhone 15 page: its own screen protectors and USB-C chargers/cables; never
     assert.ok(names.includes(byName('iPhone 15 Anti Static').name))
     assert.ok(names.includes(byName('iPhone 15 Uyumlu Tam Kaplayan').name))
     assert.ok(names.includes(byName('T120 USB-A to Type-C').name))
-    assert.ok(names.includes(byName('20W Type-C Girişli Şarj Başlığı').name))
+    assert.ok(names.includes(byName('Type-C to Type-C PD 25W').name))
+    assert.ok(!names.includes(byName('20W Type-C Girişli Şarj Başlığı').name), 'a charger port is not the phone plug')
     for (const n of names) {
-        assert.doesNotMatch(n, /iPhone 15 Pro|Lightning|Micro|Powerbank|Kulaklık|X9$/, n)
+        assert.doesNotMatch(n, /iPhone 15 Pro|Lightning|Micro|Powerbank|Kulaklık|Girişli|Çıkışlı|Adaptör|X9$/, n)
         if (/Ekran Koruyucu/.test(n)) assert.match(n, /iPhone 15 /, n)
     }
     assert.deepEqual(page('iphone-15').namedIds.length, 2)
@@ -211,6 +218,11 @@ test('threshold: a model needs 3 products (named, or by a certain connector), a 
         { id: 4, name: 'Onopo Micro USB Şarj ve Data Kablosu' },
     ])
     assert.deepEqual(mixed.pages.map(p => [p.slug, p.productIds]), [['iphone-15', [1, 2, 3]]])
+    // … which answers for visitors but is noindex: only one product names the model (near-duplicate of every
+    // other USB-C model page)
+    const mixedProducts = [1, 2, 3, 4].map(id => ({ id, name: '', in_stock: true }))
+    assert.equal(D.isIndexableDevicePage(mixed.pages[0], mixedProducts), false)
+    assert.deepEqual(D.devicePagePaths(mixedProducts, mixed), [])
 })
 
 test('product page link: exactly one model page, else exactly one brand page, else none', () => {
@@ -252,7 +264,7 @@ test('groups, titles and intros come from the real products: in stock first, no 
         assert.equal(md.alternates.canonical, `https://onopostore.com/cihaz/${p.slug}/`)
     }
     const groups = D.groupDeviceProducts(D.devicePageProducts(page('iphone-15'), CATALOG))
-    assert.deepEqual(groups.map(g => g.group.key), ['ekran-koruyucu', 'sarj-aleti', 'kablo', 'arac-sarj'])
+    assert.deepEqual(groups.map(g => g.group.key), ['ekran-koruyucu', 'sarj-aleti', 'kablo'])
     assert.equal(D.deviceTitle(page('iphone-15'), groups), 'iPhone 15 Ekran Koruyucu, Şarj Aleti ve Kablo')
     assert.equal(D.deviceTitle(page('iphone-15-pro-max'), groups), 'iPhone 15 Pro Max Ekran Koruyucu ve Şarj Aleti')
     assert.match(D.deviceIntro(page('iphone-15'), groups), /USB-C girişli olduğu için/)
@@ -274,10 +286,14 @@ test('related guides and sibling models', () => {
 // URLs: page list, sitemap, edge cache, reserved slugs, redirects
 // ---------------------------------------------------------------------------------------------
 
-test('devicePagePaths: the hub and every page with an in-stock product; a sold-out page is left out (noindex)', () => {
+test('devicePagePaths: the hub and every indexable page; sold-out and connector-filled model pages are left out (noindex)', () => {
     const paths = D.devicePagePaths(CATALOG)
     assert.equal(paths[0], '/cihaz/')
-    assert.deepEqual(paths.slice(1), catalog.pages.map(p => `/cihaz/${p.slug}/`))
+    // Today no model has 3 products naming it: the model pages answer (noindex), the brand pages are indexed
+    assert.deepEqual(paths.slice(1), ['/cihaz/iphone/', '/cihaz/samsung/', '/cihaz/xiaomi-redmi/', '/cihaz/samsung-tablet/', '/cihaz/huawei/'])
+    for (const p of catalog.pages) assert.equal(D.isIndexableDevicePage(p, CATALOG), p.kind === 'brand', p.slug)
+    assert.deepEqual(D.deviceLlmsLinks(CATALOG).map(l => l.path), paths)
+    assert.deepEqual(D.deviceLlmsLinks(CATALOG)[1], { label: 'iPhone aksesuarları', path: '/cihaz/iphone/', note: `${page('iphone').productIds.length} ürün` })
     const soldOut = [1, 2, 3].map(id => ({ id, name: `Onopo Redmi Note 99 Ekran Koruyucu ${id}`, in_stock: false }))
     assert.deepEqual(D.devicePagePaths(soldOut), [])
     assert.deepEqual(D.devicePagePaths([...soldOut.slice(0, 2), { ...soldOut[2], in_stock: true }]), ['/cihaz/', '/cihaz/xiaomi-redmi/', '/cihaz/redmi-note-99/'])
@@ -301,13 +317,20 @@ test('sitemap: /cihaz/ and the device pages with lastmod from their products; gu
     const byUrl = new Map(entries.map(e => [e.url, e]))
     assert.equal(entries.length, byUrl.size, 'no duplicates')
     for (const path of D.devicePagePaths(CATALOG)) assert.ok(byUrl.has(`https://onopostore.com${path}`), path)
-    assert.equal(byUrl.get('https://onopostore.com/cihaz/iphone-15/').lastModified, '2026-10-21T08:00:00.000Z')
+    assert.equal(byUrl.get('https://onopostore.com/cihaz/iphone/').lastModified, '2026-10-21T08:00:00.000Z')
+    assert.ok(!byUrl.has('https://onopostore.com/cihaz/iphone-15/'), 'noindex model page')
     assert.equal(byUrl.get('https://onopostore.com/cihaz/').lastModified, '2026-10-21T08:00:00.000Z')
     assert.equal(byUrl.get('https://onopostore.com/cihaz/huawei/').lastModified, '2026-10-01T00:00:00.000Z')
     assert.ok(!byUrl.has('https://onopostore.com/cihaz/redmi-note-12/'))
     for (const url of ['https://onopostore.com/', 'https://onopostore.com/rehber/', 'https://onopostore.com/kategori/cep-telefonu-aksesuarlari/', 'https://onopostore.com/page/help/']) {
         assert.ok(byUrl.has(url), url)
     }
+    // IndexNow's daily sweep takes its list from this sitemap (app/api/cron/automation job=indexnow): the first
+    // run sends every indexable device page, never a noindex one
+    const ix = await import('../lib/indexnow.ts')
+    const { changed } = ix.planIndexNowSweep(entries.map(e => ({ url: e.url, lastModified: e.lastModified ?? null })), new Map())
+    for (const path of D.devicePagePaths(CATALOG)) assert.ok(changed.includes(`https://onopostore.com${path}`), path)
+    assert.ok(!changed.includes('https://onopostore.com/cihaz/iphone-15/'))
     // Rows without names (an older query shape) add no device page
     assert.deepEqual(D.deviceSitemapEntries([{ id: 1, name: '', stock: 1 }]), [])
 })
@@ -329,6 +352,8 @@ test('reserved: "cihaz" is never a product slug (routing, analytics, assistant p
     assert.equal(analytics.productSlugOf('/cihaz/'), null)
     assert.equal(pageContext.isProductPath('/cihaz/'), false)
     assert.notEqual(pageContext.pageContext('/cihaz/').type, 'product')
+    // The guides hub was missing from the assistant's list (it asked for a product named "rehber")
+    assert.equal(pageContext.isProductPath('/rehber/'), false)
 })
 
 const index = R.buildIndex({

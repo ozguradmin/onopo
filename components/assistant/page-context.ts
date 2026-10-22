@@ -15,7 +15,7 @@ const FACET = /^[a-z0-9-]{1,40}$/
 /** First path segments that are app routes, never a product slug (app/*). */
 const RESERVED = new Set([
     'admin', 'api', 'categories', 'cihaz', 'kategori', 'kategoriler', 'login', 'maintenance', 'odeme', 'orders', 'page', 'product',
-    'products', 'profile', 'register', 'siparis-basarili', 'siparis-hata',
+    'products', 'profile', 'rehber', 'register', 'siparis-basarili', 'siparis-hata',
 ])
 
 /** CMS-backed top-level pages (app/help, app/policy, app/shipping, app/terms). */

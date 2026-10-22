@@ -126,7 +126,8 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   geçerli anahtarla çalışır; hata sistem kayıtlarına (`indexnow`, "Arama motoru bildirimleri") yazılır, asla fırlatmaz.
   USD fiyat cron'u `updated_at`'i değiştirmediği için yalnızca kur yüzünden değişen fiyatlar ayrıca bildirilmez.
 - **`/llms.txt`** (`app/llms.txt/route.ts`, biçim `lib/llms-txt.ts`): canlı veriden mağaza özeti (kargo, iade, ödeme,
-  iletişim, kategoriler, rehberler, en çok görüntülenen 30 stoklu ürün ve fiyatı). Edge cache'te; sitemap'te yok.
+  iletişim, kategoriler, rehberler, indekslenen cihaz sayfaları, en çok görüntülenen 30 stoklu ürün ve fiyatı). Edge cache'te;
+  sitemap'te yok.
 - **Ürün sayfası SSS** (`lib/product-faq.ts`, `components/pdp/ProductFaq.tsx`): 4–6 soru, yalnızca gerçek veriden; veri
   yoksa soru yok. Uyumluluk sorusu sadece ürün adı cihaz modelini açıkça yazıyorsa. FAQPage JSON-LD = görünen sorular.
 
@@ -140,9 +141,11 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - `/cihaz/` (marka ve modeller, sayılarıyla) ve `/cihaz/<slug>/`: marka (`iphone`, `samsung`, `xiaomi-redmi`, `samsung-tablet`, `huawei` …)
   ya da model (`iphone-15-pro-max`, `samsung-galaxy-s24` …). Liste koddan değil aktif ürün **adlarından** çıkar
   (`lib/devices/match.ts`; `lib/redirects.ts` de aynı kuralları kullanır). En az 3 aktif ürünü olmayan marka/model sayfası
-  yok (model yalnızca marka sayfasında listelenir); stokta ürünü olmayan sayfa 200 + noindex ve sitemap dışı.
+  yok (model yalnızca marka sayfasında listelenir). Stokta ürünü olmayan sayfa ve adında model geçen ürünü 3'ten az olan model
+  sayfası 200 + noindex; sitemap, llms.txt ve IndexNow dışı (`isIndexableDevicePage`; bugün yalnızca 5 marka sayfası + hub).
 - Model eşleşmesi adla: "iPhone 15" ≠ "iPhone 15 Pro", "13 / 13 Pro" ikisine de girer. Bağlantı kuralı yalnızca kesin olan yerde:
-  iPhone 14'e kadar Lightning, iPhone 15+ ve Galaxy S8+ USB-C (şarj aleti, kablo, araç şarjı). Android markalarına kural yok.
+  iPhone 14'e kadar Lightning, iPhone 15+ ve Galaxy S8+ USB-C (ucu o olan şarj aleti, kablo, araç şarjı; "Girişli"/"Çıkışlı"/"Başlığı"/
+  "Adaptör" gibi kendi portu olan şarj cihazları hariç). Android markalarına kural yok.
 - Ürün türü grupları `lib/product-type.ts` (Google feed ile ortak). Ürün sayfasında "Bu cihaz için diğer ürünler" bağlantısı (tek model
   sayfası, yoksa tek marka sayfası), `/kategoriler/`'de "Cihaza göre" bloğu. Sitemap'te var; edge cache allowlist'inde; çözücü
   `/cihaz/` altında tahmin yapmaz. Sayfa adresleri: `devicePagePaths()` / `getDevicePageUrls()`. Ayrıntı: `docs/SEO.md` §14.

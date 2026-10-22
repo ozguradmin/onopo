@@ -1,6 +1,7 @@
 import { getDB } from '@/lib/db'
 import { getActiveProducts, getCategories, getMaxInstallments, getSiteSettings } from '@/lib/catalog'
 import { getCmsPageLinks } from '@/lib/cms-pages'
+import { deviceLlmsLinks } from '@/lib/devices'
 import { GUIDES, guidePath } from '@/lib/guides'
 import { rankMostViewed } from '@/lib/analytics'
 import { recentProductViews, type D1Lite as AnalyticsDb } from '@/lib/analytics-db'
@@ -35,8 +36,17 @@ export async function GET() {
         const views = await recentProductViews((await getDB()) as unknown as AnalyticsDb, 30)
         const top = rankMostViewed(products.filter(p => p.in_stock), views, PRODUCT_LIMIT)
 
-        // More sections (e.g. the device pages) go here, after the guides: { title, intro?, links }
+        // More sections go here, after the guides: { title, intro?, links }. The device pages (lib/devices): the
+        // same indexable pages as the sitemap, from the same active products
         const extraSections: LlmsSection[] = []
+        const devices = deviceLlmsLinks(products)
+        if (devices.length) {
+            extraSections.push({
+                title: 'Cihaza göre',
+                intro: 'Telefon ve tablet markasına ya da modeline göre ürün sayfaları.',
+                links: devices,
+            })
+        }
 
         const body = buildLlmsTxt({
             siteName: site.name,

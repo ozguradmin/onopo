@@ -142,6 +142,19 @@ test('FAQ: the admin installment text is used as written', () => {
     assert.equal(faq.find(i => i.question === 'Taksitle alabilir miyim?').answer, 'Kredi kartı veya banka kartıyla güvenli ödeme yapabilirsin. Peşin fiyatına 3 taksit.')
 })
 
+test('FAQ: the handling answer repeats the delivery line the page shows (product text), never a second promise', () => {
+    // The live "Teslimat" text of 115 products (after components/pdp/description-parser infoText)
+    const own = 'Ürünü sipariş verdiğiniz gün saat 18:00 ve öncesi ise siparişiniz aynı gün kargoya verilir ve ertesi gün teslim edilir.'
+    const a = Object.fromEntries(buildProductFaq({ ...base(), deliveryText: own }).map(i => [i.question, i.answer]))
+    assert.equal(a['Siparişim ne zaman kargoya verilir?'], own)
+    assert.ok(!Object.values(a).some(t => /1-3 iş günü/.test(t)), 'the CMS days are not shown next to it')
+    // No product text: the CMS days; a blank text counts as none; a missing period is added
+    assert.match(Object.fromEntries(buildProductFaq({ ...base(), deliveryText: '  ' }).map(i => [i.question, i.answer]))['Siparişim ne zaman kargoya verilir?'], /1-3 iş günü/)
+    assert.equal(buildProductFaq({ ...base({ handlingTime: null }), deliveryText: 'Aynı gün kargo' }).find(i => /kargoya verilir/.test(i.question)).answer, 'Aynı gün kargo.')
+    const page = readFileSync(new URL('../components/pdp/ProductPage.tsx', import.meta.url), 'utf8')
+    assert.match(page, /deliveryText: infoText\(product\.delivery_info\) \|\| data\.featuresDelivery \|\| null,/)
+})
+
 test('FAQ JSON-LD: exactly the visible questions and answers', () => {
     const faq = buildProductFaq(base())
     const ld = faqPageJsonLd(faq)
@@ -215,6 +228,24 @@ test('llms.txt: empty sections are left out; extra sections (device pages) slot 
     assert.ok(!txt.includes('## Alışveriş rehberleri'))
     assert.ok(txt.indexOf('## Kategoriler') < txt.indexOf('## Cihaza göre aksesuarlar'))
     assert.ok(txt.indexOf('## Cihaza göre aksesuarlar') < txt.indexOf('## Ürünler'))
+})
+
+test('llms.txt route: lists the indexable device pages (lib/devices deviceLlmsLinks) after the guides', () => {
+    const route = readFileSync(new URL('../app/llms.txt/route.ts', import.meta.url), 'utf8')
+    assert.match(route, /const devices = deviceLlmsLinks\(products\)/)
+    assert.match(route, /extraSections\.push\(\{\s*title: 'Cihaza göre'/)
+    const txt = buildLlmsTxt(llmsData({ extraSections: [{ title: 'Cihaza göre', intro: 'Telefon ve tablet markasına ya da modeline göre ürün sayfaları.', links: [
+        { label: 'Cihaza göre aksesuarlar', path: '/cihaz/', note: '5 cihaz sayfası, 70 ürün' },
+        { label: 'iPhone aksesuarları', path: '/cihaz/iphone/', note: '36 ürün' },
+    ] }] }))
+    assert.ok(txt.includes([
+        '## Cihaza göre',
+        '',
+        'Telefon ve tablet markasına ya da modeline göre ürün sayfaları.',
+        '',
+        '- [Cihaza göre aksesuarlar](https://onopostore.com/cihaz/): 5 cihaz sayfası, 70 ürün',
+        '- [iPhone aksesuarları](https://onopostore.com/cihaz/iphone/): 36 ürün',
+    ].join('\n')), txt)
 })
 
 test('llms.txt route: not in the sitemap, allowed by robots.txt', () => {
