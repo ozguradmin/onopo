@@ -500,3 +500,77 @@ body:has([data-hide-bottom-nav]) [data-bottom-nav] {
     bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
+
+/* ---------------------------------------------------------------------------------------------- */
+/* Onopo Asistan (components/assistant/*): launcher and chat panel layers, shimmer, caret           */
+/* ---------------------------------------------------------------------------------------------- */
+
+@utility z-launcher {
+  z-index: 44; /* above bottom nav (40), below the PDP buy bar (45) */
+}
+
+@utility z-assistant {
+  z-index: 55; /* above overlay (50); cart drawer (60) and toasts (70) stay above */
+}
+
+@theme {
+  --color-whatsapp-50: #ECF8F5;
+  --animate-ai-shimmer: ai-shimmer 1.6s linear infinite;
+  --animate-ai-caret: ai-caret 1s steps(1) infinite;
+
+  @keyframes ai-shimmer {
+    from { background-position: 100% 0; }
+    to { background-position: 0 0; }
+  }
+
+  @keyframes ai-caret {
+    50% { opacity: 0; }
+  }
+}
+
+/* Active step label: a light sweep through muted text */
+@utility ai-shimmer {
+  background-image: linear-gradient(90deg, var(--color-muted) 0%, var(--color-muted) 40%, var(--color-ink) 50%, var(--color-muted) 60%, var(--color-muted) 100%);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: var(--animate-ai-shimmer);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-shimmer {
+    animation: none;
+    background: none;
+    color: var(--color-muted);
+  }
+
+  .animate-ai-caret {
+    animation: none !important;
+  }
+}
+
+/* Launcher above the bottom nav or the PDP buy bar (phones), 24px from the corner (desktop) */
+@media (max-width: 767px) {
+  [data-assistant-launcher] {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* PDP with the main CTA on screen: neither the bottom nav nor the buy bar is visible */
+  body:has([data-hide-bottom-nav][aria-hidden="true"]) [data-assistant-launcher] {
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (min-width: 768px) {
+  [data-assistant-launcher] {
+    bottom: 24px;
+  }
+}
+
+/* A toast is up: the launcher steps aside */
+body:has([data-sonner-toast]) [data-assistant-launcher] {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(.9);
+}
