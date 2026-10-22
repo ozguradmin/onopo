@@ -8,7 +8,7 @@
 //   - the maintenance render answered as 503 + Retry-After + X-Robots-Tag: noindex (client-side navigations of
 //     tabs opened before maintenance get a plain 503, so the router loads that page),
 //   - the readable session hint cookie (lib/session-hint.ts) kept in sync with auth_token,
-//   - the cron (scheduled) handler.
+//   - the cron (scheduled) handler (daily price update; on Mondays also the assistant's popular questions).
 // See https://opennext.js.org/cloudflare/howtos/custom-worker
 //
 // .open-next/worker.js already imports the 8 MB Next server handler lazily, so a cache HIT answered
@@ -53,6 +53,11 @@ type Env = {
     ASSETS?: { fetch(request: Request): Promise<Response> }
 }
 type Ctx = { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void }
+
+/** Monday in Turkey time (the weekly jobs of the daily cron). */
+function isIstanbulMonday(now: Date): boolean {
+    return new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Istanbul', weekday: 'short' }).format(now) === 'Mon'
+}
 
 // ---- content version (site_settings.cache_version) and maintenance switch (site_settings.maintenance_mode) ----
 
@@ -328,6 +333,24 @@ const worker = {
 
         // Call the route in-process; the trailing slash matches next.config trailingSlash
         const baseUrl = env.NEXT_PUBLIC_BASE_URL || 'https://onopostore.com'
+
+        // Mondays (Europe/Istanbul): the assistant's weekly popular questions (app/api/ai/popular). Its own
+        // failure never stops the price update, and it runs before it so a failed price update cannot skip it
+        if (isIstanbulMonday(new Date())) {
+            try {
+                const popular: Response = await handler.fetch(new Request(`${baseUrl}/api/ai/popular/`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${env.CRON_SECRET}` },
+                }), env, ctx)
+                const result = await popular.json().catch(() => null) as { status?: string; changed?: boolean } | null
+                console.log(`[cron] ai popular questions ${popular.status} ${result?.status ?? '-'}`)
+                // New chips: the cached storefront pages carry the settings, so they must not keep the old ones
+                if (popular.ok && result?.changed) await bumpCacheVersion(env)
+            } catch (error) {
+                console.error('[cron] ai popular questions failed', error)
+            }
+        }
+
         const request = new Request(`${baseUrl}/api/cron/update-prices/`, {
             headers: { Authorization: `Bearer ${env.CRON_SECRET}` },
         })

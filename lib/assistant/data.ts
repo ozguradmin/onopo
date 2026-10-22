@@ -21,6 +21,7 @@ import { DEFAULT_FACTS, normalizeCutoff, type StoreFacts } from './facts'
 import { budgetExceeded, parseBudgetUsd, recordExtraCost, type D1Lite } from './limits'
 import { decideFacts, ensureFactsTable, loadStoredFacts, refreshFacts, type FactsProduct, type StaleItem } from './product-facts'
 import { pickStoreWhatsapp, type ProductDetailRow } from './tools'
+import { analyzePopular, type AnalyzeResult } from './popular'
 import { buildKnowledge, type Knowledge, type TurnDeps } from './turn'
 
 /** Code defaults for the model ids (wrangler.toml [vars] override them). */
@@ -228,6 +229,25 @@ export async function refreshFactsInBackground(env: CloudflareEnv, settings: Ass
     } finally {
         factsRunning = false
     }
+}
+
+/**
+ * The weekly popular-questions analysis (lib/assistant/popular.ts) with this env: the chat model, today's
+ * budget (skipped when it is used up) and the cost recorded in today's budget row. Used by the cron route
+ * and the admin button.
+ */
+export async function runPopularAnalysis(env: CloudflareEnv, now: Date = new Date()): Promise<AnalyzeResult> {
+    const db = env.DB
+    if (!env.AI) throw new Error('ai_binding_missing')
+    const settings = (await getVersionState(db)).settings
+    return analyzePopular({
+        db: db as unknown as D1Lite,
+        ai: env.AI,
+        model: env.AI_CHAT_MODEL || DEFAULT_MODELS.chat,
+        now,
+        budgetExceeded: () => budgetExceeded(db as unknown as D1Lite, now, parseBudgetUsd(settings.ai_daily_budget_usd)),
+        recordCost: (calls, cost) => recordExtraCost(db as unknown as D1Lite, calls, cost, now),
+    })
 }
 
 /** The knowledge for the current version (rebuilt when the version or the relevant settings change). */

@@ -28,7 +28,7 @@ export const CHIP_ACTIONS: readonly ChipAction[] = ['faq_shipping', 'faq_cutoff'
 export const HANDOFF_REASONS: readonly HandoffReason[] = [
     'whatsapp_order', 'order_status', 'return', 'payment', 'bulk', 'compatibility', 'product_request', 'complaint', 'human', 'other',
 ]
-const UI_EVENT_TYPES: readonly UiEventType[] = ['open', 'card_click', 'add_to_cart', 'wa_shown', 'wa_click', 'stop', 'new_chat']
+const UI_EVENT_TYPES: readonly UiEventType[] = ['open', 'card_click', 'add_to_cart', 'wa_shown', 'wa_click', 'stop', 'new_chat', 'cart_change', 'cart_undo']
 const UI_SOURCES = ['launcher', 'nudge', 'search', 'header', 'chip', 'card'] as const
 
 export const CONVERSATION_ID_RE = /^[A-Za-z0-9-]{8,64}$/

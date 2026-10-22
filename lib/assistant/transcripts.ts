@@ -39,7 +39,7 @@ export interface ConversationSummary {
     outcome: TranscriptOutcome
 }
 
-export type TranscriptEvent = Extract<AssistantEvent, { t: 'products' | 'compare' | 'links' | 'store_info' | 'whatsapp' | 'suggestions' }>
+export type TranscriptEvent = Extract<AssistantEvent, { t: 'products' | 'compare' | 'links' | 'store_info' | 'whatsapp' | 'suggestions' | 'cart' | 'cart_ops' }>
 
 export interface TranscriptMessage {
     role: 'user' | 'assistant'
@@ -51,7 +51,7 @@ export interface TranscriptMessage {
 
 export const TRANSCRIPT_RETENTION_DAYS = 365
 export const PAGE_SIZE = 30
-const CARD_TYPES: ReadonlySet<string> = new Set(['products', 'compare', 'links', 'store_info', 'whatsapp', 'suggestions'])
+const CARD_TYPES: ReadonlySet<string> = new Set(['products', 'compare', 'links', 'store_info', 'whatsapp', 'suggestions', 'cart', 'cart_ops'])
 
 // ---------------------------------------------------------------------------------------------
 // Tables
@@ -202,7 +202,7 @@ export async function recordTranscript(db: D1Lite, t: TranscriptTurn, now: Date 
         const at = now.toISOString()
         const bucket = outcomeBucket(t.outcome)
         let events = JSON.stringify(t.capture.events)
-        if (events.length > MAX_EVENTS_JSON) events = JSON.stringify(t.capture.events.filter(e => e.t !== 'compare' && e.t !== 'products'))
+        if (events.length > MAX_EVENTS_JSON) events = JSON.stringify(t.capture.events.filter(e => e.t !== 'compare' && e.t !== 'products' && e.t !== 'cart'))
         const products = t.capture.productIds.length ? t.capture.productIds.join(',') : null
         const device = (t.capture.device ?? t.device)?.slice(0, 60) || null
         const conv = db

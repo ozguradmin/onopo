@@ -6,13 +6,14 @@
  * last 7 days. Values are site_settings keys saved through the existing POST /api/site-settings (which
  * also bumps cache_version, so the storefront picks up the switch). Only changed keys are sent.
  * Also here: how many conversations were stored (the transcripts themselves are on
- * /admin/assistant/sohbetler/) and the product facts lines, with a button that fills the missing ones.
+ * /admin/assistant/sohbetler/), the product facts lines, with a button that fills the missing ones, and the
+ * popular-question chips of the empty chat (weekly analysis, "Şimdi analiz et", edit or clear them).
  */
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { ArrowLeft, Save, Sparkles, MessageCircle, Truck, Megaphone, Wallet, BarChart3, MessagesSquare, PackageSearch, Download, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Save, Sparkles, MessageCircle, Truck, Megaphone, Wallet, BarChart3, MessagesSquare, PackageSearch, Download, RefreshCw, Lightbulb } from 'lucide-react'
 import { waBaseOf } from '@/lib/assistant/tools'
 
 const KEYS = ['ai_assistant_enabled', 'ai_whatsapp_number', 'ai_ship_days', 'ai_ship_cutoff', 'ai_support_hours', 'ai_campaigns', 'ai_daily_budget_usd'] as const
@@ -56,6 +57,26 @@ interface FactsStatus {
     missing: number
 }
 
+interface PopularState {
+    questions: string[]
+    meta: { at: string; source: 'auto' | 'admin'; messages: number } | null
+}
+
+const POPULAR_STATUS: Record<string, string> = {
+    updated: 'Sorular güncellendi.',
+    unchanged: 'Analiz yapıldı; sorular aynı kaldı.',
+    too_few: 'Son 7 günde yeterli mesaj yok (en az 20); mevcut sorular korundu.',
+    no_valid: 'Model uygun soru bulamadı; mevcut sorular korundu.',
+    model_error: 'Yapay zekâ şu an cevap vermedi; mevcut sorular korundu.',
+    budget: 'Bugünkü bütçe dolu; analiz yarın tekrar denenebilir.',
+}
+
+function formatIstanbul(iso: string): string {
+    const d = new Date(iso)
+    if (!Number.isFinite(d.getTime())) return iso
+    return d.toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'medium', timeStyle: 'short' })
+}
+
 const CAMPAIGNS_MAX = 600
 
 function Section({ icon: Icon, title, children }: { icon: React.ComponentType<{ className?: string }>; title: string; children: React.ReactNode }) {
@@ -86,6 +107,10 @@ export default function AdminAssistantPage() {
     const [facts, setFacts] = React.useState<FactsStatus | null>(null)
     const [factsBusy, setFactsBusy] = React.useState(false)
     const [factsNote, setFactsNote] = React.useState('')
+    const [popular, setPopular] = React.useState<PopularState | null>(null)
+    const [popularDraft, setPopularDraft] = React.useState<string[]>(['', '', ''])
+    const [popularBusy, setPopularBusy] = React.useState(false)
+    const [popularNote, setPopularNote] = React.useState('')
 
     React.useEffect(() => {
         fetch('/api/site-settings', { cache: 'no-store' })
@@ -110,7 +135,62 @@ export default function AdminAssistantPage() {
             .then(r => (r.ok ? r.json() : null))
             .then(d => setFacts(d && typeof d.total === 'number' ? d : null))
             .catch(() => {})
+        fetch('/api/admin/assistant/popular/', { cache: 'no-store' })
+            .then(r => (r.ok ? r.json() : null))
+            .then((d: PopularState | null) => {
+                if (!d || !Array.isArray(d.questions)) return
+                setPopular({ questions: d.questions, meta: d.meta ?? null })
+                setPopularDraft([0, 1, 2].map(i => d.questions[i] ?? ''))
+            })
+            .catch(() => {})
     }, [])
+
+    function showPopular(d: PopularState) {
+        setPopular({ questions: d.questions, meta: d.meta ?? null })
+        setPopularDraft([0, 1, 2].map(i => d.questions[i] ?? ''))
+    }
+
+    /** "Şimdi analiz et": the weekly analysis on demand (a fraction of a cent, counted in today's budget). */
+    const analyzePopular = async () => {
+        setPopularBusy(true)
+        setPopularNote('')
+        try {
+            const res = await fetch('/api/admin/assistant/popular/', { method: 'POST' })
+            const d = await res.json().catch(() => null)
+            if (!res.ok || !d) throw new Error(String(res.status))
+            showPopular({ questions: Array.isArray(d.questions) ? d.questions : [], meta: d.meta ?? null })
+            setPopularNote(POPULAR_STATUS[d.status] ?? 'Analiz tamamlandı.')
+        } catch {
+            setPopularNote('Analiz yapılamadı, lütfen tekrar dene.')
+        } finally {
+            setPopularBusy(false)
+        }
+    }
+
+    /** Saves the admin's own list ([] clears it). */
+    const savePopular = async (questions: string[]) => {
+        setPopularBusy(true)
+        setPopularNote('')
+        const list = questions.map(q => q.trim()).filter(Boolean)
+        try {
+            const res = await fetch('/api/admin/assistant/popular/', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ questions: list }),
+            })
+            const d = await res.json().catch(() => null)
+            if (!res.ok || !d || !Array.isArray(d.questions)) {
+                setPopularNote(typeof d?.error === 'string' ? d.error : 'Kaydedilemedi, lütfen tekrar dene.')
+                return
+            }
+            showPopular(d)
+            setPopularNote(list.length ? 'Sorular kaydedildi.' : 'Sorular temizlendi.')
+        } catch {
+            setPopularNote('Kaydedilemedi, lütfen tekrar dene.')
+        } finally {
+            setPopularBusy(false)
+        }
+    }
 
     /** Fills the missing product facts lines a few at a time until none is left (or nothing moves). */
     const refreshFacts = async () => {
@@ -312,6 +392,49 @@ export default function AdminAssistantPage() {
                         <a href="/api/admin/assistant/conversations/export/?format=csv" className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50">
                             <Download className="w-4 h-4" /> Excel için indir (CSV)
                         </a>
+                    </div>
+                </Section>
+
+                <Section icon={Lightbulb} title="Sık sorulan sorular">
+                    <p className="text-sm text-slate-600">
+                        Sohbet açıldığında &quot;Kargo bedava için ne eklesem?&quot; düğmesinin yanında gösterilen sorular. Her pazartesi son 7 günün
+                        mesajlarına bakılarak en sık sorulan 3 soru otomatik seçilir; istersen kendin de yazabilir ya da temizleyebilirsin.
+                    </p>
+                    {popular?.meta && (
+                        <p className="text-xs text-slate-500">
+                            Son güncelleme: {formatIstanbul(popular.meta.at)} ·{' '}
+                            {popular.meta.source === 'admin' ? 'elle düzenlendi' : `${popular.meta.messages} mesajdan otomatik`}
+                        </p>
+                    )}
+                    {popular && popular.questions.length === 0 && <p className="text-sm text-slate-500">Şu an gösterilen soru yok.</p>}
+                    <div className="space-y-2">
+                        {popularDraft.map((q, i) => (
+                            <div key={i}>
+                                <label className="sr-only" htmlFor={`ai-popular-${i}`}>{`Soru ${i + 1}`}</label>
+                                <input
+                                    id={`ai-popular-${i}`}
+                                    type="text"
+                                    maxLength={32}
+                                    value={q}
+                                    onChange={e => setPopularDraft(d => d.map((x, j) => (j === i ? e.target.value : x)))}
+                                    className="w-full p-2 border rounded-lg"
+                                    placeholder={['Örn. iPhone 15 için şarj aleti', 'Örn. Seramik ile 9D farkı ne?', 'Örn. Hızlı şarj kablosu öner'][i]}
+                                />
+                            </div>
+                        ))}
+                        <p className="text-xs text-slate-500">En çok 32 karakter; numara, bağlantı ya da kişisel bilgi yazma.</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Button type="button" variant="outline" onClick={analyzePopular} disabled={popularBusy}>
+                            <RefreshCw className={`w-4 h-4 mr-2${popularBusy ? ' animate-spin' : ''}`} /> Şimdi analiz et
+                        </Button>
+                        <Button type="button" variant="outline" onClick={() => savePopular(popularDraft)} disabled={popularBusy}>
+                            <Save className="w-4 h-4 mr-2" /> Soruları kaydet
+                        </Button>
+                        <Button type="button" variant="ghost" onClick={() => savePopular([])} disabled={popularBusy || !popular?.questions.length}>
+                            Temizle
+                        </Button>
+                        {popularNote && <span className="text-sm text-slate-600" role="status">{popularNote}</span>}
                     </div>
                 </Section>
 
