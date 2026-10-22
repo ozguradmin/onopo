@@ -329,7 +329,10 @@ export function searchCatalog(rows: readonly CatalogRow[], query: string, opts: 
         && (opts.maxPrice == null || r.displayPrice <= opts.maxPrice + 0.001),
     )
     const prepared = prepareQuery(query)
-    const known = prepared.tokens.filter(t => rows.some(r => scoreSearch(docOf(r), prepareQuery(t)) > 0))
+    const known = prepared.tokens.filter(t => {
+        const single = prepareQuery(t)
+        return rows.some(r => scoreSearch(docOf(r), single) > 0)
+    })
     let ranked: CatalogRow[]
     if (known.length === 0) {
         // No usable word: a group (or price) filter alone still lists that group, cheapest first

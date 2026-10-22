@@ -20,7 +20,7 @@ import { buildMessages, buildSystemMessage, buildTurnContext, computeCart, type 
 import { sanitize } from './request'
 import { buildRouterState, decide, routeTurn, type RouteDecision } from './router'
 import { parseWorkersAiSse, type Usage } from './sse-parser'
-import { DATA_TOOLS, TOOL_STEP, TOOLS, catalogLinesFor, isKnownTool, newToolState, runTool, waBaseOf, whatsappEvents, type ProductDetailRow, type ToolContext } from './tools'
+import { DATA_TOOLS, TOOL_STEP, TOOLS, catalogLinesFor, isKnownTool, newToolState, runTool, waBaseOf, whatsappEvents, type ProductDetailRow, type ToolContext, type ToolResult } from './tools'
 import { addToolText, collectAllowed, createTextGuard } from './validator'
 import { CANNED, DEFAULT_TEXT, faqAnswer } from './canned'
 import { buildSuggestions, type TurnEnd } from './suggestions'
@@ -664,7 +664,7 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
                 }
                 log.tools.push(tc.name)
                 out({ t: 'step', id: TOOL_STEP[tc.name], state: 'active' })
-                let r
+                let r: ToolResult
                 try {
                     r = await runTool(tc.name, tc.args, ctx)
                 } catch {
