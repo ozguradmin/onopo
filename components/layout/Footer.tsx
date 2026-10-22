@@ -167,6 +167,7 @@ function FooterInner({ variant }: { variant: 'store' | 'checkout' }) {
                                 {l.label}
                             </FooterLink>
                         ))}
+                        <FooterLink href="/rehber/">Rehberler</FooterLink>
                         <FooterLink href="/profile/">Hesabım</FooterLink>
                     </FooterColumn>
 

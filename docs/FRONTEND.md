@@ -340,6 +340,8 @@ Everything is server-friendly unless marked (client). New storefront code import
 | `components/ui/FallbackImage.tsx` (client) | `<img>` with a one-shot chain: `src`(+`srcSet`) → `fallbackSrc` → `placeholderSrc` (default `/placeholder.svg`), then it stops. It also catches images that failed before hydration. Always pass `width`/`height` or use an aspect-ratio box. |
 | `components/product/ProductCard.tsx` | `<ProductCard product rating? priority? eager? freeShippingThreshold? sizes? headingLevel="h3" showAddButton?>`, see below. Also exports `RatingStars`. |
 | `components/product/ProductCardImages.tsx` (client) | The card's image well: main image plus the lazily added hover image (below). |
+| `components/guides/GuideBody.tsx` | Guide article parts: `<GuideBody sections>` (H2 per section, paragraphs/lists/tips with `[label](/path/)` links), `<GuideToc>`, `<GuideFaqList>` (always visible), `<InlineText>`. Data: `lib/guides` (docs/SEO.md §11) |
+| `components/guides/GuideCards.tsx` | `<GuideCards guides headingLevel>` (hub, "Diğer rehberler"), `<GuideLinkList guides>` (/kategoriler/ block) |
 | `components/product/ProductCardActions.tsx` (client) | `<QuickAddButton product variant="icon"\|"full" openDrawer?>`, `<FavoriteButton productId productName variant="card"\|"plain">`, `useFavorites()`, `toCartItem(product)`, `resetFavorites()` |
 
 ### ProductCard (spec §9)

@@ -28,6 +28,7 @@
  */
 import { BOT_USER_AGENT } from './bot-user-agent'
 import { isTrackingParam } from './edge-cache'
+import { GUIDES_PATH, guidePath, isGuideSlug } from './guides/slugs'
 import { imageKey, R2_PUBLIC_HOST } from './images'
 import { foldTr } from './seo'
 
@@ -57,7 +58,7 @@ export const SUGGEST_MIN_SCORE = 0.4
 /** Pages that exist without a database row. /help/ … redirect to /page/<slug>/ themselves (lib/seo-routing.ts). */
 const STATIC_LIVE = new Set([
     '/', '/products/', '/categories/', '/kategoriler/', '/odeme/', '/login/', '/register/', '/profile/', '/orders/',
-    '/help/', '/policy/', '/shipping/', '/terms/',
+    '/help/', '/policy/', '/shipping/', '/terms/', GUIDES_PATH,
 ])
 
 const PRODUCT_PREFIXES = new Set(['urun', 'urunler', 'product', 'products', 'p', 'item', 'items', 'shop', 'magaza'])
@@ -493,6 +494,9 @@ export function isLiveTarget(target: string, index: RedirectIndex): boolean {
     if (m) return index.categoriesBySlug.has(m[1])
     m = /^\/page\/([^/]+)\/$/.exec(p)
     if (m) return index.pages.has(m[1])
+    // Shopping guides: the texts are in code (lib/guides), so the slug list is the index
+    m = /^\/rehber\/([^/]+)\/$/.exec(p)
+    if (m) return isGuideSlug(m[1])
     m = /^\/product\/(\d{1,10})\/$/.exec(p)
     if (m) return index.productsById.has(Number(m[1]))
     m = /^\/([^/]+)\/$/.exec(p)
@@ -687,6 +691,12 @@ async function resolveRules(parsed: ParsedPath, deps: ResolveDeps): Promise<Reso
     const last = lastRaw.replace(PAGE_EXT, '')
     if (!last || last === 'index') return null
 
+    // /rehber/…: our own guides. A guide slug (another spelling such as /rehber/x.html) goes to the guide; any
+    // other path under /rehber/ stays a 404 (logged for the admin), never a guess at a product
+    if (first === 'rehber') {
+        return segments.length === 2 && isGuideSlug(last) ? { target: guidePath(last), via: 'pattern', rule: 'guide' } : null
+    }
+
     // /kategori/<x>/ (old or nested slug), /category/<x>/, /collections/<x>/
     if (CATEGORY_PREFIXES.has(first) && segments.length >= 2) {
         return matchCategorySegment(last, index)
@@ -708,6 +718,7 @@ async function resolveRules(parsed: ParsedPath, deps: ResolveDeps): Promise<Reso
     const category = index.categoriesBySlug.get(last)
     if (category) return productResult(category, 'pattern', 'category')
     if (index.pages.has(last)) return { target: `/page/${last}/`, via: 'pattern', rule: 'page' }
+    if (isGuideSlug(last)) return { target: guidePath(last), via: 'pattern', rule: 'guide' }
     if (/^\d+$/.test(last)) return null
     return matchProductSegment(last, index, [...index.products, ...index.categories])
 }

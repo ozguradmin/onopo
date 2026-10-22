@@ -1259,6 +1259,58 @@ export function itemListJsonLd(items: Array<{ path: string; name?: string }>, op
     }
 }
 
+export interface ArticleSeoInput {
+    headline: string
+    description: string
+    /** Canonical path, e.g. "/rehber/<slug>/". */
+    path: string
+    /** YYYY-MM-DD */
+    datePublished: string
+    dateModified: string
+}
+
+/**
+ * Article for an editorial page (the shopping guides). Author and publisher are the store itself (the root
+ * layout's OnlineStore node, same @id); the image is the site's og-image, as no guide has its own picture.
+ */
+export function articleJsonLd(article: ArticleSeoInput, site: Pick<SiteSeo, 'name' | 'logo'> = DEFAULT_SITE_SEO): JsonLdObject {
+    const url = canonicalUrl(article.path)
+    const organization = {
+        '@type': 'Organization',
+        '@id': ORGANIZATION_ID,
+        name: site.name,
+        url: `${SITE_URL}/`,
+        ...(site.logo ? { logo: { '@type': 'ImageObject', url: site.logo } } : {}),
+    }
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'Article',
+        headline: article.headline,
+        description: article.description,
+        url,
+        mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+        inLanguage: SITE.language,
+        datePublished: article.datePublished,
+        dateModified: article.dateModified,
+        image: [DEFAULT_OG_IMAGE.url],
+        author: organization,
+        publisher: organization,
+    }
+}
+
+/** FAQPage: only for questions and answers that are visible on the page, as plain text. */
+export function faqPageJsonLd(items: Array<{ question: string; answer: string }>): JsonLdObject {
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: items.map(it => ({
+            '@type': 'Question',
+            name: it.question,
+            acceptedAnswer: { '@type': 'Answer', text: it.answer },
+        })),
+    }
+}
+
 export interface ReviewStats {
     count: number
     average: number
