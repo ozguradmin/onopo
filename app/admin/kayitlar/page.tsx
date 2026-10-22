@@ -37,6 +37,7 @@ const SOURCES: { value: string; label: string }[] = [
     { value: 'assistant', label: 'AI Asistan' },
     { value: 'reviews', label: 'Değerlendirme e-postaları' },
     { value: 'redirects', label: 'Yönlendirmeler' },
+    { value: 'indexnow', label: 'Arama motoru bildirimleri' },
     { value: 'other', label: 'Diğer' },
 ]
 const SOURCE_LABEL: Record<string, string> = Object.fromEntries(SOURCES.filter(s => s.value).map(s => [s.value, s.label]))

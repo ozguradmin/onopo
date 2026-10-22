@@ -4,6 +4,7 @@ import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import { slugifyTr } from '@/lib/seo'
 import { runInBackground } from '@/lib/automation/background'
+import { notifyIndexNow } from '@/lib/indexnow-server'
 import { refreshFactsForProducts } from '@/lib/assistant/data'
 import { gtinForStorage, writeProductGtin } from '@/lib/gtin'
 
@@ -117,6 +118,8 @@ export async function POST(req: NextRequest) {
         // The assistant learns the first few new products right away (what fits in waitUntil's ~30 s); the
         // daily cron sweep writes the rest (lib/assistant/facts-auto.ts)
         if (insertedIds.length) await runInBackground('facts', env => refreshFactsForProducts(env, insertedIds))
+        // One IndexNow POST for the whole import (new pages and their listings)
+        if (insertedIds.length) await notifyIndexNow(req.url, { productIds: insertedIds, paths: ['/products/'] })
 
         return NextResponse.json({
             success: true,

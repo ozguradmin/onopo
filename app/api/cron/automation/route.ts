@@ -1,8 +1,11 @@
 /**
- * POST /api/cron/automation/?job=reviews|images|facts&ms=<time budget>: the daily automatic upkeep.
+ * POST /api/cron/automation/?job=reviews|indexnow|images|facts&ms=<time budget>: the daily automatic upkeep.
  *
  *  - job=reviews: the review-request e-mails, at most 20 orders per run, each order once
  *    (lib/order-reviews.ts, lib/review-requests-server.ts).
+ *  - job=indexnow: one IndexNow POST with the sitemap URLs that are new, changed since they were last sent or
+ *    gone from the sitemap (lib/indexnow.ts). The sitemap (app/sitemap.ts) is the list, so every page added to
+ *    it later (guides, device pages …) is sent once by itself.
  *  - job=images: creates the missing WebP variants of the images the storefront shows (Cloudflare Images
  *    binding; lib/image-variants-server.ts), bounded per run.
  *  - job=facts: writes every missing or outdated assistant facts line, one DeepSeek call every 4 s, at most
@@ -17,11 +20,13 @@ import { NextResponse } from 'next/server'
 import { sweepProductFacts } from '@/lib/assistant/data'
 import { sweepImageVariants } from '@/lib/image-variants-server'
 import { sweepReviewRequests } from '@/lib/review-requests-server'
+import { runIndexNowSweep } from '@/lib/indexnow-server'
+import sitemap from '@/app/sitemap'
 
 export const dynamic = 'force-dynamic'
 
 const headers = { 'Cache-Control': 'private, no-store' }
-const MAX_MS: Record<string, number> = { reviews: 2 * 60_000, images: 4 * 60_000, facts: 9 * 60_000 }
+const MAX_MS: Record<string, number> = { reviews: 2 * 60_000, indexnow: 60_000, images: 4 * 60_000, facts: 9 * 60_000 }
 
 export async function POST(req: Request) {
     const cronSecret = process.env.CRON_SECRET
@@ -42,6 +47,13 @@ export async function POST(req: Request) {
             const s = r as { stopped: string; candidates?: number; sent?: number; failed?: number }
             console.log(`automation_reviews stopped=${s.stopped} candidates=${s.candidates ?? '-'} sent=${s.sent ?? '-'} failed=${s.failed ?? '-'}`)
             return NextResponse.json({ job, stopped: s.stopped, candidates: s.candidates ?? null, sent: s.sent ?? 0, failed: s.failed ?? 0 }, { headers })
+        }
+        if (job === 'indexnow') {
+            // The cron calls this in-process on NEXT_PUBLIC_BASE_URL: the host is the production one only there
+            const entries = (await sitemap()).map(e => ({ url: e.url, lastModified: e.lastModified ?? null }))
+            const r = await runIndexNowSweep(env, url.hostname, entries)
+            console.log(`automation_indexnow status=${r.status} changed=${r.changed} removed=${r.removed}`)
+            return NextResponse.json({ job, ...r }, { headers })
         }
         if (job === 'images') {
             const r = await sweepImageVariants(env, deadline)

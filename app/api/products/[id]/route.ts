@@ -4,6 +4,8 @@ import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import { runInBackground } from '@/lib/automation/background'
 import { refreshFactsForProducts } from '@/lib/assistant/data'
+import { notifyIndexNow } from '@/lib/indexnow-server'
+import { productPath } from '@/lib/seo'
 import { GTIN_NOT_SAVED_WARNING, gtinError, normalizeGtin, writeProductGtin } from '@/lib/gtin'
 
 // Columns only the admin product editor needs (purchase/source prices); never sent to anyone else
@@ -121,6 +123,9 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 
         console.log('Updating product:', intId, body)
 
+        // IndexNow: the listing a product leaves (category change) has changed too
+        const before = await db.prepare('SELECT category FROM products WHERE id = ?').bind(intId).first<{ category: string | null }>().catch(() => null)
+
         try {
             await db.prepare(
                 `UPDATE products SET 
@@ -188,6 +193,8 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         // A changed name or description is re-learned by the assistant right away; other edits cost nothing
         // (the facts line is keyed by a hash of name + description; lib/assistant/facts-auto.ts)
         if (Number.isInteger(intId) && intId > 0) await runInBackground('facts', env => refreshFactsForProducts(env, [intId]))
+        // Bing, Yandex & co. recrawl the page and its listing(s) (price, stock, text, deactivation)
+        if (Number.isInteger(intId) && intId > 0) await notifyIndexNow(req.url, { productIds: [intId], categories: [before?.category] })
 
         return NextResponse.json(gtinWarning ? { success: true, warning: gtinWarning } : { success: true })
 
@@ -234,8 +241,13 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
             }
         }
 
+        // Read before the row goes: the search engines are told that its page and its listing changed
+        const gone = await db.prepare('SELECT slug, category FROM products WHERE id = ?').bind(intId).first<{ slug: string | null; category: string | null }>().catch(() => null)
+
         // Finally delete product
         await db.prepare('DELETE FROM products WHERE id = ?').bind(intId).run()
+
+        if (gone) await notifyIndexNow(req.url, { paths: [gone.slug ? productPath(gone.slug) : null, '/products/'], categories: [gone.category] })
 
         return NextResponse.json({ success: true })
 

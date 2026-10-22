@@ -17,7 +17,7 @@
  * Pure apart from the injected database (tests pass a node:sqlite fake), so worker.ts can import it too.
  */
 
-export type SystemLogSource = 'redirects' | 'facts' | 'images' | 'cron' | 'assistant' | 'reviews' | 'other'
+export type SystemLogSource = 'redirects' | 'facts' | 'images' | 'cron' | 'assistant' | 'reviews' | 'indexnow' | 'other'
 export type SystemLogLevel = 'error' | 'warn' | 'info'
 
 export interface SystemLogEvent {
@@ -52,7 +52,7 @@ interface SystemLogStmt {
     run(): Promise<unknown>
 }
 
-export const SYSTEM_LOG_SOURCES: readonly SystemLogSource[] = ['facts', 'images', 'cron', 'assistant', 'reviews', 'redirects', 'other']
+export const SYSTEM_LOG_SOURCES: readonly SystemLogSource[] = ['facts', 'images', 'cron', 'assistant', 'reviews', 'redirects', 'indexnow', 'other']
 export const SYSTEM_LOG_LEVELS: readonly SystemLogLevel[] = ['error', 'warn', 'info']
 
 /** Same window for de-duplication everywhere (24 h). */
