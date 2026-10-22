@@ -6,18 +6,27 @@
  * the visitor edit it first; the compact row is a one-line reminder. The number is never printed: it only
  * exists inside `waBase` (https://wa.me/<digits>), built by the server or from the store settings.
  * Text the visitor edits is their own message and is not masked again.
+ *
+ * The message field exists only after "Düzenle" (before it the message is plain text, so there is nothing to
+ * focus), and editing ends when the panel is minimised or closed: a field that keeps focus inside a hidden sheet
+ * made iOS show its keyboard for this message when the visitor tapped the search box (components/layout/focus-rules.ts).
+ * The edited text stays.
  */
 import * as React from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import { LIMITS, whatsappLink } from '@/lib/assistant/contract'
 import { WhatsAppGlyph } from '../icons'
 import { useAssistantUi } from '../useAssistantChat'
+import { assistantVisible, useAssistantStore } from '../assistant-store'
 import type { WhatsappEvent } from '../chat-reducer'
 
 export function WhatsAppCard({ card, beaconShown = true }: { card: WhatsappEvent; beaconShown?: boolean }) {
     const { chat } = useAssistantUi()
     const [message, setMessage] = React.useState(card.message)
-    const [editing, setEditing] = React.useState(false)
+    const [editingState, setEditing] = React.useState(false)
+    const panelVisible = useAssistantStore(assistantVisible)
+    // Only while the panel is on screen: a minimised sheet keeps no editable field
+    const editing = editingState && panelVisible
     const [more, setMore] = React.useState(false)
     const fieldRef = React.useRef<HTMLTextAreaElement>(null)
     const href = whatsappLink(card.waBase, message)
@@ -28,6 +37,11 @@ export function WhatsAppCard({ card, beaconShown = true }: { card: WhatsappEvent
         // once per card
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+
+    // The sheet was minimised or closed while editing: back to the plain text (a new "Düzenle" is needed)
+    React.useEffect(() => {
+        if (!panelVisible) setEditing(false)
+    }, [panelVisible])
 
     React.useEffect(() => {
         if (editing) fieldRef.current?.focus()
@@ -52,7 +66,7 @@ export function WhatsAppCard({ card, beaconShown = true }: { card: WhatsappEvent
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Gönderilecek mesaj</span>
                 <button
                     type="button"
-                    onClick={() => setEditing(v => !v)}
+                    onClick={() => setEditing(!editing)}
                     aria-expanded={editing}
                     className="-my-2 inline-flex min-h-10 items-center px-1 text-[13px] font-semibold text-brand-600 hover:text-brand-700"
                 >

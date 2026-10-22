@@ -46,7 +46,7 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - `--persist-to` yolunu kısa tut: Windows'un 259 karakterlik yol sınırına takılmasın.
 - `tsc`, `.next/types` altında ödeme callback route'u için eskiden kalan hatalar verir; `next.config.ts` build'de
   tip hatalarını yok sayar (`ignoreBuildErrors`).
-- Birim testleri: `node --test scripts/edge-cache.test.mjs scripts/seo.test.mjs scripts/redirects.test.mjs scripts/guides.test.mjs scripts/devices.test.mjs scripts/worker-hsts.test.mjs` (Node 23.6+; CI çalıştırmaz).
+- Birim testleri: `node --test scripts/edge-cache.test.mjs scripts/seo.test.mjs scripts/redirects.test.mjs scripts/guides.test.mjs scripts/devices.test.mjs scripts/worker-hsts.test.mjs scripts/rsc-cache.test.mjs scripts/focus-rules.test.mjs scripts/page-awake.test.mjs` (Node 23.6+; CI çalıştırmaz).
   Otomatik işler: `node --test scripts/automation.test.mjs` (D1 yerine `node:sqlite`, saat/AI/R2/Images sahte).
   Yorumlar/değerlendirme e-postaları ve migration: `node --test scripts/reviews.test.mjs`; Google feed ve barkod: `node --test scripts/feeds.test.mjs`.
   IndexNow (sahte fetch, anahtar dosyası, cron adımı): `node --test scripts/indexnow.test.mjs`; ürün SSS ve `/llms.txt`:
@@ -100,6 +100,14 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   Oturum açık kullanıcının başarılı içerik yazmaları (ürün, kategori, ayar, sayfa, menü, yükleme …) ve günlük
   fiyat cron'u `cache_version`'ı artırır. Tamamen kapatmak: `lib/edge-cache.ts`'te `EDGE_CACHE_ENABLED = false`
   (kod sabiti; değişiklik + deploy gerekir).
+- **RSC payload'ları** (istemci tarafı geçişler ve prefetch'ler, `RSC: 1` başlığı) aynı allowlist ve kurallarla saklanır:
+  anahtar ayrı köktedir (`/__edge-cache-rsc/`, build id + `cache_version` + yol + router başlıklarının hash'i; `_rsc` ve
+  `Next-Url` hariç), gövdesinde React hata satırı, `"data-onopo-nocache":""`, boş kategori listesi olan ya da ürün bloğu
+  olmayan `/<slug>/` saklanmaz. Tarayıcıya akış hemen gider, kopya arka planda kontrol edilip yazılır. Bakımda cache yok,
+  503 aynı. Kapatmak: `RSC_EDGE_CACHE_ENABLED = false`.
+- Mağaza linkleri: alt menünün "Ana sayfa"/"Kategoriler" sekmeleri ekranda görünür görünmez, header/çekmece linkleri
+  dokunma/hover/odakta tam prefetch alır (`components/layout/PrefetchLink.tsx`, yalnızca `lib/prefetch.ts` herkese açık
+  sayfaları; hesap, sipariş, ödeme, giriş asla). `next.config.ts` `experimental.staleTimes` (dynamic 30 sn, static 180 sn).
 - Anonim allowlist HTML tarayıcıya `Cache-Control: private, no-cache` ile gider (bfcache çalışsın). Oturumlu,
   admin ve ödeme yanıtları kendi başlığını korur.
 - **Oturum ipucu:** okunabilir `onopo_oturum=1` çerezi `auth_token` ile senkron tutulur (`lib/session-hint.ts`;
@@ -134,6 +142,8 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 ## Alışveriş rehberleri (`/rehber/`)
 - Metinler kodda: `lib/guides/content/*.ts` (6 rehber), slug listesi `lib/guides/slugs.ts`. İlgili ürünler D1'den canlı
   (`lib/guides/server.ts`, en çok 8, stoktakiler önce); metinde fiyat/stok yazılmaz. Metin değişince `dateModified`'i güncelle.
+- Görseller yalnızca kendi ürün fotoğraflarımız (stok/AI görsel yok): ilgili stoktaki ilk 3 ürünün fotoğrafı (`selectGuideImages`)
+  rehberin başlık görseli, kartlar, `/kategoriler/` ve cihaz sayfası listeleri, og:image ve Article JSON-LD `image` olur.
 - Ürün sayfasında tek "İlgili rehber" bağlantısı (`guideForProduct`), footer'da "Rehberler", `/kategoriler/`'de blok.
   Sitemap'te var; edge cache allowlist'inde; yönlendirme çözücü `/rehber/` altında tahmin yapmaz. Ayrıntı: `docs/SEO.md` §12.
 

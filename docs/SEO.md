@@ -507,6 +507,14 @@ Contract details:
   clauses of FACETS keys and/or a search query on the product NAME, taken in turns, in stock first, max 8. Never
   prices or stock in the text. If the catalogue cannot be read the page renders without them and carries
   `data-onopo-nocache`.
+- Pictures: only our own product photos (R2), never stock or generated images. `selectGuideImages` takes the first 3
+  in-stock related products with a photo, in the product row's order (`lib/guides/server.ts` `getGuideImages`, the same
+  catalogue read). They are the guide's header picture (`components/guides/GuideArt.tsx`: white tiles on a light panel,
+  fixed aspect ratio, alt = the product's short name), the guide cards' pictures (hub, "Diğer rehberler"; lazy except the
+  hub's first card), a small photo in the compact lists (`/kategoriler/`, device pages), og:image (the originals on
+  images.onopostore.com; the hub uses the first guide's) and the Article JSON-LD `image`. A guide without such a product
+  shows its icon and the site og-image. A failed catalogue read leaves the pictures out and marks the page
+  `data-onopo-nocache`.
 - Product pages show one "İlgili rehber" link: `guideForProduct()` tries the guides in `PRODUCT_GUIDE_ORDER`
   (most specific first) with each guide's `productMatch` (default: its product clauses).
 - Internal links: footer "Rehberler" (Müşteri hizmetleri column), the "Alışveriş rehberleri" block on

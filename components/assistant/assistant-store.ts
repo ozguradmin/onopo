@@ -74,3 +74,13 @@ export const ASSISTANT_EXCLUDED_PATH = /^\/(odeme|siparis-|admin|maintenance|log
 export function assistantVisible(s: Pick<AssistantState, 'open' | 'minimized'>): boolean {
     return s.open && !s.minimized
 }
+
+/**
+ * The phone sheet makes way for the search sheet (shell search box, bottom-nav "Ara"): it is minimised (the
+ * conversation stays, the launcher reads "Sohbete devam et"). Call it after the search field took focus in the
+ * same tap, so the sheet's focus trap leaves that focus alone (overlay-hooks / focus-rules.ts).
+ */
+export function yieldAssistantSheet(): void {
+    const s = useAssistantStore.getState()
+    if (s.isSheet && assistantVisible(s)) s.minimize()
+}

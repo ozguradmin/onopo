@@ -6,9 +6,11 @@ import { JsonLd } from '@/components/seo/JsonLd'
 import { ProductRail } from '@/components/home/ProductRail'
 import { GuideBody, GuideFaqList, GuideToc, InlineText } from '@/components/guides/GuideBody'
 import { GuideCards } from '@/components/guides/GuideCards'
+import { GuideArt } from '@/components/guides/GuideArt'
 import { getShippingSettings } from '@/lib/catalog'
 import { GUIDES, GUIDES_PATH, formatGuideDate, getGuide, guidePath, guideReadingMinutes, parseInlineLinks } from '@/lib/guides'
-import { getGuideProducts } from '@/lib/guides/server'
+import { getGuideImages, getGuideProducts } from '@/lib/guides/server'
+import { absoluteImageUrl } from '@/lib/images'
 import { articleJsonLd, buildMetadata, faqPageJsonLd, itemListJsonLd, productPath } from '@/lib/seo'
 import { getSiteSeo } from '@/lib/seo-server'
 import { normalizeSlugParam } from '@/lib/seo-routing'
@@ -17,6 +19,8 @@ import { normalizeSlugParam } from '@/lib/seo-routing'
  * /rehber/<slug>/: one shopping guide (text from lib/guides/content, related products live from D1).
  * An unknown slug is a real 404 (never guessed: lib/redirects.ts does not fuzzy-match under /rehber/);
  * another case of a known slug is a 308 to it. No loading.tsx / Suspense: the status is decided first.
+ * The header picture, og:image and the Article image are our own photos of the guide's in-stock products
+ * (lib/guides selectGuideImages); the "Diğer rehberler" cards get theirs the same way.
  */
 type Params = Promise<{ slug: string }>
 
@@ -27,12 +31,13 @@ function plain(text: string): string {
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
     const guide = getGuide(normalizeSlugParam((await params).slug) ?? '')
     if (!guide) return { title: 'Sayfa bulunamadı', robots: { index: false, follow: true } }
-    const site = await getSiteSeo()
+    const [site, { images }] = await Promise.all([getSiteSeo(), getGuideImages()])
     return buildMetadata({
         title: guide.title,
         description: guide.description,
         path: guidePath(guide.slug),
         type: 'article',
+        images: (images[guide.slug] ?? []).map(p => ({ url: absoluteImageUrl(p.image), alt: p.alt })),
         site,
     })
 }
@@ -46,11 +51,20 @@ export default async function GuidePage({ params }: { params: Params }) {
         notFound()
     }
 
-    const [{ products, failed }, shipping, site] = await Promise.all([getGuideProducts(guide), getShippingSettings(), getSiteSeo()])
+    const [{ products, failed }, guideImages, shipping, site] = await Promise.all([getGuideProducts(guide), getGuideImages(), getShippingSettings(), getSiteSeo()])
     const others = GUIDES.filter(g => g.slug !== guide.slug)
     const path = guidePath(guide.slug)
+    const photos = guideImages.images[guide.slug] ?? []
     const jsonLd = [
-        articleJsonLd({ headline: guide.title, description: guide.description, path, datePublished: guide.datePublished, dateModified: guide.dateModified }, site),
+        articleJsonLd({
+            headline: guide.title,
+            description: guide.description,
+            path,
+            datePublished: guide.datePublished,
+            dateModified: guide.dateModified,
+            // Originals, like every JSON-LD image (lib/images)
+            images: photos.map(p => absoluteImageUrl(p.image)),
+        }, site),
         guide.faq.length > 0 ? faqPageJsonLd(guide.faq.map(f => ({ question: f.q, answer: plain(f.a) }))) : null,
         products.length > 0 ? itemListJsonLd(products.map(p => ({ path: productPath(p.slug), name: p.name })), { name: guide.productsTitle }) : null,
     ]
@@ -58,7 +72,7 @@ export default async function GuidePage({ params }: { params: Params }) {
     return (
         <div className="bg-canvas pb-14 pt-4 lg:pb-16 lg:pt-6">
             {/* The products could not be read: this render must not be edge-cached */}
-            {failed && <div hidden data-onopo-nocache="" />}
+            {(failed || guideImages.failed) && <div hidden data-onopo-nocache="" />}
             <div className="container-store">
                 <Breadcrumb jsonLd items={[{ label: 'Anasayfa', href: '/' }, { label: 'Rehberler', href: GUIDES_PATH }, { label: guide.title }]} />
 
@@ -75,6 +89,7 @@ export default async function GuidePage({ params }: { params: Params }) {
                                 {' · '}
                                 {guideReadingMinutes(guide)} dk okuma
                             </p>
+                            <GuideArt images={photos} variant="hero" eager className="mt-5" />
                         </header>
 
                         <GuideToc sections={guide.sections} faq={guide.faq.length > 0} className="mt-6 rounded-sheet border border-line bg-surface px-4 py-3 lg:hidden" />
@@ -104,7 +119,7 @@ export default async function GuidePage({ params }: { params: Params }) {
 
             <section aria-labelledby="diger-rehberler" className="container-store mt-12 lg:mt-16">
                 <SectionHeader id="diger-rehberler" title="Diğer rehberler" href={GUIDES_PATH} linkLabel="Tüm rehberler" />
-                <GuideCards guides={others} headingLevel="h3" />
+                <GuideCards guides={others} images={guideImages.images} headingLevel="h3" />
             </section>
 
             <JsonLd data={jsonLd} />

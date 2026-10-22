@@ -441,8 +441,9 @@ html[data-header-collapsed] [data-under-header="sidebar"] {
   animation-timing-function: ease-out;
 }
 
-/* Until the visitor first scrolls, taps or types (html[data-interacted], LayoutProvider) the first message stands
-   still: a page that is only loaded and watched (a speed test) does not keep changing (Speed Index). */
+/* The first message stands still until html[data-interacted] (LayoutProvider, components/layout/page-awake.ts): the
+   visitor's first scroll, tap or key, or 6 s after the page has loaded and is visible, so the bar also rotates on a
+   phone nobody touches, while the first paint stays calm. */
 html:not([data-interacted]) .topbar-rotator > [data-msg] {
   animation: none !important;
   opacity: 0;

@@ -30,6 +30,7 @@ import { useShellChrome, useSiteSettings } from "@/components/layout/store-data"
 import { useShellUI } from "@/components/layout/shell-ui"
 import { SearchCombobox } from "@/components/search/SearchCombobox"
 import { DesktopNav } from "./MegaMenu"
+import { PrefetchLink } from "./PrefetchLink"
 import { TopBar } from "./TopBar"
 
 const COLLAPSE_MOBILE = 52 // height of the mobile search row
@@ -279,9 +280,8 @@ function Logo({ className }: { className?: string }) {
     }, [])
 
     return (
-        <Link
+        <PrefetchLink
             href="/"
-            prefetch={false}
             aria-label={`${siteName} ana sayfa`}
             className={cn('flex shrink-0 items-center rounded-thumb', className)}
         >
@@ -305,7 +305,7 @@ function Logo({ className }: { className?: string }) {
                     <span className="text-brand-500">store</span>
                 </span>
             )}
-        </Link>
+        </PrefetchLink>
     )
 }
 
