@@ -174,6 +174,24 @@ export function localWhatsapp(opts: {
     }
 }
 
+/**
+ * wa.me base for local WhatsApp cards until the server's `meta` event names one (owner decision: the
+ * public whatsapp_number, else the footer phone of Site Ayarları). Only a Turkish mobile number counts
+ * (wa.me/90 + 5xx + 7 digits): a landline cannot receive WhatsApp, so it means no WhatsApp UI at all.
+ * The first usable number of the list wins.
+ */
+export function mobileWaBase(...numbers: Array<string | null | undefined>): string | null {
+    for (const n of numbers) {
+        let d = String(n ?? '').replace(/\D/g, '')
+        if (!d) continue
+        if (d.startsWith('00')) d = d.slice(2)
+        if (d.startsWith('0')) d = '9' + d
+        else if (d.length === 10) d = '90' + d
+        if (/^905\d{9}$/.test(d)) return `https://wa.me/${d}`
+    }
+    return null
+}
+
 /** An assistant message that only holds a local WhatsApp card. */
 export function localCardMessage(card: WhatsappEvent, now = Date.now()): UiMessage {
     const m = base('assistant', now)

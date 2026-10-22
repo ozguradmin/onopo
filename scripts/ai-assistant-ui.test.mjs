@@ -127,6 +127,20 @@ test('chat-reducer: a local WhatsApp card masks the summary and never prints the
     assert.deepEqual(wa.productIds, [5])
 })
 
+test('chat-reducer: the store WhatsApp fallback takes the first Turkish mobile number only', () => {
+    // Synthetic numbers (555 is reserved for fiction), never a real one
+    assert.equal(reducer.mobileWaBase('0555 000 00 00'), 'https://wa.me/905550000000')
+    assert.equal(reducer.mobileWaBase('+90 (555) 000 00 00'), 'https://wa.me/905550000000')
+    assert.equal(reducer.mobileWaBase('5550000000'), 'https://wa.me/905550000000')
+    assert.equal(reducer.mobileWaBase('0090 555 000 0000'), 'https://wa.me/905550000000')
+    // empty whatsapp_number → the footer phone; a landline is not usable
+    assert.equal(reducer.mobileWaBase('', '0555 000 00 01'), 'https://wa.me/905550000001')
+    assert.equal(reducer.mobileWaBase('0212 000 00 00'), null)
+    assert.equal(reducer.mobileWaBase('0212 000 00 00', '0555 000 00 02'), 'https://wa.me/905550000002')
+    assert.equal(reducer.mobileWaBase(null, undefined, ''), null)
+    assert.equal(reducer.mobileWaBase('0555 000'), null)
+})
+
 test('chat-reducer: stale cards get the current price, and missing products are marked gone', () => {
     const m = fold([
         { t: 'products', layout: 'carousel', products: [card(1, { price: 100 }), card(2)], moreHref: null, total: 2 },
