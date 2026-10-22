@@ -235,8 +235,7 @@ export async function ListingView({ data, h1, intro, breadcrumb, searchPlacehold
 
                 <div className="pt-4 lg:grid lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-8 lg:pt-8 xl:grid-cols-[256px_minmax(0,1fr)] xl:gap-10">
                     <aside aria-label="Filtreler" className="hidden lg:block">
-                        <div className="sticky top-[calc(var(--listing-top,0px)+16px)] max-h-[calc(100vh-var(--listing-top,0px)-32px)] overflow-y-auto overscroll-contain pr-2 [scrollbar-width:thin]">
-                            <h2 className="sr-only">Filtreler</h2>
+                        <div className="sticky top-[calc(var(--header-offset,122px)+16px)] max-h-[calc(100vh-var(--header-offset,122px)-32px)] overflow-y-auto overscroll-contain pr-2 transition-[top,max-height] duration-200 ease-out [scrollbar-width:thin]">
                             <FilterPanel panel={panel} />
                         </div>
                     </aside>

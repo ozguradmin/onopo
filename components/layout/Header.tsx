@@ -12,7 +12,8 @@
  *
  * The hide-on-scroll and the scrolled shadow are applied to the DOM directly from a passive,
  * rAF-throttled scroll listener (no React re-render while scrolling, transforms only: no layout shift).
- * Collapsed, the sticky header is 56px on phones and 72px on desktop.
+ * Collapsed, the sticky header is 56px on phones and 72px on desktop. Its visible height (open or
+ * collapsed) is published as `--header-offset` on <html> for sticky parts that sit under it.
  * /odeme gets a reduced checkout header (logo, "Güvenli ödeme", "Alışverişe dön"), spec §13.
  */
 import * as React from "react"
@@ -51,9 +52,21 @@ function StoreHeader() {
         const row1 = row1Ref.current
         if (!header || !row1) return
         const desktop = window.matchMedia('(min-width: 1024px)')
+        const root = document.documentElement
         let lastY = window.scrollY
         let collapsed = false
         let ticking = false
+        // Layout height of the open header (transforms do not change it), kept by a ResizeObserver
+        let fullHeight = header.offsetHeight
+
+        // --header-offset on <html>: where the header's visible bottom edge ends up once stuck, open or
+        // collapsed. Sticky parts below it (listing toolbar and filter sidebar) use it as their `top`
+        // with the same 200 ms transition, so they move together with the header instead of chasing a
+        // measurement taken mid-animation.
+        const syncOffset = () => {
+            const by = desktop.matches ? COLLAPSE_DESKTOP : COLLAPSE_MOBILE
+            root.style.setProperty('--header-offset', `${Math.max(0, collapsed ? fullHeight - by : fullHeight)}px`)
+        }
 
         const setCollapsed = (next: boolean) => {
             if (next === collapsed) return
@@ -62,6 +75,7 @@ function StoreHeader() {
             header.dataset.collapsed = next ? 'true' : 'false'
             header.style.transform = next ? `translateY(-${by}px)` : ''
             row1.style.transform = next ? `translateY(${by}px)` : ''
+            syncOffset()
         }
         // Un-hide at once (no slide) before a search opens: the mobile sheet is position:fixed inside
         // the header, so the header must not carry a transform, not even mid-transition.
@@ -104,10 +118,17 @@ function StoreHeader() {
         }
         const onBreakpoint = () => {
             setCollapsed(false)
+            syncOffset()
             update()
         }
         // Keyboard focus must never land on the hidden second row
         const onFocusIn = () => revealRef.current()
+        const resize = new ResizeObserver(() => {
+            fullHeight = header.offsetHeight
+            syncOffset()
+        })
+        resize.observe(header)
+        syncOffset()
         update()
         window.addEventListener('scroll', onScroll, { passive: true })
         desktop.addEventListener('change', onBreakpoint)
@@ -116,6 +137,8 @@ function StoreHeader() {
             window.removeEventListener('scroll', onScroll)
             desktop.removeEventListener('change', onBreakpoint)
             header.removeEventListener('focusin', onFocusIn)
+            resize.disconnect()
+            root.style.removeProperty('--header-offset')
             revealRef.current = () => { }
         }
     }, [])
