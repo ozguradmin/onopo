@@ -16,7 +16,8 @@
  *   Retry-After and X-Robots-Tag: noindex (crawlers must not index the maintenance text as the page).
  * - Cart: rehydrates the persisted zustand store once on mount (the store uses skipHydration), then
  *   seeds its shipping rule from the server data (the drawer and /odeme still re-read
- *   /api/shipping-settings, so the totals always equal what the order API charges).
+ *   /api/shipping-settings, so the totals always equal what the order API charges). Afterwards it follows
+ *   the saved cart, except on /odeme: other tabs' changes and back/forward cache restores (watchSavedCart).
  * - Analytics: one POST /api/analytics/track per store page view, also on client-side navigations
  *   (same body as before: { page: pathname }).
  * - Optional `returnDays` (CMS return window from getSiteSeo) feeds the trust badges; default 14.
@@ -31,7 +32,7 @@ import { MobileNav } from "@/components/layout/MobileNav"
 import { MobileMenu } from "@/components/layout/MobileMenu"
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary'
 import { DEFAULT_SHELL_FACTS, ShellChromeContext, ShellFactsContext, StoreDataProvider } from '@/components/layout/store-data'
-import { useCartStore } from "@/store/cart-store"
+import { syncSavedCart, useCartStore, watchSavedCart } from "@/store/cart-store"
 import type { PublicSiteSettings, StorefrontData } from '@/lib/catalog'
 
 const MAINTENANCE_EXEMPT = ['/maintenance', '/login', '/register']
@@ -93,6 +94,15 @@ export function LayoutProvider({
         // once per page load
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+
+    // Then keep it in line with the saved cart (another tab adds or removes, Back restores this page). Not on
+    // /odeme: it reads the cart once on mount, and while its payment frame is open, a cart emptied elsewhere
+    // must not swap the frame for the empty-cart view (its own writes still start from the saved cart).
+    React.useEffect(() => {
+        if (isCheckout) return
+        syncSavedCart() // changes made while this page was on /odeme
+        return watchSavedCart()
+    }, [isCheckout])
 
     // Page-view tracking (was in Footer on mount; now also counts client-side navigations)
     React.useEffect(() => {

@@ -367,6 +367,30 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Sticky listing parts under the store header: the "Sırala | Filtrele" toolbar (below lg) and the filter
+   sidebar (lg and up, 16px below the header). Header.tsx writes the header's open and collapsed heights on
+   <html> only when its size or the breakpoint changes, and toggles html[data-header-collapsed] with its own
+   slide; these elements move with it through their `top` transition (200 ms). `top` is not inherited, so a
+   toggle restyles only them. `top`, not a transform: it only takes effect while the element is stuck.
+   Fallbacks are the open header's heights before it is measured: 109px below lg, 122px from lg. */
+[data-under-header="toolbar"] {
+  top: var(--header-open, 109px);
+}
+
+html[data-header-collapsed] [data-under-header="toolbar"] {
+  top: var(--header-collapsed, 57px);
+}
+
+[data-under-header="sidebar"] {
+  top: calc(var(--header-open, 122px) + 16px);
+  max-height: calc(100vh - var(--header-open, 122px) - 32px);
+}
+
+html[data-header-collapsed] [data-under-header="sidebar"] {
+  top: calc(var(--header-collapsed, 74px) + 16px);
+  max-height: calc(100vh - var(--header-collapsed, 74px) - 32px);
+}
+
 /* Cart badge "bump" when an item is added (150 ms, off under reduced motion) */
 @keyframes badge-bump {
   0% {

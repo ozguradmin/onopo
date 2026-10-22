@@ -48,6 +48,57 @@ interface CartState {
     getTotal: () => number
 }
 
+// The saved cart in localStorage. Its key and shape ({ state: { items, coupon, shippingSettings }, version })
+// stay as they are: carts saved by earlier visits and the checkout depend on them.
+const CART_STORAGE_KEY = 'onopo-cart-storage'
+
+type SavedCart = Pick<CartState, 'items' | 'coupon' | 'shippingSettings'>
+
+/**
+ * The saved cart as it is right now, or null when it cannot be read (no storage, blocked storage, a value
+ * that is not a cart): then this page's own copy stays. No saved cart at all is an empty cart (another page
+ * may have removed it). The shipping rule falls back to `shipping` when the saved cart has none.
+ */
+function readSavedCart(shipping: ShippingSettings): SavedCart | null {
+    if (typeof window === 'undefined') return null
+    try {
+        const raw = window.localStorage.getItem(CART_STORAGE_KEY)
+        if (raw === null) return { items: [], coupon: null, shippingSettings: shipping }
+        const saved = JSON.parse(raw)?.state
+        if (!saved || !Array.isArray(saved.items)) return null
+        return {
+            items: saved.items,
+            coupon: saved.coupon ?? null,
+            shippingSettings: saved.shippingSettings && typeof saved.shippingSettings === 'object' ? saved.shippingSettings : shipping,
+        }
+    } catch {
+        return null
+    }
+}
+
+/**
+ * What this page's copy of the cart must take over from the saved cart, or null when the two already agree.
+ * The whole saved part is taken (lines, coupon, shipping rule), so writing it back saves the same text again:
+ * that is no change for the other tabs, so two tabs never bounce updates between each other.
+ */
+function savedCartChanges(state: CartState): SavedCart | null {
+    const saved = readSavedCart(state.shippingSettings)
+    if (!saved) return null
+    const mine: SavedCart = { items: state.items, coupon: state.coupon, shippingSettings: state.shippingSettings }
+    return JSON.stringify(saved) === JSON.stringify(mine) ? null : saved
+}
+
+/**
+ * Called by every cart write before it changes anything. persist saves the whole cart on every set, even when
+ * only the drawer opens, and another tab (or this page before a back/forward cache restore) may have changed
+ * the saved cart since this page last read it: a write from that stale copy would drop the other page's lines.
+ * So the write first takes over the saved cart, then applies its own change to it.
+ */
+function pullSavedCart(get: () => CartState, set: (partial: Partial<CartState>) => void) {
+    const saved = savedCartChanges(get())
+    if (saved) set(saved)
+}
+
 export const useCartStore = create<CartState>()(
     persist(
         (set, get) => ({
@@ -61,6 +112,7 @@ export const useCartStore = create<CartState>()(
                     const res = await fetch('/api/shipping-settings')
                     const data = await res.json()
                     if (data && !data.error) {
+                        pullSavedCart(get, set)
                         set({ shippingSettings: parseShippingSettings(data) })
                     }
                 } catch (error) {
@@ -68,13 +120,18 @@ export const useCartStore = create<CartState>()(
                 }
             },
 
-            applyCoupon: (code, discountType, discountValue) => set({
-                coupon: { code, discountType, discountValue }
-            }),
+            applyCoupon: (code, discountType, discountValue) => {
+                pullSavedCart(get, set)
+                set({ coupon: { code, discountType, discountValue } })
+            },
 
-            removeCoupon: () => set({ coupon: null }),
+            removeCoupon: () => {
+                pullSavedCart(get, set)
+                set({ coupon: null })
+            },
 
             addItem: (product) => {
+                pullSavedCart(get, set)
                 const items = get().items
                 const existingItem = items.find(item => item.id === product.id)
                 let newItems
@@ -93,6 +150,7 @@ export const useCartStore = create<CartState>()(
             },
 
             removeItem: (productId) => {
+                pullSavedCart(get, set)
                 const newItems = get().items.filter(item => item.id !== productId)
                 set({ items: newItems })
             },
@@ -102,6 +160,7 @@ export const useCartStore = create<CartState>()(
                     get().removeItem(productId)
                     return
                 }
+                pullSavedCart(get, set)
                 set({
                     items: get().items.map(item =>
                         item.id === productId ? { ...item, quantity } : item
@@ -109,10 +168,22 @@ export const useCartStore = create<CartState>()(
                 })
             },
 
-            clearCart: () => set({ items: [], coupon: null }),
-            toggleCart: () => set({ isOpen: !get().isOpen }),
-            openCart: () => set({ isOpen: true }),
-            closeCart: () => set({ isOpen: false }),
+            clearCart: () => {
+                pullSavedCart(get, set)
+                set({ items: [], coupon: null })
+            },
+            toggleCart: () => {
+                pullSavedCart(get, set)
+                set({ isOpen: !get().isOpen })
+            },
+            openCart: () => {
+                pullSavedCart(get, set)
+                set({ isOpen: true })
+            },
+            closeCart: () => {
+                pullSavedCart(get, set)
+                set({ isOpen: false })
+            },
 
             totalItems: () => get().items.reduce((total, item) => total + item.quantity, 0),
 
@@ -152,7 +223,7 @@ export const useCartStore = create<CartState>()(
             }
         }),
         {
-            name: 'onopo-cart-storage',
+            name: CART_STORAGE_KEY,
             skipHydration: true,
             // Never persist the drawer's open state, or it reopens by itself after a reload
             partialize: (state) => ({ items: state.items, coupon: state.coupon, shippingSettings: state.shippingSettings }),
@@ -165,6 +236,32 @@ export const useCartStore = create<CartState>()(
         }
     )
 )
+
+/** Take over the saved cart's changes in this page (badge, drawer); the drawer stays open or shut as it is. */
+export function syncSavedCart() {
+    const saved = savedCartChanges(useCartStore.getState())
+    if (saved) useCartStore.setState(saved)
+}
+
+/**
+ * Keeps this page's cart in line with the saved one after the first load (LayoutProvider): another tab's
+ * changes arrive as 'storage' events (key null: storage cleared), and a page restored from the back/forward
+ * cache, which gets no events while it is cached, catches up on 'pageshow'. Returns the cleanup.
+ */
+export function watchSavedCart(): () => void {
+    const onStorage = (e: StorageEvent) => {
+        if (e.key === CART_STORAGE_KEY || e.key === null) syncSavedCart()
+    }
+    const onPageShow = (e: PageTransitionEvent) => {
+        if (e.persisted) syncSavedCart()
+    }
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('pageshow', onPageShow)
+    return () => {
+        window.removeEventListener('storage', onStorage)
+        window.removeEventListener('pageshow', onPageShow)
+    }
+}
 
 // Hook to check if store is hydrated (safe to use on client)
 import { useEffect, useState } from 'react'
