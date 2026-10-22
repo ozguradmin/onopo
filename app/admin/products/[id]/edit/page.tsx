@@ -108,7 +108,7 @@ export default function EditProductPage() {
                 const res = await fetch('/api/admin/upload', { method: 'POST', body: data })
                 if (!res.ok) throw new Error('Upload failed')
                 const result = await res.json()
-                void uploadImageVariants(file, result.url) // resized WebP copies; never blocks saving
+                void uploadImageVariants(file, result) // resized WebP copies (unless the server makes them); never blocks saving
                 return result.url
             })
 

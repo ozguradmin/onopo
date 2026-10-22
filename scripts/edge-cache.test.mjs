@@ -267,6 +267,7 @@ test('shouldBumpCacheVersion: successful content writes with a session', () => {
 
 test('shouldBumpCacheVersion: writes that never change the storefront do not flush the cache', () => {
     for (const p of ['/api/admin/optimize-images/', '/api/admin/optimize-images', '/api/admin/email/send/', '/api/admin/users/',
+        '/api/admin/redirects/', '/api/admin/redirects/resolve/', '/api/admin/redirects/not-found/',
         '/api/admin/profile/', '/api/admin/log/', '/api/admin/reset-password/', '/api/auth/login/', '/api/auth/logout/',
         '/api/auth/verify-2fa/', '/api/favorites/', '/api/favorites/12/', '/api/analytics/track/', '/api/orders/', '/api/orders/90/',
         '/api/user/profile/', '/api/coupons/verify/', '/api/payment/callback/paytr/result', '/api/birfatura/api/orderCargoUpdate']) {

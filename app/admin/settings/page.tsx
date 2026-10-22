@@ -236,6 +236,8 @@ export default function AdminSettingsPage() {
                                             if (!file) return
                                             const data = new FormData()
                                             data.append('file', file)
+                                            // The server's WebP copies keep the logo's transparency too
+                                            data.append('transparent', '1')
                                             try {
                                                 const res = await fetch('/api/admin/upload', { method: 'POST', body: data })
                                                 if (res.ok) {
@@ -243,7 +245,7 @@ export default function AdminSettingsPage() {
                                                     setLogoUrl(json.url)
                                                     // 200w/400w WebP copies for the header and footer (transparency kept: the
                                                     // footer inverts the logo on dark); never blocks saving
-                                                    void uploadImageVariants(file, json.url, { keepTransparency: true })
+                                                    void uploadImageVariants(file, json, { keepTransparency: true })
                                                 }
                                             } catch { }
                                         }}

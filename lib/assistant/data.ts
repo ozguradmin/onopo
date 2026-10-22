@@ -19,7 +19,9 @@ import { SESSION_HINT_COOKIE } from '@/lib/session-hint'
 import { toCatalogRow } from './catalog-block'
 import { DEFAULT_FACTS, normalizeCutoff, type StoreFacts } from './facts'
 import { budgetExceeded, parseBudgetUsd, recordExtraCost, type D1Lite } from './limits'
-import { decideFacts, ensureFactsTable, loadStoredFacts, refreshFacts, type FactsProduct, type StaleItem } from './product-facts'
+import { decideFacts, ensureFactsTable, loadStoredFacts, type FactsProduct, type StaleItem } from './product-facts'
+import { FACTS_ON_SAVE_MAX, FACTS_ON_SAVE_WINDOW_MS, FACTS_SWEEP_MAX, factsItemsToRefresh, factsRunLogEvents, runFactsPaced, type FactsRunDeps, type FactsRunResult } from './facts-auto'
+import { logSystemEvent } from '@/lib/system-log'
 import { pickStoreWhatsapp, type ProductDetailRow } from './tools'
 import { analyzePopular, type AnalyzeResult } from './popular'
 import { buildKnowledge, type Knowledge, type TurnDeps } from './turn'
@@ -192,24 +194,139 @@ let factsRunning = false
 const FACTS_RUN_EVERY_MS = 2 * 60 * 1000
 const FACTS_PER_BACKGROUND_RUN = 3
 
+async function activeFactsProducts(db: D1Database, ids?: readonly number[]): Promise<FactsProduct[]> {
+    const list = ids?.filter(id => Number.isInteger(id) && id > 0).slice(0, 100)
+    if (ids && !list?.length) return []
+    const sql = list
+        ? `SELECT id, name, description FROM products WHERE is_active = 1 AND id IN (${list.map(() => '?').join(', ')}) ORDER BY id`
+        : 'SELECT id, name, description FROM products WHERE is_active = 1 ORDER BY id'
+    const stmt = db.prepare(sql)
+    const { results } = await (list ? stmt.bind(...list) : stmt).all<{ id: number; name: string; description: string | null }>()
+    return (results ?? []).map(r => ({ id: Number(r.id), name: String(r.name ?? ''), description: r.description ?? null }))
+}
+
 /** Active products whose facts line is missing or older than their description, read fresh (not memoised). */
 export async function staleFactItems(db: D1Database): Promise<{ total: number; ready: number; stale: StaleItem[] }> {
-    const { results } = await db.prepare('SELECT id, name, description FROM products WHERE is_active = 1 ORDER BY id').all<{ id: number; name: string; description: string | null }>()
-    const products = (results ?? []).map(r => ({ id: Number(r.id), name: String(r.name ?? ''), description: r.description ?? null }))
+    const products = await activeFactsProducts(db)
     const decision = await decideFacts(products, await loadStoredFacts(db as unknown as D1Lite))
     return { total: products.length, ready: decision.ready, stale: decision.stale }
 }
 
-/** Fills up to the given number of stale facts lines with the chat model and counts the cost in today's budget row. */
-export async function fillProductFacts(env: CloudflareEnv, limit: number, concurrency = 2) {
+/**
+ * The runner's dependencies from the Worker env (lib/assistant/facts-auto.ts): the chat model, the chat's own
+ * DeepSeek slot limiter, today's budget and the cost recorded in today's budget row. null without env.AI.
+ */
+function factsRunDeps(env: CloudflareEnv, settings: AssistantSettings): FactsRunDeps | null {
+    if (!env.AI) return null
+    const db = env.DB as unknown as D1Lite
+    const limiter = env.CHAT_RL_MODEL
+    return {
+        db,
+        ai: env.AI,
+        model: env.AI_CHAT_MODEL || DEFAULT_MODELS.chat,
+        takeSlot: limiter ? async () => (await limiter.limit({ key: 'deepseek' })).success : undefined,
+        budgetOk: async () => {
+            try {
+                return !(await budgetExceeded(db, new Date(), parseBudgetUsd(settings.ai_daily_budget_usd)))
+            } catch {
+                // Unknown spend: wait for a later run rather than spend blind
+                return false
+            }
+        },
+        recordCost: (calls, cost) => recordExtraCost(db, calls, cost),
+    }
+}
+
+async function logFactsRun(db: D1Database, r: FactsRunResult, context: 'sweep' | 'save' | 'button'): Promise<void> {
+    for (const e of factsRunLogEvents(r, context)) await logSystemEvent(db, e)
+}
+
+export interface FillResult {
+    done: number
+    failed: number
+    failedIds: number[]
+    remaining: number
+    total: number
+    ready: number
+    stopped: string
+}
+
+/**
+ * The "Ürün bilgilerini yenile" button (POST /api/admin/assistant/facts/): paced lines until `deadline`
+ * (epoch ms), skipping the products in `exclude` (they already failed in this button run). The page repeats
+ * the request while `remaining` > 0 and `stopped` is not a real error.
+ */
+export async function fillProductFacts(env: CloudflareEnv, opts: { deadline: number; exclude?: readonly number[] }): Promise<FillResult> {
     const db = env.DB
-    if (!env.AI) return { done: 0, failed: 0, remaining: -1, total: 0, ready: 0 }
     const before = await staleFactItems(db)
-    const batch = before.stale.slice(0, Math.max(0, limit))
-    const model = env.AI_CHAT_MODEL || DEFAULT_MODELS.chat
-    const r = batch.length ? await refreshFacts(db as unknown as D1Lite, env.AI, model, batch, { concurrency }) : { done: 0, failed: 0, costMicroUsd: 0 }
-    if (r.costMicroUsd > 0) await recordExtraCost(db as unknown as D1Lite, batch.length, r.costMicroUsd)
-    return { done: r.done, failed: r.failed, remaining: before.stale.length - r.done, total: before.total, ready: before.ready + r.done }
+    const deps = factsRunDeps(env, await getAssistantSettings(db))
+    if (!deps) return { done: 0, failed: 0, failedIds: [], remaining: -1, total: before.total, ready: before.ready, stopped: 'no_ai' }
+    const skip = new Set(opts.exclude ?? [])
+    const todo = before.stale.filter(i => !skip.has(i.id))
+    const r = await runFactsPaced(deps, todo, { maxItems: todo.length, deadline: opts.deadline })
+    await logFactsRun(db, r, 'button')
+    if (r.done > 0) staleFactsCount = Math.max(0, before.stale.length - r.done)
+    return {
+        done: r.done,
+        failed: r.failed.length,
+        failedIds: r.failed.map(f => f.id),
+        remaining: Math.max(0, before.stale.length - r.done),
+        total: before.total,
+        ready: before.ready + r.done,
+        stopped: r.stopped,
+    }
+}
+
+/**
+ * After an admin save (ctx.waitUntil): rewrites the lines of these products whose name + description hash
+ * changed (inactive and unchanged products cost nothing). At most FACTS_ON_SAVE_MAX within ~25 s; the daily
+ * sweep does the rest. Never throws.
+ */
+export async function refreshFactsForProducts(env: CloudflareEnv, ids: readonly number[]): Promise<void> {
+    try {
+        const db = env.DB
+        const products = await activeFactsProducts(db, ids)
+        if (!products.length) return
+        const items = await factsItemsToRefresh(products, await loadStoredFacts(db as unknown as D1Lite))
+        if (!items.length) return
+        const deps = factsRunDeps(env, await getAssistantSettings(db))
+        if (!deps) return
+        const r = await runFactsPaced(deps, items, { maxItems: FACTS_ON_SAVE_MAX, deadline: Date.now() + FACTS_ON_SAVE_WINDOW_MS })
+        console.log(`ai_facts_on_save done=${r.done} failed=${r.failed.length} remaining=${r.remaining} stopped=${r.stopped}`)
+        await logFactsRun(db, r, 'save')
+    } catch (err) {
+        await logSystemEvent(env.DB, {
+            source: 'facts',
+            level: 'error',
+            message: 'Kaydedilen ürünün asistan bilgisi güncellenemedi.',
+            detail: err instanceof Error ? err.message : 'error',
+            ref: ids.slice(0, 5).map(id => `ürün #${id}`).join(', '),
+        })
+    }
+}
+
+/**
+ * The daily sweep (cron → /api/cron/automation/?job=facts): every missing or outdated line, at most
+ * FACTS_SWEEP_MAX, until `deadline` (epoch ms). Never throws.
+ */
+export async function sweepProductFacts(env: CloudflareEnv, deadline: number): Promise<FactsRunResult & { stale: number }> {
+    const db = env.DB
+    try {
+        const before = await staleFactItems(db)
+        if (!before.stale.length) return { done: 0, failed: [], remaining: 0, stopped: 'done', costMicroUsd: 0, stale: 0 }
+        const deps = factsRunDeps(env, await getAssistantSettings(db))
+        if (!deps) {
+            await logSystemEvent(db, { source: 'facts', level: 'error', message: 'Yapay zekâ bağlantısı (AI) yok; ürün bilgileri yazılamıyor.' })
+            return { done: 0, failed: [], remaining: before.stale.length, stopped: 'no_ai', costMicroUsd: 0, stale: before.stale.length }
+        }
+        const r = await runFactsPaced(deps, before.stale, { maxItems: FACTS_SWEEP_MAX, deadline })
+        await logFactsRun(db, r, 'sweep')
+        staleFactsCount = Math.max(0, before.stale.length - r.done)
+        return { ...r, stale: before.stale.length }
+    } catch (err) {
+        await logSystemEvent(db, { source: 'facts', level: 'error', message: 'Günlük ürün bilgisi taraması çalışmadı.', detail: err instanceof Error ? err.message : 'error' })
+        return { done: 0, failed: [], remaining: -1, stopped: 'exception', costMicroUsd: 0, stale: -1 }
+    }
 }
 
 /**
@@ -221,10 +338,12 @@ export async function refreshFactsInBackground(env: CloudflareEnv, settings: Ass
     factsRunning = true
     lastFactsRun = Date.now()
     try {
-        if (await budgetExceeded(env.DB as unknown as D1Lite, new Date(), parseBudgetUsd(settings.ai_daily_budget_usd))) return
-        const r = await fillProductFacts(env, FACTS_PER_BACKGROUND_RUN)
-        if (r.remaining >= 0) staleFactsCount = r.remaining
-        console.log(`ai_facts done=${r.done} failed=${r.failed} remaining=${r.remaining}`)
+        const deps = factsRunDeps(env, settings)
+        if (!deps) return
+        const before = await staleFactItems(env.DB)
+        const r = await runFactsPaced(deps, before.stale, { maxItems: FACTS_PER_BACKGROUND_RUN, deadline: Date.now() + FACTS_ON_SAVE_WINDOW_MS })
+        staleFactsCount = Math.max(0, before.stale.length - r.done)
+        console.log(`ai_facts done=${r.done} failed=${r.failed.length} remaining=${staleFactsCount}`)
     } catch (err) {
         console.error('ai_facts_failed', err instanceof Error ? err.name : 'error')
     } finally {

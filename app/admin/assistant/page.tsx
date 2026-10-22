@@ -6,7 +6,7 @@
  * last 7 days. Values are site_settings keys saved through the existing POST /api/site-settings (which
  * also bumps cache_version, so the storefront picks up the switch). Only changed keys are sent.
  * Also here: how many conversations were stored (the transcripts themselves are on
- * /admin/assistant/sohbetler/), the product facts lines, with a button that fills the missing ones, and the
+ * /admin/assistant/sohbetler/), the product facts lines (written automatically; a button hurries the missing ones), and the
  * popular-question chips of the empty chat (weekly analysis, "Şimdi analiz et", edit or clear them).
  */
 import * as React from 'react'
@@ -192,22 +192,50 @@ export default function AdminAssistantPage() {
         }
     }
 
-    /** Fills the missing product facts lines a few at a time until none is left (or nothing moves). */
+    /**
+     * Fills the missing product facts lines until none is left. Each request works ~20 s at the server's pace
+     * (one call every 4 s, retries on rate limits); a request that ended because the model was busy is
+     * followed by a pause, not by giving up (it used to stop at 32/118). Products that failed are skipped in
+     * the following requests and listed in Sistem kayıtları. Only a real error (quota, database) stops it.
+     */
     const refreshFacts = async () => {
         setFactsBusy(true)
         setFactsNote('')
         let done = 0
+        const failedIds: number[] = []
+        let idleRounds = 0
+        const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
         try {
-            for (let i = 0; i < 40; i++) {
-                const res = await fetch('/api/admin/assistant/facts/', { method: 'POST' })
+            for (let i = 0; i < 200; i++) {
+                const res = await fetch('/api/admin/assistant/facts/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ exclude: failedIds }),
+                })
                 const d = await res.json().catch(() => null)
                 if (!res.ok || !d) throw new Error(String(res.status))
                 done += Number(d.done) || 0
-                setFacts({ total: d.total, ready: d.ready, missing: Math.max(0, d.remaining) })
-                setFactsNote(`${done} ürün güncellendi, ${Math.max(0, d.remaining)} kaldı...`)
-                if (d.remaining <= 0 || d.done === 0) break
+                for (const id of Array.isArray(d.failedIds) ? d.failedIds : []) if (!failedIds.includes(id)) failedIds.push(id)
+                const remaining = Math.max(0, Number(d.remaining) || 0)
+                setFacts({ total: d.total, ready: d.ready, missing: remaining })
+                const left = Math.max(0, remaining - failedIds.length)
+                if (left <= 0) break
+                if (d.stopped === 'quota' || d.stopped === 'db' || d.stopped === 'failures' || d.stopped === 'budget' || d.stopped === 'no_ai' || d.stopped === 'exception') {
+                    const why = d.stopped === 'budget' ? 'günlük bütçe doldu' : d.stopped === 'quota' ? 'yapay zekânın günlük hakkı doldu' : 'bir hata oluştu (Sistem kayıtları sayfasına bak)'
+                    setFactsNote(`${done} ürün yenilendi; durdu: ${why}.`)
+                    return
+                }
+                // Nothing moved because the model was busy: wait a little longer each time, give up after a few minutes
+                idleRounds = d.done > 0 ? 0 : idleRounds + 1
+                if (idleRounds >= 8) {
+                    setFactsNote(`${done} ürün yenilendi; yapay zekâ çok yoğun. Kalanlar her gün otomatik tamamlanır.`)
+                    return
+                }
+                setFactsNote(`${done} ürün güncellendi, ${left} kaldı...${idleRounds ? ' (yapay zekâ yoğun, bekleniyor)' : ''}`)
+                if (idleRounds) await pause(Math.min(60_000, 10_000 * idleRounds))
             }
-            setFactsNote(done ? `${done} ürünün bilgisi yenilendi.` : 'Yenilenecek ürün yok.')
+            const failNote = failedIds.length ? ` ${failedIds.length} ürünün bilgisi yazılamadı (Sistem kayıtları).` : ''
+            setFactsNote(done || failedIds.length ? `${done} ürünün bilgisi yenilendi.${failNote}` : 'Yenilenecek ürün yok.')
         } catch {
             setFactsNote(done ? `${done} ürün yenilendi; kalanlar için tekrar dene.` : 'Yenilenemedi, lütfen tekrar dene.')
         } finally {
@@ -441,7 +469,9 @@ export default function AdminAssistantPage() {
                 <Section icon={PackageSearch} title="Ürün bilgileri">
                     <p className="text-sm text-slate-600">
                         Asistan her ürünün açıklamasından kısa bir bilgi çıkarır (kutu içeriği, güç, hızlı şarj, kablo tipi, garanti) ve
-                        sorulara buna göre cevap verir. Açıklamayı değiştirdiğin ürünler kendiliğinden yenilenir; hepsini hemen yenilemek için düğmeyi kullan.
+                        sorulara buna göre cevap verir. Yeni eklediğin ya da adını veya açıklamasını değiştirdiğin ürünler kaydettiğin anda
+                        kendiliğinden öğrenilir; kalanları her sabah otomatik tarama tamamlar. Düğmeye basman gerekmez; yalnızca hepsini
+                        hemen yenilemek istersen kullan. Sorunlar Sistem kayıtları sayfasında görünür.
                     </p>
                     {facts && (
                         <p className="text-sm">

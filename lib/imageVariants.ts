@@ -1,5 +1,6 @@
-// Browser-only helper for admin image uploads.
-// The original upload is unchanged. Afterwards, resized WebP copies are made in the admin's browser
+// Browser-only helper for admin image uploads: the FALLBACK. Normally the upload route makes the variants on
+// the server (Cloudflare Images binding, lib/image-variants-server.ts) and answers variants: 'server'; then
+// nothing happens here. Otherwise, after the original upload, resized WebP copies are made in the admin's browser
 // (canvas / OffscreenCanvas) and stored next to the original in R2 under
 //   v/<width>/<originalKey>.webp     e.g. v/400/1773939592857-ONOPOT120.png.webp
 // so the storefront can later serve https://images.onopostore.com/v/<width>/<key>.webp instead of
@@ -130,12 +131,18 @@ async function createAndUploadVariants(file: File, key: string, options: Variant
 // and decoding several full-size photos at once can run a phone out of memory
 let queue: Promise<void> = Promise.resolve()
 
+/** The upload route's answer: `variants: 'server'` = the server makes the variants (Cloudflare Images binding). */
+export type UploadAnswer = string | { url?: string | null; variants?: string | null }
+
 /**
- * Creates and uploads the WebP variants of an image that was just uploaded.
- * Call without awaiting after the original upload succeeded: `void uploadImageVariants(file, result.url)`.
+ * Creates and uploads the WebP variants of an image that was just uploaded — only when the server did not
+ * take the job (fallback; lib/image-variants-server.ts makes them right after the upload when it can).
+ * Call without awaiting after the original upload succeeded: `void uploadImageVariants(file, result)`.
  * Calls are queued and processed one after another; the promise settles when this file is done.
  */
-export async function uploadImageVariants(file: File, uploadedUrl: string, options: VariantOptions = {}): Promise<void> {
+export async function uploadImageVariants(file: File, uploaded: UploadAnswer, options: VariantOptions = {}): Promise<void> {
+    if (typeof uploaded !== 'string' && uploaded?.variants === 'server') return
+    const uploadedUrl = typeof uploaded === 'string' ? uploaded : uploaded?.url ?? ''
     const key = originalKeyFromUrl(uploadedUrl)
     if (!key || !file.type.startsWith('image/') || file.type === 'image/svg+xml' || file.type === 'image/gif') return
     if (typeof createImageBitmap !== 'function') return

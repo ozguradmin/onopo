@@ -8,7 +8,11 @@
 //   - the maintenance render answered as 503 + Retry-After + X-Robots-Tag: noindex (client-side navigations of
 //     tabs opened before maintenance get a plain 503, so the router loads that page),
 //   - the readable session hint cookie (lib/session-hint.ts) kept in sync with auth_token,
-//   - the cron (scheduled) handler (daily price update; on Mondays also the assistant's popular questions).
+//   - old URLs (the previous shop's links still in Google, renamed products, /_next/image?url=…): a GET that
+//     would answer 404 gets a 301 to its live replacement when lib/redirects.ts finds one; the rest is counted
+//     in not_found_log for Admin › Yönlendirmeler,
+//   - the cron (scheduled) handler (daily price update, image variants and assistant product facts; on Mondays
+//     also the assistant's popular questions). Failures are written to the system log (Admin › Sistem kayıtları).
 // See https://opennext.js.org/cloudflare/howtos/custom-worker
 //
 // .open-next/worker.js already imports the 8 MB Next server handler lazily, so a cache HIT answered
@@ -38,19 +42,37 @@ import {
     shouldBumpCacheVersion,
     stripTrackingParams,
 } from './lib/edge-cache'
+import {
+    ensureRedirectTables,
+    isJunkPath,
+    loadIndex,
+    lookupAdminRedirect,
+    notFoundCandidate,
+    notFoundLogKey,
+    notFoundVisitorKind,
+    parsePath,
+    recordNotFound,
+    recordRedirectHit,
+    referrerHost,
+    resolvePath,
+    toLocation,
+} from './lib/redirects'
 import { SESSION_HINT_COOKIE } from './lib/session-hint'
+import { logSystemEvent, type SystemLogDb } from './lib/system-log'
 
-type D1Like = {
-    prepare(sql: string): {
-        bind(...values: unknown[]): { run(): Promise<unknown> }
-        all(): Promise<{ results?: Record<string, unknown>[] }>
-    }
+type D1Stmt = {
+    bind(...values: unknown[]): D1Stmt
+    run(): Promise<unknown>
+    all<T = Record<string, unknown>>(): Promise<{ results?: T[] }>
+    first<T = Record<string, unknown>>(): Promise<T | null>
 }
+type D1Like = { prepare(sql: string): D1Stmt }
 type Env = {
     CRON_SECRET?: string
     NEXT_PUBLIC_BASE_URL?: string
     DB?: D1Like
     ASSETS?: { fetch(request: Request): Promise<Response> }
+    BUCKET?: { head(key: string): Promise<unknown | null> }
 }
 type Ctx = { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void }
 
@@ -265,6 +287,84 @@ async function serveFromEdgeCache(request: Request, url: URL, env: Env, ctx: Ctx
     return out
 }
 
+// ---- old URLs: a 404 with a live replacement becomes a 301 (rules and safety in lib/redirects.ts) ----
+
+// Not 'immutable': an admin may change a redirect, and a fuzzy match may improve as products change
+const OLD_URL_REDIRECT_CACHE_CONTROL = 'public, max-age=3600'
+
+/**
+ * Looks at the final response of a GET/HEAD (lib/redirects.ts notFoundCandidate decides which: page 404s,
+ * /_next/image errors, Next's trailing-slash hop of legacy paths). A resolved URL is answered 301 (one hop:
+ * targets are live pages); an unresolved 404 is counted in not_found_log (visitors and Googlebot only) and
+ * sent unchanged. Any failure here keeps the original response: this must never break a page.
+ */
+async function withOldUrlRedirect(request: Request, url: URL, response: Response, env: Env, ctx: Ctx): Promise<Response> {
+    const candidate = notFoundCandidate(request.method, url, response.status, response.headers.get('location'), isRscRequest(request.headers, url))
+    const db = env.DB
+    if (!candidate || !db) return response
+    const parsed = parsePath(candidate)
+    if (!parsed || isJunkPath(parsed.path)) return response
+    try {
+        await ensureRedirectTables(db)
+        const index = await loadIndex(db)
+        const bucket = env.BUCKET
+        const assets = env.ASSETS
+        const result = await resolvePath(candidate, {
+            index,
+            adminRedirect: key => lookupAdminRedirect(db, key),
+            imageExists: bucket ? async key => (await bucket.head(key)) != null : undefined,
+            assetExists: assets
+                ? async path => (await assets.fetch(new Request(new URL(path, url.origin).href, { method: 'HEAD' }))).ok
+                : undefined,
+        })
+        if (result?.target) {
+            if (result.via === 'admin' && result.from) {
+                const from = result.from
+                ctx.waitUntil(recordRedirectHit(db, from).catch(error => console.error('[redirects] hit count failed', error)))
+            }
+            await response.body?.cancel().catch(() => {})
+            return new Response(null, {
+                status: 301,
+                headers: {
+                    Location: toLocation(result.target),
+                    'Cache-Control': OLD_URL_REDIRECT_CACHE_CONTROL,
+                    'X-Onopo-Redirect': result.via,
+                },
+            })
+        }
+        if (result && result.target === null) {
+            // An admin redirect whose target has since disappeared: the visitor gets the 404, the owner a note
+            ctx.waitUntil(logSystemEvent(db, {
+                source: 'redirects',
+                level: 'warn',
+                message: 'Yönlendirmenin hedef sayfası artık açılmıyor',
+                detail: `${result.from} → ${result.to}`,
+                ref: result.from,
+            }))
+        }
+    } catch (error) {
+        console.error('[redirects] resolving an old URL failed', error)
+        ctx.waitUntil(logSystemEvent(db, {
+            source: 'redirects',
+            level: 'error',
+            message: 'Eski adres yönlendirmesi çalışmadı',
+            detail: String((error as Error)?.message ?? error).slice(0, 500),
+            ref: null,
+        }))
+    }
+    // Next's trailing-slash 308 that did not resolve: the slashed URL is requested next and counted then
+    if (response.status >= 400) {
+        const kind = notFoundVisitorKind(request.headers.get('user-agent'))
+        if (kind) {
+            ctx.waitUntil(recordNotFound(db, notFoundLogKey(parsed), {
+                googlebot: kind === 'googlebot',
+                referrerHost: referrerHost(request.headers.get('referer')),
+            }).catch(error => console.error('[redirects] not_found_log write failed', error)))
+        }
+    }
+    return response
+}
+
 const worker = {
     async fetch(request: Request, env: Env, ctx: Ctx): Promise<Response> {
         const url = new URL(request.url)
@@ -299,9 +399,11 @@ const worker = {
         const targetUrl = clean ?? url
         const finish = (response: Response) =>
             withSessionHint(request, targetUrl, clean ? withTrackingParams(response, url, clean) : response)
+        // A 404 with a live replacement becomes a 301 (its Location gets the tracking parameters back in finish)
+        const oldUrl = (response: Response) => withOldUrlRedirect(target, targetUrl, response, env, ctx)
 
         if (isCacheableRequest({ method, url: targetUrl, headers: target.headers })) {
-            return finish(await serveFromEdgeCache(target, targetUrl, env, ctx))
+            return finish(await oldUrl(await serveFromEdgeCache(target, targetUrl, env, ctx)))
         }
         // HEAD of a store page during maintenance: rendered as a GET so the 503 status and headers match
         if (method === 'HEAD' && mayRenderMaintenance(targetUrl.pathname)) {
@@ -321,13 +423,18 @@ const worker = {
             await response.body?.cancel().catch(() => {})
             return finish(maintenanceRscResponse())
         }
-        return finish(await passThrough(response, targetUrl, method, settings))
+        return finish(await oldUrl(await passThrough(response, targetUrl, method, settings)))
     },
 
-    // Triggered by [triggers] crons in wrangler.toml (0 7 * * * = 10:00 Turkey time)
+    // Triggered by [triggers] crons in wrangler.toml (0 7 * * * = 10:00 Turkey time). A scheduled invocation may
+    // run 15 minutes; the jobs run one after another, the longest (assistant facts, paced for DeepSeek's
+    // 20/min) last, with whatever time is left.
     async scheduled(controller: { cron: string }, env: Env, ctx: Ctx) {
+        const startedAt = Date.now()
+        const logDb = env.DB as unknown as SystemLogDb | undefined
         if (!env.CRON_SECRET) {
             console.error('[cron] CRON_SECRET is not set, skipping price update')
+            await logSystemEvent(logDb, { source: 'cron', level: 'error', message: 'Günlük otomatik işler çalışmadı: CRON_SECRET tanımlı değil.' })
             return
         }
 
@@ -346,28 +453,72 @@ const worker = {
                 console.log(`[cron] ai popular questions ${popular.status} ${result?.status ?? '-'}`)
                 // New chips: the cached storefront pages carry the settings, so they must not keep the old ones
                 if (popular.ok && result?.changed) await bumpCacheVersion(env)
+                if (!popular.ok) {
+                    await logSystemEvent(logDb, { source: 'assistant', level: 'warn', message: 'Haftalık popüler soru analizi çalışmadı.', detail: `HTTP ${popular.status}` })
+                }
             } catch (error) {
                 console.error('[cron] ai popular questions failed', error)
+                await logSystemEvent(logDb, { source: 'assistant', level: 'warn', message: 'Haftalık popüler soru analizi çalışmadı.', detail: error instanceof Error ? error.message : 'error' })
             }
         }
 
-        const request = new Request(`${baseUrl}/api/cron/update-prices/`, {
-            headers: { Authorization: `Bearer ${env.CRON_SECRET}` },
-        })
-
-        const response: Response = await handler.fetch(request, env, ctx)
-        const body = await response.text()
-        if (response.ok) {
-            console.log(`[cron] ${controller.cron} price update ok: ${body}`)
-            // Prices changed: cached pages and JSON must not keep showing the old ones
-            try {
-                await bumpCacheVersion(env)
-            } catch (error) {
-                console.error('[cron] cache_version bump failed', error)
+        // Daily price update. A failure is remembered and thrown at the end (it marks the invocation as failed
+        // in the Cloudflare dashboard) so the automatic upkeep below still runs.
+        let priceFailure: string | null = null
+        try {
+            const response: Response = await handler.fetch(new Request(`${baseUrl}/api/cron/update-prices/`, {
+                headers: { Authorization: `Bearer ${env.CRON_SECRET}` },
+            }), env, ctx)
+            const body = await response.text()
+            if (response.ok) {
+                console.log(`[cron] ${controller.cron} price update ok: ${body}`)
+                // Prices changed: cached pages and JSON must not keep showing the old ones
+                try {
+                    await bumpCacheVersion(env)
+                } catch (error) {
+                    console.error('[cron] cache_version bump failed', error)
+                }
+            } else {
+                priceFailure = `(${response.status}): ${body.slice(0, 500)}`
             }
-        } else {
+        } catch (error) {
+            priceFailure = error instanceof Error ? error.message : String(error)
+        }
+        if (priceFailure) {
+            await logSystemEvent(logDb, { source: 'cron', level: 'error', message: 'Günlük döviz kuru ve fiyat güncellemesi yapılamadı; USD fiyatlı ürünlerin TL fiyatı eski kaldı.', detail: priceFailure })
+        }
+
+        // Automatic upkeep (app/api/cron/automation): missing image variants, then the assistant's product facts.
+        // Each job gets the time left (the route caps it); a job's own failures are logged by the job.
+        const CRON_WALL_MS = 14 * 60_000
+        const automation = async (job: 'images' | 'facts', maxMs: number) => {
+            const left = CRON_WALL_MS - (Date.now() - startedAt) - 30_000
+            const ms = Math.min(maxMs, left)
+            if (ms < 15_000) {
+                await logSystemEvent(logDb, { source: 'cron', level: 'warn', message: 'Günlük otomatik işlere zaman kalmadı; sonraki gün devam edecek.', ref: job })
+                return
+            }
+            try {
+                const res: Response = await handler.fetch(new Request(`${baseUrl}/api/cron/automation/?job=${job}&ms=${ms}`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${env.CRON_SECRET}` },
+                }), env, ctx)
+                const text = await res.text()
+                console.log(`[cron] automation ${job} ${res.status}: ${text.slice(0, 300)}`)
+                if (!res.ok) {
+                    await logSystemEvent(logDb, { source: 'cron', level: 'error', message: 'Günlük otomatik iş çalışmadı.', detail: `HTTP ${res.status}: ${text.slice(0, 300)}`, ref: job })
+                }
+            } catch (error) {
+                console.error(`[cron] automation ${job} failed`, error)
+                await logSystemEvent(logDb, { source: 'cron', level: 'error', message: 'Günlük otomatik iş çalışmadı.', detail: error instanceof Error ? error.message : 'error', ref: job })
+            }
+        }
+        await automation('images', 4 * 60_000)
+        await automation('facts', 9 * 60_000)
+
+        if (priceFailure) {
             // Throwing marks the cron invocation as failed in the Cloudflare dashboard
-            throw new Error(`[cron] ${controller.cron} price update failed (${response.status}): ${body}`)
+            throw new Error(`[cron] ${controller.cron} price update failed ${priceFailure}`)
         }
     },
 }

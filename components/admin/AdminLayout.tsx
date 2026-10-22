@@ -24,7 +24,9 @@ import {
     Mail,
     Truck,
     Sparkles,
-    MessagesSquare
+    MessagesSquare,
+    Signpost,
+    ScrollText
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -40,6 +42,7 @@ const navItems = [
     { href: '/admin/settings/integrations', label: 'Entegrasyonlar', icon: Share2 },
     { href: '/admin/pages', label: 'Sayfalar', icon: FileText },
     { href: '/admin/header', label: 'Menü Yönetimi', icon: Menu },
+    { href: '/admin/yonlendirmeler', label: 'Yönlendirmeler', icon: Signpost },
     { href: '/admin/reviews', label: 'Yorumlar', icon: MessageSquare },
     { href: '/admin/coupons', label: 'Kuponlar', icon: Ticket },
     { href: '/admin/users', label: 'Kullanıcılar', icon: Users },
@@ -48,7 +51,14 @@ const navItems = [
     { href: '/admin/assistant', label: 'AI Asistan', icon: Sparkles },
     { href: '/admin/assistant/sohbetler', label: 'Sohbetler', icon: MessagesSquare },
     { href: '/admin/image-optimization', label: 'Görsel Optimizasyonu', icon: ImageIcon },
+    { href: '/admin/kayitlar', label: 'Sistem kayıtları', icon: ScrollText },
 ]
+
+// The sidebar badge: open errors of the system log (lib/system-log.ts), re-read at most once a minute while
+// moving between admin pages, and at once when the Sistem kayıtları page marks something "Çözüldü"
+const SYSTEM_LOG_BADGE_HREF = '/admin/kayitlar'
+const SYSTEM_LOG_POLL_MS = 60_000
+
 
 // Pages reachable without an admin session
 const PUBLIC_ADMIN_PATHS = ['/admin/login', '/admin/reset-password']
@@ -96,6 +106,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     // Set when /api/auth/me can't be reached; the admin stays on the page and can retry
     const [authError, setAuthError] = React.useState(false)
     const [retryCount, setRetryCount] = React.useState(0)
+    const [openErrors, setOpenErrors] = React.useState(0)
+    const lastBadgeRead = React.useRef(0)
 
     // Re-checked on every admin page change. The panel is only rendered once the session is confirmed,
     // so a logged-out visitor never sees (or triggers the API calls of) a dashboard before the redirect.
@@ -116,6 +128,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         })
         return () => { cancelled = true }
     }, [pathname, isPublicPage, retryCount, router])
+
+    // Open system log errors for the sidebar badge (only once the admin session is confirmed)
+    React.useEffect(() => {
+        if (!user) return
+        let cancelled = false
+        const read = (force: boolean) => {
+            if (!force && Date.now() - lastBadgeRead.current < SYSTEM_LOG_POLL_MS) return
+            lastBadgeRead.current = Date.now()
+            fetch('/api/admin/system-logs/?summary=1', { cache: 'no-store' })
+                .then(r => (r.ok ? r.json() : null))
+                .then(d => { if (!cancelled && d?.unresolved) setOpenErrors(Number(d.unresolved.error) || 0) })
+                .catch(() => { })
+        }
+        read(false)
+        const onChange = () => read(true)
+        window.addEventListener('onopo:system-logs-changed', onChange)
+        return () => {
+            cancelled = true
+            window.removeEventListener('onopo:system-logs-changed', onChange)
+        }
+    }, [user, pathname])
 
     const handleLogout = async () => {
         await fetch('/api/auth/logout', { method: 'POST' })
@@ -203,6 +236,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                                 >
                                     <item.icon className="w-5 h-5" />
                                     {item.label}
+                                    {item.href === SYSTEM_LOG_BADGE_HREF && openErrors > 0 && (
+                                        <span
+                                            className="ml-auto min-w-[1.5rem] rounded-full bg-red-500 px-1.5 py-0.5 text-center text-xs font-bold text-white"
+                                            aria-label={`${openErrors} açık hata`}
+                                        >
+                                            {openErrors > 99 ? '99+' : openErrors}
+                                        </span>
+                                    )}
                                 </Link>
                             )
                         })}
