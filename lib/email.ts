@@ -240,7 +240,7 @@ export async function sendOrderConfirmation(order: any, items: any[], toEmail: s
             subject: template.subject,
             html: template.html
         })
-        console.log('Order confirmation email sent to:', toEmail)
+        console.log('Order confirmation email sent')
         return { success: true }
     } catch (error) {
         console.error('Failed to send order confirmation:', error)
@@ -258,7 +258,7 @@ export async function sendTrackingUpdate(order: any, trackingNumber: string, toE
             subject: template.subject,
             html: template.html
         })
-        console.log('Tracking update email sent to:', toEmail)
+        console.log('Tracking update email sent')
         return { success: true }
     } catch (error) {
         console.error('Failed to send tracking update:', error)
@@ -276,7 +276,7 @@ export async function sendWelcomeEmail(toEmail: string) {
             subject: template.subject,
             html: template.html
         })
-        console.log('Welcome email sent to:', toEmail)
+        console.log('Welcome email sent')
         return { success: true }
     } catch (error) {
         console.error('Failed to send welcome email:', error)
@@ -294,7 +294,7 @@ export async function sendAdminNewOrderNotification(order: any, items: any[], cu
             subject: template.subject,
             html: template.html
         })
-        console.log('Admin notification email sent to:', adminEmail)
+        console.log('Admin notification email sent')
         return { success: true }
     } catch (error) {
         console.error('Failed to send admin notification:', error)
@@ -310,7 +310,7 @@ export async function sendCustomEmail(to: string | string[], subject: string, ht
             subject,
             html: htmlContent
         })
-        console.log('Custom email sent to:', to)
+        console.log(`Custom email sent (${Array.isArray(to) ? to.length : 1} recipient(s))`)
         return { success: true }
     } catch (error) {
         console.error('Failed to send custom email:', error)
