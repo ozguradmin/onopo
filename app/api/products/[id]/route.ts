@@ -3,24 +3,37 @@ import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 
+// Columns only the admin product editor needs (purchase/source prices); never sent to anyone else
+const ADMIN_ONLY_COLUMNS = ['price_usd', 'cost', 'cost_price', 'purchase_price', 'buy_price']
+
+// GET: the full row for admins (product editor, inactive products included); for everyone else only an
+// active product, without the admin-only columns
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
     try {
         const db = await getDB()
         const params = await props.params
         const id = params.id
 
+        const token = req.cookies.get('auth_token')?.value
+        const isAdmin = token ? (await verifyJWT(token))?.role === 'admin' : false
+
         const product = await db.prepare('SELECT * FROM products WHERE id = ?').bind(id).first()
 
-        if (!product) {
+        if (!product || (!isAdmin && Number(product.is_active) !== 1)) {
             return NextResponse.json({ error: 'Product not found' }, { status: 404 })
         }
 
+        const row: Record<string, unknown> = { ...product }
+        if (!isAdmin) for (const column of ADMIN_ONLY_COLUMNS) delete row[column]
+
         return NextResponse.json({
-            ...product,
+            ...row,
             images: product.images ? JSON.parse(product.images as string) : []
         }, {
             headers: {
-                'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300'
+                // The answer depends on the auth cookie, so no shared cache may keep it (a cached public copy
+                // without price_usd reaching the admin editor would blank that field on the next save)
+                'Cache-Control': isAdmin ? 'private, no-store' : 'private, no-cache'
             }
         })
 
