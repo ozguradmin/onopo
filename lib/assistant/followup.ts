@@ -36,7 +36,8 @@ const OFFER_RE = /(gosterebilirim|gostereyim|gosterelim|gostermemi|onerebilirim|
 function sentences(text: string): string[] {
     return text
         .replace(/\s+/g, ' ')
-        .split(/(?<=[.!?…])\s+/)
+        .replace(/([.!?…])\s+/g, '$1\n')
+        .split('\n')
         .map(s => s.trim())
         .filter(Boolean)
 }
