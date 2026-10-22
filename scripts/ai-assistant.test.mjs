@@ -1680,6 +1680,16 @@ test('update_cart: cart_ops, then the cart after the change; the model gets the 
     const ok = await tools.runTool('update_cart', { ops: [{ id: 401, qty: 1 }] }, add)
     assert.equal(ok.events[0].t, 'cart_ops')
     assert.deepEqual(add.state.cart.map(c => c.id), [617, 634, 401])
+    // The page product without a card is not "shown": the UI could not add it (it adds from a card), so the
+    // server must not claim it did
+    const page = cartCtx({ pageProduct: row(401) })
+    const refused = await tools.runTool('update_cart', { ops: [{ id: 401, qty: 1 }] }, page)
+    assert.deepEqual(refused.events, [])
+    assert.match(refused.forModel, /izin_yok/)
+    // ...but once its card was shown in this turn, it may be added
+    await tools.runTool('show_products', { ids: [401] }, page)
+    const added = await tools.runTool('update_cart', { ops: [{ id: 401, qty: 1 }] }, page)
+    assert.equal(added.events[0].t, 'cart_ops')
 })
 
 test('show_products: no "Sepete Ekle" card for a product already in the cart; all in the cart → the cart card', async () => {

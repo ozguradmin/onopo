@@ -799,7 +799,9 @@ function updateCart(args: Record<string, unknown>, ctx: ToolContext): ToolResult
     if (ops.length === 0) {
         return { forModel: wrapForModel({ hata: 'gecersiz_arguman' }), events: [], steps: [step('prices')], isData: true, productIds: [] }
     }
-    const shown = new Set<number>([...ctx.state.shownBefore, ...ctx.state.productIds, ...(ctx.state.pageProduct ? [ctx.state.pageProduct.id] : [])])
+    // Only products shown on a card (earlier turns or this one) may be added: the UI adds a product from its
+    // card (CardProduct), so the page product alone (no card) would be "added" here but not in the real cart
+    const shown = new Set<number>([...ctx.state.shownBefore, ...ctx.state.productIds])
     const r = applyCartOps(ctx.state.cart, ops, ctx.k.byId, shown)
     if (r.applied.length === 0) {
         return { forModel: wrapForModel({ yapilmadi: r.rejected }), events: [], steps: [step('prices')], isData: true, productIds: [] }
