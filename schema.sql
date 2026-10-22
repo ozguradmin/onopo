@@ -143,6 +143,17 @@ CREATE TABLE IF NOT EXISTS two_factor_challenges (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Password-login attempt limit (app/api/auth/login-limit.ts): one row per attempt that has not (yet) proven the
+-- right password, keyed by SHA-256 hashes (with the JWT secret) of the account e-mail and the client IP (no
+-- e-mails or IPs stored). attempted_at is Unix time in ms; rows older than the 15-minute window are deleted by the login route.
+-- Additive only: older code simply never reads this table.
+CREATE TABLE IF NOT EXISTS login_failures (
+    id INTEGER PRIMARY KEY,
+    email_hash TEXT NOT NULL,
+    ip_hash TEXT NOT NULL,
+    attempted_at INTEGER NOT NULL
+);
+
 -- No INSERT statements here: deploy.yml runs this file against the live database on every push,
 -- so seed rows would come back after being deleted in the admin panel. Default rows for a fresh,
 -- empty database are in scripts/seed-defaults.sql (run it once by hand).
@@ -161,3 +172,6 @@ CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites(user_id);
 CREATE INDEX IF NOT EXISTS idx_favorites_product_id ON favorites(product_id);
 CREATE INDEX IF NOT EXISTS idx_homepage_sections_is_active ON homepage_sections(is_active);
 CREATE INDEX IF NOT EXISTS idx_two_factor_challenges_user_id ON two_factor_challenges(user_id);
+CREATE INDEX IF NOT EXISTS idx_login_failures_email_ip ON login_failures(email_hash, ip_hash, attempted_at);
+CREATE INDEX IF NOT EXISTS idx_login_failures_ip ON login_failures(ip_hash, attempted_at);
+CREATE INDEX IF NOT EXISTS idx_login_failures_attempted_at ON login_failures(attempted_at);

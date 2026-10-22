@@ -2,10 +2,11 @@
 //   - the canonical-host redirect (http -> https, www -> apex) for page GETs (not for /sitemap.xml and
 //     /robots.txt on www, which Akakçe reads there),
 //   - tracking parameters (utm_*, gclid, srsltid, ...) removed from the URL Next renders (the browser keeps
-//     its address),
+//     its address) and put back on the Location of Next's same-origin redirects,
 //   - a conservative edge cache for anonymous public GETs (rules in lib/edge-cache.ts); anonymous cached
 //     HTML goes to the browser as 'private, no-cache' so it can use the back/forward cache,
-//   - the maintenance render answered as 503 + Retry-After + X-Robots-Tag: noindex,
+//   - the maintenance render answered as 503 + Retry-After + X-Robots-Tag: noindex (client-side navigations of
+//     tabs opened before maintenance get a plain 503, so the router loads that page),
 //   - the readable session hint cookie (lib/session-hint.ts) kept in sync with auth_token,
 //   - the cron (scheduled) handler.
 // See https://opennext.js.org/cloudflare/howtos/custom-worker
@@ -20,16 +21,19 @@ import {
     CACHE_HEADER,
     CACHE_VERSION_MEMO_MS,
     EDGE_CACHE_TTL_SECONDS,
+    blocksRscDuringMaintenance,
     cacheKeyUrl,
     canonicalRedirect,
     hasAuthCookie,
     isCacheableRequest,
     isMaintenanceBody,
+    isRscRequest,
     isStorableBody,
     isStorableResponse,
     maintenanceHeaders,
     mayRenderMaintenance,
     needsBodyCheck,
+    restoreTrackingParams,
     sessionHintSetCookie,
     shouldBumpCacheVersion,
     stripTrackingParams,
@@ -152,6 +156,15 @@ function maintenanceResponse(body: string, origin: Response): Response {
     return new Response(body, { status: 503, statusText: 'Service Unavailable', headers })
 }
 
+// Client-side (RSC) navigation of a store page while maintenance is on (lib/edge-cache.ts
+// blocksRscDuringMaintenance): not a Flight payload, so the Next router does a full page load instead
+function maintenanceRscResponse(): Response {
+    const headers = new Headers(maintenanceHeaders())
+    headers.set('Content-Type', 'text/plain; charset=utf-8')
+    headers.set(CACHE_HEADER, 'BYPASS')
+    return new Response('Site kısa bir bakımda.', { status: 503, statusText: 'Service Unavailable', headers })
+}
+
 // Responses that are not served from or stored in the edge cache. While maintenance is on, store-page HTML
 // is read so the maintenance render can be answered as 503.
 async function passThrough(response: Response, url: URL, method: string, settings: EdgeSettings | null): Promise<Response> {
@@ -183,6 +196,16 @@ function withSessionHint(request: Request, url: URL, response: Response): Respon
     if (!line) return response
     const out = new Response(response.body, response)
     out.headers.append('Set-Cookie', line)
+    return out
+}
+
+// A same-origin redirect of a request whose tracking parameters were stripped gets them back in its Location
+// (lib/edge-cache.ts restoreTrackingParams), e.g. Next's trailing-slash 308
+function withTrackingParams(response: Response, requestUrl: URL, renderedUrl: URL): Response {
+    const location = restoreTrackingParams(response.status, response.headers.get('location'), requestUrl, renderedUrl)
+    if (!location) return response
+    const out = new Response(response.body, response)
+    out.headers.set('Location', location)
     return out
 }
 
@@ -264,13 +287,16 @@ const worker = {
         }
 
         // Next renders the page as if tracking parameters weren't there (the cache key ignores them too), so a
-        // stored page never carries the first visitor's click ids
+        // stored page never carries the first visitor's click ids; a redirect Next answers gets them back
+        // (withTrackingParams)
         const clean = stripTrackingParams(url)
         const target = clean ? new Request(clean.href, request) : request
         const targetUrl = clean ?? url
+        const finish = (response: Response) =>
+            withSessionHint(request, targetUrl, clean ? withTrackingParams(response, url, clean) : response)
 
         if (isCacheableRequest({ method, url: targetUrl, headers: target.headers })) {
-            return withSessionHint(request, targetUrl, await serveFromEdgeCache(target, targetUrl, env, ctx))
+            return finish(await serveFromEdgeCache(target, targetUrl, env, ctx))
         }
         // HEAD of a store page during maintenance: rendered as a GET so the 503 status and headers match
         if (method === 'HEAD' && mayRenderMaintenance(targetUrl.pathname)) {
@@ -278,14 +304,19 @@ const worker = {
             if (settings?.maintenance) {
                 const get = new Request(targetUrl.href, { method: 'GET', headers: target.headers })
                 const full = await passThrough(await handler.fetch(get, env, ctx), targetUrl, 'GET', settings)
-                return withSessionHint(request, targetUrl, new Response(null, full))
+                return finish(new Response(null, full))
             }
         }
         const [response, settings] = await Promise.all([
             handler.fetch(target, env, ctx) as Promise<Response>,
             method === 'GET' && mayRenderMaintenance(targetUrl.pathname) ? getEdgeSettings(env) : null,
         ])
-        return withSessionHint(request, targetUrl, await passThrough(response, targetUrl, method, settings))
+        // A client-side navigation during maintenance: the router falls back to a full page load (the 503 page)
+        if (settings?.maintenance && isRscRequest(target.headers, targetUrl) && blocksRscDuringMaintenance(targetUrl.pathname)) {
+            await response.body?.cancel().catch(() => {})
+            return finish(maintenanceRscResponse())
+        }
+        return finish(await passThrough(response, targetUrl, method, settings))
     },
 
     // Triggered by [triggers] crons in wrangler.toml (0 7 * * * = 10:00 Turkey time)

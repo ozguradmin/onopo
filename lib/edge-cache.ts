@@ -13,9 +13,9 @@
 // version (site_settings.cache_version), which worker.ts bumps after every successful admin/content write
 // and after the daily price cron, so edits show up at once (within the ~10 s version memo per isolate).
 //
-// Also here (pure rules used by worker.ts): tracking parameters stripped before Next renders, the browser
-// Cache-Control of anonymous allowlisted HTML (bfcache), the maintenance render (503) and the readable
-// session hint cookie kept in sync with auth_token.
+// Also here (pure rules used by worker.ts): tracking parameters stripped before Next renders (and put back
+// on Next's same-origin redirects), the browser Cache-Control of anonymous allowlisted HTML (bfcache), the
+// maintenance render (503) and the readable session hint cookie kept in sync with auth_token.
 
 // Set to false to switch the edge cache off completely (every response is then BYPASS).
 export const EDGE_CACHE_ENABLED = true
@@ -98,10 +98,14 @@ const ADMIN_PARAMS = ['includeAll']
 
 // Tracking parameters that don't change the response: dropped from the cache key, and worker.ts removes them
 // from the URL Next renders (stripTrackingParams), so a stored page never carries one visitor's click ids.
-// Google: utm_*, gclid, gclsrc, gbraid, wbraid, dclid, srsltid (Merchant Center auto-tagging), _gl/_ga
-// (cross-domain linker); Meta: fbclid, igshid/igsh; Microsoft: msclkid; Yandex: yclid; TikTok: ttclid;
-// X: twclid; Mailchimp: mc_cid, mc_eid; LinkedIn: li_fat_id.
-const IGNORED_PARAMS = /^(utm_\w+|fbclid|gclid|gclsrc|gbraid|wbraid|dclid|srsltid|_gl|_ga|msclkid|yclid|ttclid|twclid|igshid|igsh|mc_cid|mc_eid|li_fat_id)$/i
+// Only vendor click/campaign ids: no page reads any of these names (the store's own parameters, e.g. q, f,
+// sort, page, minPrice, maxPrice, discounted, inStock, category, redirect, token, index, includeAll, stay).
+// Google: utm_*, gclid, gclsrc, gbraid, wbraid, dclid, gad_* (Ads auto-tagging: gad_source, gad_campaignid),
+// srsltid (Merchant Center auto-tagging), _gl/_ga (cross-domain linker); Meta: fbclid, igshid/igsh;
+// Microsoft: msclkid; Yandex: yclid, ysclid; TikTok: ttclid; X: twclid; Pinterest: epik; Reddit: rdt_cid;
+// Snapchat: sc_cid, ScCid; Impact: irclickid; Klaviyo: _kx; HubSpot: hsa_*, _hsenc, _hsmi; Mailchimp: mc_cid,
+// mc_eid; Marketo: mkt_tok; LinkedIn: li_fat_id.
+const IGNORED_PARAMS = /^(utm_\w+|fbclid|gclid|gclsrc|gbraid|wbraid|dclid|gad_\w+|srsltid|_gl|_ga|msclkid|yclid|ysclid|ttclid|twclid|igshid|igsh|epik|rdt_cid|sc_cid|sccid|irclickid|_kx|hsa_\w+|_hsenc|_hsmi|mc_cid|mc_eid|mkt_tok|li_fat_id)$/i
 
 export function isTrackingParam(name: string): boolean {
     return IGNORED_PARAMS.test(name)
@@ -118,6 +122,39 @@ export function stripTrackingParams(url: URL): URL | null {
     const clean = new URL(url.href)
     clean.search = kept.length ? new URLSearchParams(kept).toString() : ''
     return clean
+}
+
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
+
+/**
+ * The Location of a redirect Next answered for a request whose tracking parameters were stripped, with
+ * those parameters put back, or null when the response is left as it is. Campaign links without the
+ * trailing slash (/products?utm_source=x&page=2 → 308 /products/?page=2) then still land with their
+ * utm/gclid/... Only same-origin targets get them. When Next kept the rendered query unchanged (the
+ * trailing-slash redirect) the visitor's query is restored exactly as sent; otherwise the removed
+ * parameters are appended. A path-relative Location stays relative.
+ * requestUrl: the URL the browser asked for; renderedUrl: the URL handed to Next (stripTrackingParams).
+ */
+export function restoreTrackingParams(status: number, location: string | null, requestUrl: URL, renderedUrl: URL): string | null {
+    if (!REDIRECT_STATUSES.has(status) || !location) return null
+    const removed = [...requestUrl.searchParams].filter(([key]) => isTrackingParam(key))
+    if (!removed.length) return null
+    let target: URL
+    try {
+        target = new URL(location, renderedUrl)
+    } catch {
+        return null
+    }
+    if (target.origin !== renderedUrl.origin) return null
+    // The route chose its own tracking parameters: keep them
+    if ([...target.searchParams.keys()].some(isTrackingParam)) return null
+    // A redirect to the rendered URL itself is left alone (it can only loop)
+    if (target.pathname === renderedUrl.pathname && target.search === renderedUrl.search) return null
+    target.search = target.search === renderedUrl.search
+        ? requestUrl.search
+        : `${target.search ? `${target.search}&` : '?'}${new URLSearchParams(removed).toString()}`
+    const absolute = /^[a-z][a-z\d+.-]*:/i.test(location) || location.startsWith('//')
+    return absolute ? target.href : `${target.pathname}${target.search}${target.hash}`
 }
 
 // Requests made by the Next.js client router (RSC payloads share the page URL) or server actions
@@ -259,6 +296,24 @@ export function mayRenderMaintenance(pathname: string): boolean {
     if (pathname === '/admin' || pathname.startsWith('/admin/')) return false
     if (pathname.startsWith('/_next/')) return false
     return !CRAWLER_FILES.has(pathname)
+}
+
+// Store pages that render normally during maintenance (MAINTENANCE_EXEMPT in components/layout/LayoutProvider.tsx)
+const MAINTENANCE_EXEMPT_PAGES = /^\/(maintenance|login|register)\/?$/
+
+/** A request of the Next.js client router (navigation or prefetch): the RSC header or the _rsc parameter. */
+export function isRscRequest(headers: { has(name: string): boolean }, url: URL): boolean {
+    return headers.has('rsc') || url.searchParams.has('_rsc')
+}
+
+/**
+ * RSC requests that worker.ts answers with a plain 503 while maintenance is on. A tab opened before maintenance
+ * never re-renders the root layout on client navigations, so its RSC payloads would keep showing the store. The
+ * Next router turns a non-OK answer into a full page load (fetchServerResponse → MPA navigation), and that load
+ * gets the 503 maintenance page. /admin, APIs, crawler files and the exempt pages are left alone.
+ */
+export function blocksRscDuringMaintenance(pathname: string): boolean {
+    return mayRenderMaintenance(pathname) && !MAINTENANCE_EXEMPT_PAGES.test(pathname)
 }
 
 /** Headers of the 503 maintenance answer (the body is the maintenance render itself). */

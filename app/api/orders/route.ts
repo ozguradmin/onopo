@@ -301,6 +301,10 @@ export async function POST(req: NextRequest) {
     }
 }
 
+// The shop's own order data that customers never get (same rule in /api/orders/my-orders): the admin's
+// internal note and the payment provider's id
+const CUSTOMER_HIDDEN_FIELDS = ['admin_notes', 'payment_id']
+
 // Get Orders - For admin panel 
 export async function GET(req: NextRequest) {
     try {
@@ -362,6 +366,13 @@ export async function GET(req: NextRequest) {
             }
         })
 
+        if (userRole !== 'admin') {
+            return NextResponse.json(filteredResults.map((order: any) => {
+                const copy = { ...order }
+                for (const key of CUSTOMER_HIDDEN_FIELDS) delete copy[key]
+                return copy
+            }))
+        }
         return NextResponse.json(filteredResults)
 
     } catch (error: any) {

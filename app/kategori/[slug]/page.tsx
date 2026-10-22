@@ -3,6 +3,7 @@
  *
  * - Unknown slug or a category without active products → notFound() (real 404).
  * - Other spelling of the slug (case) → 308 to the canonical /kategori/<slug>/.
+ * - A former slug (CATEGORY_SLUG_ALIASES in lib/seo.ts) that no category has any more → 308 to the new one.
  * - H1 = category name, real-data intro, visible breadcrumb + BreadcrumbList, ItemList of this page.
  * - Filters/sort/search on the page are noindex,follow; ?page=N is self-canonical (docs/SEO.md §6).
  * No loading.tsx / Suspense around the content: the 404 and the redirect must keep their status codes.
@@ -16,7 +17,7 @@ import { categoryIntro, loadListing } from '@/lib/listing-data'
 import { getActiveProducts } from '@/lib/catalog'
 import { breadcrumbJsonLd, buildMetadata, categoryMetaDescription, categoryTitle, foldTr, itemListJsonLd, productPath } from '@/lib/seo'
 import { getSiteSeo } from '@/lib/seo-server'
-import { listingSeo, normalizeSlugParam, resolveCategoryCached, type CategoryInfo } from '@/lib/seo-routing'
+import { categorySlugAlias, listingSeo, normalizeSlugParam, resolveCategoryCached, type CategoryInfo } from '@/lib/seo-routing'
 
 type SearchParams = Record<string, string | string[] | undefined>
 
@@ -30,7 +31,11 @@ async function resolve(rawSlug: string): Promise<{ category: CategoryInfo; redir
     const slug = normalizeSlugParam(rawSlug)
     if (!slug) return null
     const category = await resolveCategoryCached(slug)
-    if (!category || category.productCount === 0) return null
+    if (!category || category.productCount === 0) {
+        // The former slug of a renamed category (only once no category has it any more)
+        const renamed = await categorySlugAlias(slug)
+        return renamed ? { category: renamed, redirect: true } : null
+    }
     return { category, redirect: category.slug !== slug }
 }
 
