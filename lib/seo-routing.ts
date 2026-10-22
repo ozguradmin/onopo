@@ -30,7 +30,7 @@ export type SlugResolution =
 /** Top-level paths owned by static routes. A product slug must never be one of these (the static route wins). */
 export const RESERVED_SLUGS = [
     'admin', 'api', 'categories', 'help', 'kategori', 'login', 'maintenance', 'odeme', 'orders', 'page', 'policy',
-    'product', 'products', 'profile', 'register', 'shipping', 'siparis-basarili', 'siparis-hata', 'terms',
+    'product', 'products', 'profile', 'register', 'rehber', 'shipping', 'siparis-basarili', 'siparis-hata', 'terms',
     'cart', 'checkout', 'sepet', 'export', 'sitemap.xml', 'robots.txt', 'degerlendir',
 ] as const
 

@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { preload } from 'react-dom'
 import Link from 'next/link'
-import { ArrowDown, BadgeCheck, PenLine, RotateCcw, ShieldCheck, Truck } from 'lucide-react'
+import { ArrowDown, BadgeCheck, BookOpen, ChevronRight, PenLine, RotateCcw, ShieldCheck, Truck } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,7 @@ import { ProductMachineData } from '@/components/seo/ProductMachineData'
 import { ProductCard } from '@/components/product/ProductCard'
 import { breadcrumbJsonLd, categoryPath, productBrand, type SiteSeo } from '@/lib/seo'
 import { brandOf, displayName, specChips } from '@/lib/search'
+import { guideForProduct, guidePath } from '@/lib/guides'
 import { formatDateTR, formatTL } from '@/lib/format'
 import { productImageSrcSet, productImageUrl } from '@/lib/images'
 import type { ProductPageData } from '@/lib/product-data'
@@ -57,6 +58,8 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
     const relatedRatings = related.length > 0 ? await getReviewStatsMapSafe() : null
     const soldOut = !product.in_stock
     const parsed = parseDescription(product.description, product.name)
+    // One shopping guide that fits the product (lib/guides PRODUCT_GUIDE_ORDER), linked under the description
+    const guide = guideForProduct(product)
 
     // ---- facts -------------------------------------------------------------------------------
     const code = product.product_code
@@ -253,6 +256,22 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                                     <InfoSection id="ozellikler" title="Teknik özellikler" defaultOpen>
                                         <SpecsTable rows={specRows} />
                                     </InfoSection>
+                                )}
+                                {guide && (
+                                    <Link
+                                        href={guidePath(guide.slug)}
+                                        prefetch={false}
+                                        className="group my-4 flex min-h-14 items-center gap-3 rounded-card border border-line bg-surface px-4 py-3 transition-colors duration-150 hover:border-brand-100 hover:bg-brand-50 lg:mb-0 lg:mt-8"
+                                    >
+                                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-brand-600 shadow-card" aria-hidden="true">
+                                            <BookOpen className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                                        </span>
+                                        <span className="min-w-0 flex-1 text-sm leading-5">
+                                            <span className="block text-[13px] text-muted">İlgili rehber</span>
+                                            <span className="block font-semibold text-ink group-hover:text-brand-700">{guide.title}</span>
+                                        </span>
+                                        <ChevronRight className="h-4 w-4 shrink-0 text-subtle" aria-hidden="true" />
+                                    </Link>
                                 )}
                             </div>
                             <div className="min-w-0 lg:flex lg:flex-col lg:gap-10 xl:col-span-5">

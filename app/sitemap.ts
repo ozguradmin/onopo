@@ -1,5 +1,6 @@
-import { MetadataRoute } from 'next'
+import type { MetadataRoute } from 'next'
 import { getDB } from '@/lib/db'
+import { guideSitemapEntries } from '@/lib/guides'
 import {
     canonicalUrl,
     categoryPath,
@@ -37,6 +38,7 @@ function latest(dates: Array<string | null>): string | undefined {
  * - /kategori/<slug>/ for categories with at least one active product (lastmod = newest product change in it)
  * - every active product, in stock or not, at its canonical /<slug>/ (lastmod = updated_at, else created_at)
  * - CMS pages at /page/<slug>/ (lastmod = updated_at)
+ * - the shopping guides: /rehber/ and /rehber/<slug>/ (lastmod = the guide's dateModified, from lib/guides)
  * No utility pages, no query-string URLs, no lastmod = "now".
  * On a database error this throws (HTTP 500) so crawlers retry later instead of reading a truncated list.
  */
@@ -66,6 +68,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         { url: canonicalUrl('/products/'), ...(newestProduct ? { lastModified: newestProduct } : {}), changeFrequency: 'daily', priority: 0.8 },
         { url: canonicalUrl('/kategoriler/'), ...(newestProduct ? { lastModified: newestProduct } : {}), changeFrequency: 'weekly', priority: 0.6 },
     ]
+
+    for (const g of guideSitemapEntries()) {
+        entries.push({ url: canonicalUrl(g.path), lastModified: g.lastModified, changeFrequency: 'monthly', priority: 0.5 })
+    }
 
     for (const c of categories.results || []) {
         const lastModified = d1DateToIso(c.lastmod)

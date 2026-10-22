@@ -9,6 +9,8 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - **Kod:** Next.js 16 (App Router) + React 19 + Tailwind 4, Cloudflare Workers üzerinde OpenNext ile.
 - **Cloudflare:** Worker `onopo-app`, D1 veritabanı `onopo-db` (binding `DB`), R2 `onopo-storage` (binding `BUCKET`).
   Hesap ve kaynak ID'leri `wrangler.toml`'da. Giriş noktası `worker.ts` (OpenNext worker'ını sarar, aşağıda).
+  `workers_dev = false`, `preview_urls = false`: `*.workers.dev` ve önizleme adresleri kapalı; site yalnızca
+  onopostore.com / www'den (dashboard'daki custom domain/route) açılır.
 - **Ödeme:** PayTR (`lib/payment/paytr.ts`). `test_mode` kodda sabit `'0'` → ödemeler **gerçek**.
   Ayarlar `payment_settings` tablosunda; gizli alanlar sadece admin'e döner.
 - **E-posta:** Resend (`lib/email.ts`). Admin bildirimi `site_settings.admin_email` adresine gider.
@@ -42,7 +44,7 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - `--persist-to` yolunu kısa tut: Windows'un 259 karakterlik yol sınırına takılmasın.
 - `tsc`, `.next/types` altında ödeme callback route'u için eskiden kalan hatalar verir; `next.config.ts` build'de
   tip hatalarını yok sayar (`ignoreBuildErrors`).
-- Birim testleri: `node --test scripts/edge-cache.test.mjs scripts/seo.test.mjs scripts/redirects.test.mjs` (Node 23.6+; CI çalıştırmaz).
+- Birim testleri: `node --test scripts/edge-cache.test.mjs scripts/seo.test.mjs scripts/redirects.test.mjs scripts/guides.test.mjs scripts/worker-hsts.test.mjs` (Node 23.6+; CI çalıştırmaz).
   Otomatik işler: `node --test scripts/automation.test.mjs` (D1 yerine `node:sqlite`, saat/AI/R2/Images sahte).
   Yorumlar/değerlendirme e-postaları ve migration: `node --test scripts/reviews.test.mjs`; Google feed ve barkod: `node --test scripts/feeds.test.mjs`.
 
@@ -82,6 +84,9 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - **Kanonik host:** `http://` ve `www.` sayfa GET/HEAD istekleri `https://onopostore.com`'a 301 olur. `/api/*` hiç
   yönlenmez (checkout POST'ları, PayTR, BirFatura, Merchant feed). `/sitemap.xml` ve `/robots.txt` istendiği
   host'ta kalır (Akakçe www'den okur; yalnızca http → https).
+- **HSTS:** Worker'ın döndürdüğü her HTTPS yanıtına (sayfa, API, cache HIT, 301'ler, 404) `withHsts` ile
+  `Strict-Transport-Security: max-age=31536000` eklenir; statik dosyalar `public/_headers`'tan alır. **includeSubDomains
+  ve preload yok** (printfast.onopostore.com ayrı bir servis). http yanıtlarına eklenmez.
 - **Takip parametreleri** (`utm_*`, `gclid`, `srsltid`, `fbclid`, `msclkid` …) Next'in gördüğü URL'den silinir;
   tarayıcı adresi değişmez. Sunucu kodu bunları okuyamaz.
 - **Edge cache** (Workers Cache API): yalnızca anonim (`auth_token` yok) ve allowlist'teki GET'ler (ana sayfa,
@@ -106,6 +111,12 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   zaman açılan bir sayfa ya da images.onopostore.com (açık yönlendirme yok, `/api` ve `/admin` hiç yönlenmez).
   Bulunamayanlar `not_found_log`'a (yalnızca yol, sayılar, referrer host; IP/UA yok; Googlebot dışı botlar sayılmaz).
   Ürün/kategori indeksi isolate başına 10 dk tutulur. Testler: `node --test scripts/redirects.test.mjs`.
+
+## Alışveriş rehberleri (`/rehber/`)
+- Metinler kodda: `lib/guides/content/*.ts` (6 rehber), slug listesi `lib/guides/slugs.ts`. İlgili ürünler D1'den canlı
+  (`lib/guides/server.ts`, en çok 8, stoktakiler önce); metinde fiyat/stok yazılmaz. Metin değişince `dateModified`'i güncelle.
+- Ürün sayfasında tek "İlgili rehber" bağlantısı (`guideForProduct`), footer'da "Rehberler", `/kategoriler/`'de blok.
+  Sitemap'te var; edge cache allowlist'inde; yönlendirme çözücü `/rehber/` altında tahmin yapmaz. Ayrıntı: `docs/SEO.md` §12.
 
 ## Admin girişi ve 2FA
 - Admin hesabı `admin@onopo.com` (`lib/login-alias.ts`). Sahip kişisel bir takma adresle (alias) de giriş

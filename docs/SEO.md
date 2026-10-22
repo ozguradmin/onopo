@@ -29,6 +29,8 @@ and carry no query string. The only exception is `?page=N` (N ≥ 2) on listings
 | `/gaming/` | → 308 `/kategori/oyun-ve-oyuncu-aksesuarlari/` | `LEGACY_CATEGORY_TARGETS` | Falls back to `/products/` if that category has no active product |
 | `/sepet/`, `/uye-giris/` | → 308 `/odeme/`, `/login/` | `LEGACY_PATH_REDIRECTS` | URLs from the old shop platform. `resolveSlug` returns kind `'legacy-path'` (they were 404 before) |
 | `/cart/`, `/checkout/` | 404 | | Only linked from the hidden Akakçe block; disallowed in robots.txt |
+| Guides hub | `/rehber/` | `GUIDES_PATH` | Shopping guides ("Alışveriş rehberleri"); see §12 |
+| Guide | `/rehber/<slug>/` | `guidePath(slug)` | Text in code (`lib/guides`); unknown slug 404, other case 308 |
 | Utility pages | (no canonical, noindex) | `privatePageMetadata` | `/odeme/ /profile/ /orders/ /login/ /register/ /siparis-basarili/ /siparis-hata/ /maintenance/ /admin/*`. `/admin` and `/admin/*` also send `X-Robots-Tag: noindex, nofollow` (`next.config.ts`), because the admin client app has no page metadata |
 
 `LEGACY_CATEGORY_TARGETS` lives in `lib/seo.ts` (client-safe, so the menus can use it) and is re-exported from
@@ -51,7 +53,8 @@ not a Cloudflare rule. GET/HEAD requests for pages on `http://` or `www.onoposto
 `https://onopostore.com` with the same path and query. `/api/*` is never redirected: checkout POSTs happen on
 www, PayTR and BirFatura call the apex, and Merchant fetches the feed from www. `/sitemap.xml` and `/robots.txt`
 stay on the host they were requested on (only http → https), because the Akakçe bot reads
-`https://www.onopostore.com/sitemap.xml`. Other hosts (workers.dev, 127.0.0.1) are left alone. Canonicals point
+`https://www.onopostore.com/sitemap.xml`. Other hosts (127.0.0.1; workers.dev and preview URLs are switched off in
+`wrangler.toml`) are left alone. Canonicals point
 at the apex whichever host served the page.
 
 **Tracking parameters** (`utm_*`, `gclid`, `srsltid`, `fbclid`, `msclkid` …) are removed by `worker.ts` from the
@@ -181,6 +184,8 @@ Render with `<JsonLd data={…} />` from `components/seo/JsonLd.tsx`, on the ser
 | Category | `breadcrumbJsonLd` + `itemListJsonLd(productsOnThisPage.map(p => ({ path: productPath(p.slug), name: p.name })), { startIndex })` |
 | /products/ (page 1, no filters) | `itemListJsonLd(...)` (optional) |
 | CMS | `breadcrumbJsonLd` |
+| Guide (`/rehber/<slug>/`) | `breadcrumbJsonLd` (Anasayfa › Rehberler › title) + `articleJsonLd` (publisher/author = the store's Organization `@id`, datePublished/dateModified) + `faqPageJsonLd` (only the FAQ shown on the page) + `itemListJsonLd` of the related products shown |
+| Guides hub | `breadcrumbJsonLd` + `itemListJsonLd` of the guides |
 
 `productJsonLd` (used by `ProductMachineData`) builds the following, from real data only:
 
@@ -332,6 +337,7 @@ return buildMetadata({ title, description, path: '/products/', query: ls.canonic
   - `/kategori/<slug>/` for categories with ≥ 1 active product, lastmod = newest product change in the category
   - **every active product, in stock or not**, at `/<slug>/`, lastmod = `updated_at`, else `created_at`
   - CMS pages at `/page/<slug>/`, lastmod = `pages.updated_at`
+  - `/rehber/` and every guide at `/rehber/<slug>/`, lastmod = the guide's `dateModified` (`guideSitemapEntries()`)
 - No utility pages and no query strings.
 - Same XML shape as before (`<url><loc><lastmod><changefreq><priority>`), because Akakçe reads it.
 - Image entries are implemented but switched off (`INCLUDE_IMAGES`).
@@ -463,7 +469,11 @@ Contract details:
   them as CMS pages; they then appear in the sitemap automatically.
 - Cloudflare (owner): the www/http → apex redirect is done in `worker.ts` (§1), so no Redirect Rule is needed.
   If one is ever added, it runs before the Worker and needs the same exclusions. Always Use HTTPS (the Worker
-  leaves `/api/*` on http alone), and HSTS later, without includeSubDomains.
+  leaves `/api/*` on http alone). HSTS is sent by the site itself (`Strict-Transport-Security: max-age=31536000`,
+  no includeSubDomains, no preload: worker.ts `withHsts`, static assets via `public/_headers`); do not also switch
+  it on in the Cloudflare SSL/TLS settings with includeSubDomains (printfast.onopostore.com is another service).
+- The regression harness (`onopo-tasarim-yedek/regresyon`, `sitemapAdditionKind`) must allow the new sitemap URLs
+  `/rehber/` and `/rehber/<slug>/`, or it warns about them as unexpected additions.
 
 ## 11. Google Merchant feed (`/api/feeds/google`, items in `lib/google-feed.ts`)
 
@@ -478,3 +488,23 @@ Contract details:
   adapters 8008); left out otherwise. Rules: `classifyProduct()`; tests: `node --test scripts/feeds.test.mjs`.
 - No `g:product_highlight`/`g:product_detail`: `ai_product_facts` is AI-written free text, not reliable enough.
 - Akakçe's XML feed (`/api/feeds/akakce`) fills `<barkod>` from `products.gtin` first, then the spec table.
+
+## 12. Shopping guides (`/rehber/`)
+
+- Content lives in code: `lib/guides/content/*.ts` (typed `Guide`: slug, title ≤ 52, description 140–160, intro,
+  datePublished/dateModified, sections of H2 + paragraphs/lists/tips, FAQ, related-products rule). Inline links are
+  written `[label](/rehber/<slug>/)`. The slug list is `lib/guides/slugs.ts` (also read by `lib/redirects.ts`).
+  Change `dateModified` whenever a text changes (Article JSON-LD and sitemap lastmod).
+- Related products come live from D1 (`lib/guides/server.ts` → `getActiveProducts()` → `selectGuideProducts`):
+  clauses of FACETS keys and/or a search query on the product NAME, taken in turns, in stock first, max 8. Never
+  prices or stock in the text. If the catalogue cannot be read the page renders without them and carries
+  `data-onopo-nocache`.
+- Product pages show one "İlgili rehber" link: `guideForProduct()` tries the guides in `PRODUCT_GUIDE_ORDER`
+  (most specific first) with each guide's `productMatch` (default: its product clauses).
+- Internal links: footer "Rehberler" (Müşteri hizmetleri column), the "Alışveriş rehberleri" block on
+  `/kategoriler/`, the product page link, "Diğer rehberler" under each guide.
+- Edge cache: `/rehber/` and `/rehber/<slug>/` are on the allowlist. Old-URL resolver: both are live targets;
+  `/rehber/<slug>.html` and `/<guide-slug>/` 301 to the guide; any other path under `/rehber/` stays a 404 (no
+  fuzzy match to a product).
+- Tests: `node --test scripts/guides.test.mjs` (data, rules against `scripts/fixtures/guide-catalog.json` = the
+  active products' public names, sitemap, edge cache, redirects).

@@ -15,7 +15,7 @@
 //
 // Also here (pure rules used by worker.ts): tracking parameters stripped before Next renders (and put back
 // on Next's same-origin redirects), the browser Cache-Control of anonymous allowlisted HTML (bfcache), the
-// maintenance render (503) and the readable session hint cookie kept in sync with auth_token.
+// maintenance render (503), the readable session hint cookie kept in sync with auth_token, and HSTS.
 
 // Set to false to switch the edge cache off completely (every response is then BYPASS).
 export const EDGE_CACHE_ENABLED = true
@@ -69,6 +69,8 @@ const PAGE_ALLOW = [
     /^\/products\/?$/,
     /^\/kategori\/[a-z0-9-]+(\/[a-z0-9-]+)*\/?$/,
     /^\/page\/[a-z0-9-]+\/?$/,
+    // Shopping guides: the hub and the articles (text in code, related products from D1)
+    /^\/rehber\/([a-z0-9-]+\/?)?$/,
     /^\/(help|policy|shipping|terms)\/?$/,
     /^\/product\/\d+\/?$/,
     /^\/sitemap\.xml$/,
@@ -79,7 +81,7 @@ const PAGE_ALLOW = [
 const PRODUCT_SLUG = /^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/
 
 // Single-segment pages on PAGE_ALLOW that are not product pages
-const NON_PRODUCT_PAGES = new Set(['products', 'help', 'policy', 'shipping', 'terms'])
+const NON_PRODUCT_PAGES = new Set(['products', 'help', 'policy', 'shipping', 'terms', 'rehber'])
 
 const API_ALLOW = [
     /^\/api\/categories\/?$/,
@@ -326,6 +328,21 @@ export function maintenanceHeaders(): Record<string, string> {
         'X-Robots-Tag': 'noindex',
         'Cache-Control': 'no-store',
     }
+}
+
+// ---- HSTS ----
+
+/**
+ * Strict-Transport-Security, sent by worker.ts on every HTTPS response it returns (pages, APIs, edge-cache HITs,
+ * the www -> apex and old-URL 301s, 404s). One year, for the requested host only: NO includeSubDomains (other
+ * subdomains such as printfast.onopostore.com are separate services that must not be forced onto HTTPS by this
+ * site) and NO preload. Static assets served before the Worker get the same header from public/_headers.
+ */
+export const HSTS_VALUE = 'max-age=31536000'
+
+/** The HSTS value for a response to this URL, or null (plain http: browsers ignore it there, so it is not sent). */
+export function hstsHeader(url: URL): string | null {
+    return url.protocol === 'https:' ? HSTS_VALUE : null
 }
 
 // ---- readable session hint (lib/session-hint.ts) ----
