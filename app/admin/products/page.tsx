@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Edit, Trash2, Plus, Upload, Trash, Loader2, Search } from 'lucide-react'
 import { formatPrice } from '@/lib/formatPrice'
 import { getImageUrl, parseProductImages } from '@/lib/utils'
+import { productImageUrl } from '@/lib/images'
+import { FallbackImage } from '@/components/ui/FallbackImage'
 import { toast } from 'sonner'
 import { ProductEditModal } from '@/components/admin/ProductEditModal'
 
@@ -368,8 +370,14 @@ export default function AdminProductsPage() {
                             {paginatedProducts.map(product => (
                                 <tr key={product.id} className={isHidden(product) ? 'bg-slate-50/70 hover:bg-slate-100' : 'hover:bg-slate-50'}>
                                     <td className="p-4">
-                                        <img
-                                            src={getImageUrl(parseProductImages(product.images)[0]) || '/placeholder.svg'}
+                                        {/* 200w variant when variants are on (one 48px thumb instead of a multi-MB original); falls back to the original once */}
+                                        <FallbackImage
+                                            src={productImageUrl(parseProductImages(product.images)[0], 200)}
+                                            fallbackSrc={getImageUrl(parseProductImages(product.images)[0])}
+                                            alt=""
+                                            width={48}
+                                            height={48}
+                                            loading="lazy"
                                             className={`w-12 h-12 rounded-lg object-cover bg-slate-100 ${isHidden(product) ? 'opacity-50' : ''}`}
                                         />
                                     </td>

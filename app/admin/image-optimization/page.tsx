@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Loader2, CheckCircle, Image as ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
+import { MissingVariantsPanel } from '@/components/admin/MissingVariantsPanel'
 
 export default function ImageOptimizationPage() {
     const [optimizing, setOptimizing] = useState(false)
@@ -88,7 +89,7 @@ export default function ImageOptimizationPage() {
                             Tüm ürün görsellerini tarayarak sıkıştırır ve WebP formatına dönüştürür.
                             Bu işlem sayfa yükleme hızını artırır ve sunucu alanından tasarruf sağlar.
                         </p>
-                        <div className="mt-4 flex gap-2">
+                        <div className="mt-4 flex flex-wrap gap-2">
                             <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">Lossless Compression</span>
                             <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">WebP Conversion</span>
                             <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">Resize</span>
@@ -127,6 +128,8 @@ export default function ImageOptimizationPage() {
                     </Button>
                 )}
             </div>
+
+            <MissingVariantsPanel />
         </div>
     )
 }
