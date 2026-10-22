@@ -12,7 +12,7 @@ import { FallbackImage } from '@/components/ui/FallbackImage'
 import { Field, FormAlert, checkboxClass, inputClass, textareaClass } from '@/components/forms/Field'
 import { CheckoutSkeleton } from '@/components/checkout/CheckoutSkeleton'
 import { TrustNote } from '@/components/checkout/TrustNote'
-import { ArrowLeft, ShoppingBag, Check, CreditCard, Lock, ChevronDown, Ticket, X, Truck, RefreshCw } from 'lucide-react'
+import { ShoppingBag, Check, CreditCard, Lock, ChevronDown, Ticket, X, Truck, RefreshCw } from 'lucide-react'
 
 /*
  * Checkout (/odeme/). Design spec §13: VISUALS ONLY.
@@ -408,9 +408,6 @@ export default function CheckoutPage() {
                                     Ödenecek tutar <span className="font-semibold text-ink-2 tabular">{formatTL(finalTotal)}</span>
                                 </p>
                             </div>
-                            <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-success">
-                                <Lock className="h-4 w-4" aria-hidden="true" /> Güvenli ödeme
-                            </span>
                         </div>
                         <div className="mt-4 overflow-hidden rounded-sheet border border-line bg-white shadow-card">
                             <iframe
@@ -464,25 +461,13 @@ export default function CheckoutPage() {
     }
 
     return (
-        <div className="min-h-[60vh] bg-surface pb-12 pt-4 lg:pb-20 lg:pt-6">
+        <div className="min-h-[60vh] bg-surface pb-12 pt-5 lg:pb-20 lg:pt-8">
             <div className="container-store">
-                <div className="mx-auto max-w-[1120px]">
-                    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-                        <Link
-                            href="/products/"
-                            className="-ml-1 inline-flex min-h-11 items-center gap-1.5 rounded-card px-1 text-sm font-medium text-muted transition-colors hover:text-ink"
-                        >
-                            <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Alışverişe dön
-                        </Link>
-                        <CheckoutSteps current={1} />
-                    </div>
-
-                    <div className="mt-3 flex items-center justify-between gap-4 lg:mt-4">
-                        <h1 className="type-h1 text-ink">Ödeme</h1>
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-success-50 px-3 py-1 text-[13px] font-semibold text-success">
-                            <Lock className="h-3.5 w-3.5" aria-hidden="true" /> Güvenli ödeme
-                        </span>
-                    </div>
+                {/* Full container-store width, so the page lines up with the checkout header. The back
+                    link and the "Güvenli ödeme" badge live in that header only. */}
+                <div>
+                    <CheckoutSteps current={1} />
+                    <h1 className="type-h1 mt-3 text-ink lg:mt-4">Ödeme</h1>
 
                     <div className="mt-4 lg:mt-6 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8">
                         {/* Order summary: collapsible bar on mobile (top), sticky card on desktop (right) */}
