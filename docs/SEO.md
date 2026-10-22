@@ -136,7 +136,7 @@ render (`getSiteSeo()` is cached per request only; the admin write also bumps th
 ## 3. Headings, breadcrumbs, internal links, images
 
 - **One visible `<h1>` per page.**
-  - Home: one real H1 in the hero intro (`components/home/HomeHero.tsx`, `id="home-title"`).
+  - Home: one real H1 in the "Onopo Store hakkında" block at the bottom (`HomeAbout` in `components/home/HomeHero.tsx`, `id="home-title"`); the top of the page is the campaign slider and the products.
   - Category: the category name.
   - /products/: "Tüm Ürünler" (also on `?sort=newest`, the "Yeni Gelenler" target), or `Arama: “q”` for a search.
   - Product: `product.name`.
