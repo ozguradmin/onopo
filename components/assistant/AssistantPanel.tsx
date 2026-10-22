@@ -212,9 +212,10 @@ export default function AssistantPanel() {
                     <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
                         <AssistantIcon className="h-[18px] w-[18px]" />
                     </span>
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                    {/* Title over a small "Yapay zekâ" line: side by side the title was cut to "Onopo Asi…" on phones */}
+                    <div className="flex min-w-0 flex-1 flex-col">
                         <h2 id="assistant-title" className="truncate text-[15px] font-bold leading-5 text-ink">Onopo Asistan</h2>
-                        <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold leading-4 text-muted">Yapay zekâ</span>
+                        <span className="truncate text-[11px] font-medium leading-4 text-muted">Yapay zekâ</span>
                     </div>
                     {chat.waBase && (
                         <button
