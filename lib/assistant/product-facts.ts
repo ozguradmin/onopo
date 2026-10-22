@@ -9,8 +9,9 @@
  *
  * Source of a line:
  *  1. The chat model reads the description ONCE per (name + description) hash and writes the line; it is
- *     stored in D1 (ai_product_facts) and regenerated lazily when the hash changes (a few products after a
- *     chat turn, or all missing ones from the "Ürün bilgilerini yenile" button on /admin/assistant).
+ *     stored in D1 (ai_product_facts) and regenerated when the hash changes: right after the product is saved
+ *     in the admin, by the daily cron sweep, a few after a chat turn, or from the "Ürün bilgilerini yenile"
+ *     button on /admin/assistant (all paced for DeepSeek's rate limit: facts-auto.ts).
  *  2. Until then a deterministic extract (regex facts + the start of the useful description text) stands in,
  *     so the assistant is never without the data.
  * The block is byte-stable for the same rows and stored facts (prefix cache), and kept within a char budget.

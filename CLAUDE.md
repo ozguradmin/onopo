@@ -43,6 +43,7 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - `tsc`, `.next/types` altında ödeme callback route'u için eskiden kalan hatalar verir; `next.config.ts` build'de
   tip hatalarını yok sayar (`ignoreBuildErrors`).
 - Birim testleri: `node --test scripts/edge-cache.test.mjs scripts/seo.test.mjs` (Node 23.6+; CI çalıştırmaz).
+  Otomatik işler: `node --test scripts/automation.test.mjs` (D1 yerine `node:sqlite`, saat/AI/R2/Images sahte).
 
 ## Gizli değişkenler (sadece adlar)
 - Cloudflare Worker secret'ları: `BIRFATURA_TOKEN`, `CRON_SECRET`, `JWT_SECRET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `RESEND_API_KEY`;
@@ -65,7 +66,7 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - Fatura sütunları: `orders.invoice_url, invoice_no, invoice_date` (BirFatura doldurur).
 - `schema.sql` yalnızca `CREATE TABLE/INDEX IF NOT EXISTS` içerir ve her deploy'da canlı DB'de çalışır. Varsayılan
   satırlar `scripts/seed-defaults.sql`'de: sadece boş yerel DB için elle çalıştırılır, canlıda asla.
-  Son eklenen tablo: `two_factor_challenges` (admin 2FA challenge'ı).
+  Son eklenen tablo: `system_logs` (Sistem kayıtları).
 - **`schema.sql` tam şema değil.** `orders`, `order_items`, `payment_settings`, `shipping_settings`, `coupons`,
   `product_variations`, `two_factor_codes` tabloları ve sonradan eklenen sütunlar (ör. `products.slug`,
   `free_shipping`, `price_usd`) `app/api/migrations/*` (admin korumalı) ya da `ALTER TABLE ... ADD COLUMN` ile
@@ -112,8 +113,17 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - Orijinaller R2'de, DB'de `/api/images/<key>` olarak durur; https://images.onopostore.com/<key> üzerinden sunulur.
 - Varyantlar: `https://images.onopostore.com/v/<w>/<key>.webp` (w = 200/400/800/1200). **Build sırasında**
   `NEXT_PUBLIC_IMAGE_VARIANTS_ENABLED=true` ile açılır. Henüz kapalı (deploy.yml vermiyor): önce mevcut görsellerin
-  varyantları R2'ye yüklenmeli. Admin'den yeni yüklenen görsellerin varyantlarını admin'in tarayıcısı üretir
-  (`lib/imageVariants.ts`).
+  varyantları R2'ye yüklenmeli.
+- **Varyantlar otomatik** (`lib/image-variants-auto.ts`, `lib/image-variants-server.ts`): Cloudflare Images binding'i
+  (`wrangler.toml` `[images] binding = "IMAGES"`). Yükleme uçları (`/api/admin/upload`, `/api/upload`) orijinali
+  koyduktan sonra 4 varyantı `ctx.waitUntil` içinde üretir ve `variants: 'server'` döner; o zaman tarayıcı kendi
+  kopyalarını yapmaz. Binding yoksa ya da 9422/9432 aldıysa `variants: 'browser'` döner ve eski yol
+  (`lib/imageVariants.ts`, admin'in tarayıcısı) çalışır. Logo yüklemesi `transparent=1` gönderir (saydamlık kalır).
+  Günlük cron, mağazanın gösterdiği görsellerden (aktif ürünler, aktif hero, görsel kartlar, logo) varyantı eksik
+  olanları bulur (`v/<w>/` için R2 list) ve tamamlar (en çok 60 görsel/gün). Var olan varyantın üzerine yazılmaz
+  (`If-None-Match: *`). Ücret: ayda tekil (kaynak + parametre) dönüşüm başına; Images Free planında ayda 5.000
+  ücretsiz, aşınca yeni dönüşümler 9422 ile reddedilir (ücret yok). Admin › Görsel Optimizasyonu'ndaki tarayıcı
+  taraması yedek yol olarak duruyor.
 - `FallbackImage` hata olursa bir kez orijinale düşer (sonra placeholder); döngü yok.
 - Varyantlar açıkken ürün `og:image`'ı 1200w varyantı, logo 200w/400w kullanır. Feed'ler ve JSON-LD her zaman orijinal.
 - Admin yüklemeleri: anahtar `<ms>-<8 hex>-<ad>`, `Cache-Control: public, max-age=31536000, immutable`.
@@ -144,9 +154,34 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
   Ayrıntı: `docs/SEO.md` §9.
 
 ## Cron
-- `wrangler.toml` `crons = ["0 7 * * *"]` (10:00 TR). `worker.ts` `scheduled()` → `/api/cron/update-prices/`
-  (`CRON_SECRET` ile). USD fiyatlı ürünleri ve `site_settings.last_exchange_rate/last_exchange_update` günceller.
-  Başarılı çalışmadan sonra `cache_version` artırılır.
+- `wrangler.toml` `crons = ["0 7 * * *"]` (10:00 TR). `worker.ts` `scheduled()` sırayla (hepsi `CRON_SECRET` ile,
+  süreç içi `handler.fetch`; bir cron çağrısı en çok 15 dk sürebilir):
+  1. Pazartesi: `/api/ai/popular/` (asistanın popüler soruları).
+  2. `/api/cron/update-prices/`: USD fiyatlı ürünleri ve `site_settings.last_exchange_rate/last_exchange_update`
+     günceller; başarıda `cache_version` artırılır. Hata sistem kaydına yazılır, aşağıdakiler yine çalışır, çağrı en
+     sonda hata fırlatır (Cloudflare panelinde "failed" görünsün).
+  3. `/api/cron/automation/?job=images` (en çok 4 dk): eksik görsel varyantları.
+  4. `/api/cron/automation/?job=facts` (kalan süre, en çok 9 dk): asistanın eksik/eski ürün bilgisi satırları,
+     4 sn'de bir DeepSeek çağrısı (hesap sınırı 20/dk, canlı sohbetlere yer kalsın), en çok 120 ürün/gün.
+
+## Asistan ürün bilgileri (otomatik)
+- `lib/assistant/facts-auto.ts` + `lib/automation/pacing.ts`. Ürün eklenince/kaydedilince (`POST /api/products`,
+  `PUT /api/products/<id>`, toplu içe aktarma) ad + açıklama özeti (hash) değiştiyse satır `ctx.waitUntil` içinde
+  hemen yeniden yazılır (en çok 5 ürün/~25 sn; kalanı günlük tarama). Fiyat/stok düzenlemesi model çağırmaz.
+- Çağrılar 4 sn arayla başlar, önce sohbetin `CHAT_RL_MODEL` sınırlayıcısından yer alır; 429/3040 gelirse artan
+  beklemeyle (10/25/45 sn) yeniden dener; günlük bütçe her çağrıdan önce kontrol edilir. Yalnızca gerçek hata
+  (3036 günlük hak, veritabanı, art arda 5 başarısız ürün) işi durdurur.
+- `/admin/assistant` "Ürün bilgilerini yenile" düğmesi aynı yolu kullanır (istek başına ~20 sn, sayfa bitene kadar
+  tekrarlar; model yoğunsa bekleyip devam eder).
+
+## Sistem kayıtları
+- `lib/system-log.ts`, tablo `system_logs`, sayfa `/admin/kayitlar/` (kenar çubuğunda açık hata sayısı, dashboard'da
+  uyarı). Otomatik işlerin (asistan ürün bilgileri, görseller, cron) yapamadığı her şey buraya yazılır.
+  `logSystemEvent(db, { source, level, message, detail?, ref? })` hiç hata fırlatmaz; aynı kaynak + mesaj + ref
+  24 saat içinde tek satırdır (`count`, `last_at`); "Çözüldü" (`resolved_at`) satırı gizler, aynı sorun tekrar
+  olursa geri gelir; son görülmesi 90 günden eski satırlar silinir. Müşteri verisi yazılmaz.
+- API: `GET/POST /api/admin/system-logs/` (admin). Bu POST ve `/api/admin/assistant/facts/` `cache_version`
+  artırmaz (`lib/edge-cache.ts` istisnaları).
 
 ## BirFatura entegrasyonu
 - Kod: `lib/birfatura.ts`, `app/api/birfatura/api/{orderStatus,paymentMethods,orders,orderCargoUpdate,invoiceLinkUpdate}/route.ts`.
