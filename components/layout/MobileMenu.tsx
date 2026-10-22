@@ -4,7 +4,8 @@
  * Mobile menu drawer (<1024), spec §7: left drawer, 86vw (max 360), focus trap, Escape, scroll lock.
  *   1. account row ("Giriş yap / Üye ol" or "Merhaba, {ad}"); /api/auth/me is asked only when the
  *      drawer opens, never on page load
- *   2. categories with icon and count (Admin › Kategoriler)
+ *   2. categories with icon and count (Admin › Kategoriler), all categories, all products, then
+ *      "Cihaza göre" (/cihaz/) and "Rehberler" (/rehber/)
  *   3. "Ürün tipine göre" and "Cihazına göre" quick links (or the admin menus when they exist)
  *   4. Admin › Header links
  *   5. help pages, contact (phone, WhatsApp, e-mail)
@@ -13,7 +14,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronRight, Mail, MessageCircle, Phone, User, X } from "lucide-react"
+import { BookOpen, ChevronRight, Mail, MessageCircle, Phone, Smartphone, User, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { buttonClasses } from "@/components/ui/button"
 import { useStoreData } from "@/components/layout/store-data"
@@ -53,6 +54,13 @@ function useAuthOnOpen(open: boolean): AuthState {
     return auth
 }
 
+// The device pages and the shopping guides (lib/devices DEVICES_PATH, lib/guides GUIDES_PATH; literals here so
+// the menu chunk does not pull those modules in)
+const BROWSE_LINKS = [
+    { href: '/cihaz/', label: 'Cihaza göre', Icon: Smartphone },
+    { href: '/rehber/', label: 'Rehberler', Icon: BookOpen },
+] as const
+
 // aria-current rows (the page you are on) get the brand tint
 const ROW = 'flex min-h-[52px] items-center gap-3 px-4 text-[15px] font-medium text-ink transition-colors active:bg-surface hover:bg-surface aria-[current=page]:bg-brand-50 aria-[current=page]:text-brand-700'
 
@@ -64,16 +72,17 @@ export function MobileMenu() {
     const auth = useAuthOnOpen(open)
     const closeRef = React.useRef<HTMLButtonElement>(null)
     const tree = React.useMemo(() => buildMenuTree(menus), [menus])
-    // Admin header links, minus what the drawer already has (home, the categories, all products)
+    // Admin header links, minus what the drawer already has (home, the categories, all products, devices, guides)
     const extraLinks = settings.header_links.filter(l => {
         const href = normalizeHref(l.href)
-        return l.href !== '#categories' && href !== '/' && href !== '/products/'
+        return l.href !== '#categories' && href !== '/' && href !== '/products/' && !BROWSE_LINKS.some(b => b.href === href)
     })
     const whatsapp = whatsappHref(settings.whatsapp_number)
     // "You are here" across the drawer's links, query-aware (Yeni Gelenler vs Tüm ürünler)
     const active = useActiveNavHref([
         ...categories.map(c => c.href),
         '/products/',
+        ...BROWSE_LINKS.map(l => l.href),
         ...tree.flatMap(m => [m.url, ...m.children.map(ch => ch.url)]),
         ...extraLinks.map(l => l.href),
         ...SUPPORT_LINKS.map(l => l.href),
@@ -163,6 +172,17 @@ export function MobileMenu() {
                                     <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
                                 </Link>
                             </li>
+                            {BROWSE_LINKS.map(({ href, label, Icon }) => (
+                                <li key={href}>
+                                    <Link href={href} prefetch={false} onClick={closeMenu} aria-current={current(href)} className={ROW}>
+                                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600" aria-hidden="true">
+                                            <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                                        </span>
+                                        <span className="min-w-0 flex-1 py-1.5 font-semibold leading-5">{label}</span>
+                                        <ChevronRight className="h-4 w-4 shrink-0 text-subtle" aria-hidden="true" />
+                                    </Link>
+                                </li>
+                            ))}
                         </ul>
                     </section>
 
