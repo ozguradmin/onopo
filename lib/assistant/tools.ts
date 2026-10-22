@@ -521,6 +521,8 @@ async function getProduct(args: Record<string, unknown>, ctx: ToolContext): Prom
         teslimat: info(detail.delivery_info),
         taksit_notu: info(detail.installment_info),
         whatsapp_siparis: row.whatsappOrder,
+        // The same line as in <urun_bilgileri> (box contents, power, real fast charging, …)
+        bilgi: ctx.k.productFacts?.get(row.id) ?? null,
     }
     let forModel = wrapForModel(result)
     // Too long: shorten the description first, so the JSON stays whole
@@ -668,7 +670,17 @@ export async function runTool(name: ToolName, rawArgs: unknown, ctx: ToolContext
     }
 }
 
-/** Catalogue lines of the products a tool result names (validator tool text: brand words, prices). */
+/**
+ * Catalogue lines of the products a tool result names, with their facts line (validator tool text: brand
+ * words, prices, and the numbers of "2 yıl garanti" style facts the model may repeat).
+ */
 export function catalogLinesFor(k: Knowledge, ids: number[]): string {
-    return ids.map(id => k.byId.get(id)).filter((r): r is CatalogRow => !!r).map(catalogLine).join('\n')
+    return ids
+        .map(id => k.byId.get(id))
+        .filter((r): r is CatalogRow => !!r)
+        .map(r => {
+            const facts = k.productFacts?.get(r.id)
+            return facts ? `${catalogLine(r)} | bilgi: ${facts}` : catalogLine(r)
+        })
+        .join('\n')
 }

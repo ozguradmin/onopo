@@ -12,7 +12,7 @@ import { isBotUserAgent } from '@/lib/bot-user-agent'
 import { ERROR_STATUS, encodeEvent, type AssistantEvent, type ErrorCode } from '@/lib/assistant/contract'
 import { parseChatRequest } from '@/lib/assistant/request'
 import { runTurn } from '@/lib/assistant/turn'
-import { clientIp, getAssistantSettings, isAssistantEnabled, isMaintenance, makeTurnDeps, type AssistantSettings } from '@/lib/assistant/data'
+import { clientIp, getAssistantSettings, isAssistantEnabled, isMaintenance, makeTurnDeps, refreshFactsInBackground, type AssistantSettings } from '@/lib/assistant/data'
 import { countIpTurn, IP_DAILY_TURNS, ipKey, recordTurn, type D1Lite } from '@/lib/assistant/limits'
 import { secondsUntilIstanbulMidnight } from '@/lib/assistant/facts'
 
@@ -108,6 +108,8 @@ export async function POST(req: Request) {
             const log = await runTurn(parsed.req, deps, emit, turnAbort.signal)
             console.log(`ai_turn outcome=${log.outcome} ms=${log.totalMs} calls=${log.modelCalls}`)
             await recordTurn(db as unknown as D1Lite, log)
+            // A few product facts lines whose description changed (throttled per isolate, never throws)
+            await refreshFactsInBackground(env, settings)
         } catch (err) {
             console.error('ai_turn_failed', err instanceof Error ? err.name : 'error')
             emit({ t: 'error', code: 'upstream' })

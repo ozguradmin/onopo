@@ -16,6 +16,7 @@ import type { CatalogRow, RatingMap } from './catalog-block'
 import { buildCatalogBlock, GROUP_ORDER, GROUP_TITLES, groupHref, searchCatalog } from './catalog-block'
 import type { LinkTarget, StoreFacts } from './facts'
 import { buildFactsBlock, buildLinksBlock, istanbulDay } from './facts'
+import { buildProductFactsBlock } from './product-facts'
 import { buildMessages, buildSystemMessage, buildTurnContext, computeCart, type ChatMessage } from './prompt'
 import { sanitize } from './request'
 import { buildRouterState, decide, routeTurn, type RouteDecision } from './router'
@@ -55,6 +56,8 @@ export interface Knowledge {
     waBase: string | null
     /** /page/shipping/ when that CMS page exists. */
     shippingHref: string | null
+    /** product id → facts line (<urun_bilgileri>, product-facts.ts) */
+    productFacts: Map<number, string>
 }
 
 export interface KnowledgeInput {
@@ -65,6 +68,8 @@ export interface KnowledgeInput {
     categories: { name: string; slug: string; icon?: string | null; href: string; product_count?: number }[]
     cmsPages: { slug: string; title: string; href?: string }[]
     storeWhatsapp: string | null
+    /** product id → facts line (stored model line or the deterministic extract); none → no <urun_bilgileri> */
+    productFacts?: ReadonlyMap<number, string>
 }
 
 const GAMING_CATEGORY = 'Oyun ve Oyuncu Aksesuarları'
@@ -102,10 +107,16 @@ export function buildKnowledge(input: KnowledgeInput): Knowledge {
     links.set('tum-urunler', { key: 'tum-urunler', title: 'Tüm ürünler', href: '/products/', count: rows.length, fromPrice: minPrice(rows), icon: null })
 
     const factsBlock = buildFactsBlock(input.facts)
+    const productFacts = new Map<number, string>()
+    for (const r of rows) {
+        const line = input.productFacts?.get(r.id)?.trim()
+        if (line) productFacts.set(r.id, line)
+    }
     const systemMessage = buildSystemMessage({
         facts: factsBlock,
         links: buildLinksBlock([...links.values()]),
         catalog: buildCatalogBlock(rows, input.version),
+        productFacts: productFacts.size ? buildProductFactsBlock(rows, productFacts) : '',
     })
     const prices = new Set<number>(rows.map(r => r.displayPrice))
     prices.add(input.facts.freeThreshold)
@@ -126,6 +137,7 @@ export function buildKnowledge(input: KnowledgeInput): Knowledge {
         storeWhatsapp: store,
         waBase: waBaseOf(store),
         shippingHref: input.cmsPages.some(p => p.slug === 'shipping') ? cmsPagePath('shipping') : null,
+        productFacts,
     }
 }
 
@@ -445,6 +457,9 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
         if (pageProduct) candidates = [pageProduct, ...candidates.filter(r => r.id !== pageProduct.id)]
         candidates = candidates.slice(0, 6)
         const cart = cartSummary()
+        const shownBefore = [...new Set(req.history.flatMap(h => (h.role === 'assistant' ? h.productIds ?? [] : [])))]
+            .filter(n => Number.isInteger(n) && n > 0)
+            .slice(-8)
         const turnContext = buildTurnContext({
             now: deps.now(),
             facts: k.facts,
@@ -454,9 +469,7 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
             candidates,
             router: route.answers ? { intent: decision.intent, group: decision.group, buyingStage: decision.buyingStage } : null,
             notes,
-            shownBefore: [...new Set(req.history.flatMap(h => (h.role === 'assistant' ? h.productIds ?? [] : [])))]
-                .filter(n => Number.isInteger(n) && n > 0)
-                .slice(-8),
+            shownBefore,
             waBefore: req.history.some(h => h.role === 'assistant' && h.wa),
         })
         const messages: ChatMessage[] = buildMessages(k.systemMessage, req.history, turnContext, masked)
@@ -467,6 +480,8 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
             cutoff: k.facts.cutoff,
             campaigns: k.facts.campaigns,
         })
+        // The facts lines of the products in play: "2 yıl garanti" from <urun_bilgileri> is a known number
+        addToolText(allowed, catalogLinesFor(k, [...new Set([...candidates.map(r => r.id), ...shownBefore])]))
         const guard = createTextGuard(allowed)
         guardFlags = guard.stats.flags
         const convHash = log.convHash

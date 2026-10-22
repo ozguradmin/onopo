@@ -37,6 +37,7 @@ const device = await import('../lib/assistant/device.ts')
 const canned = await import('../lib/assistant/canned.ts')
 const suggestions = await import('../lib/assistant/suggestions.ts')
 const limits = await import('../lib/assistant/limits.ts')
+const pf = await import('../lib/assistant/product-facts.ts')
 
 // ---------------------------------------------------------------------------------------------
 // Fixtures (synthetic: no real product codes, phone numbers or customer data)
@@ -1151,4 +1152,138 @@ test('limits: counter, budget memo and recordTurn against a fake D1 (no text sto
     assert.ok(!JSON.stringify(insert[1]).includes('iPhone'))
     assert.ok(sql.some(([q]) => q.startsWith("DELETE FROM ai_usage_daily WHERE bucket LIKE 'ip:%'")))
     limits.resetLimitsMemo()
+})
+
+// ---------------------------------------------------------------------------------------------
+// Product facts (<urun_bilgileri>)
+// ---------------------------------------------------------------------------------------------
+
+// Synthetic descriptions in the shapes the catalogue uses (imported "Ürün Açıklaması…Detaylı Bilgi…" and plain HTML)
+const DESC_HEAD_ONLY = '<div>Ürün Açıklaması20W adaptörDetaylı Bilgi<p>Bu ürün yalnızca başlıktır. Hızlı şarj özelliği bulunmamaktadır.</p><p>Stok: 25 adet</p>Teknik ÖzelliklerMarka onopo</div>'
+const DESC_SET = '<p>67W GaN hızlı şarj seti. Kutu içeriği: adaptör ve 1 m Type-C kablo.</p><p>2 yıl garanti. Bilgi için www.example.com ya da 0500 000 00 00</p>'
+
+test('product facts: the deterministic extract knows box contents, real fast charging and specs', () => {
+    const head = pf.extractFacts('onopo 20W PD Type-C Hızlı Şarj Aleti Adaptör - A1', DESC_HEAD_ONLY)
+    assert.match(head, /^Kutu: yalnızca adaptör \(başlık\), kablo yok; Güç: 20W; Hızlı şarj: yok/)
+    assert.ok(!/stok|25 adet/i.test(head))
+    const set = pf.extractFacts('onopo 67W GaN Hızlı Şarj Seti Type-C Kablolu Şarj Aleti - M6', DESC_SET)
+    assert.match(set, /^Kutu: adaptör ve 1 m Type-C kablo; Güç: 67W/)
+    assert.match(set, /Garanti: 2 yıl/)
+    assert.ok(!/www\.|0500|example/.test(set))
+    const lightning = pf.extractFacts('iPhone Apple Uyumlu 20W PD Şarj Aleti Seti Lightning Kablolu - A9', '<p>PD destekli 20W set.</p>')
+    assert.match(lightning, /Kutu: adaptör \+ Lightning kablo/)
+    assert.match(lightning, /Hızlı şarj: PD/)
+    const cable = pf.extractFacts('Type-C to Type-C 60W Örgülü Hızlı Şarj ve Data Kablosu 1 m - K1', '')
+    assert.match(cable, /Uzunluk: 1 m/)
+    assert.match(cable, /Malzeme: örgülü/)
+    assert.ok(!cable.includes('Kutu:'))
+    assert.match(pf.extractFacts('Powerbank 10000 mAh', '<p>22.5W hızlı şarj.</p>'), /Güç: 22,5W.*Kapasite: 10000 mAh/)
+    assert.ok(pf.extractFacts('X', '<p>' + 'uzun açıklama '.repeat(80) + '</p>').length <= pf.FACTS_LINE_MAX)
+    assert.equal(pf.extractFacts('Boş Ürün', null), '')
+})
+
+test('product facts: the hash follows name + description; stale lines fall back to the extract', async () => {
+    const a = await pf.factsHash('Ad', '<p>x</p>')
+    assert.match(a, /^[0-9a-f]{16}$/)
+    assert.equal(await pf.factsHash('Ad', '<p>x</p>  '), a)
+    assert.notEqual(await pf.factsHash('Ad', '<p>y</p>'), a)
+    assert.notEqual(await pf.factsHash('Ad 2', '<p>x</p>'), a)
+    const products = [
+        { id: 2, name: 'onopo 20W PD Type-C Hızlı Şarj Aleti Adaptör - A1', description: DESC_HEAD_ONLY },
+        { id: 1, name: 'Ad', description: '<p>x</p>' },
+        { id: 3, name: 'Kablo 1 m', description: '<p>yeni</p>' },
+    ]
+    const stored = new Map([
+        [1, { hash: a, facts: 'Kutu: model satırı' }],
+        [3, { hash: 'eskiozet00000000', facts: 'eski satır' }],
+    ])
+    const d = await pf.decideFacts(products, stored)
+    assert.equal(d.ready, 1)
+    assert.equal(d.facts.get(1), 'Kutu: model satırı')
+    assert.match(d.facts.get(2), /^Kutu: yalnızca adaptör/)
+    assert.notEqual(d.facts.get(3), 'eski satır')
+    assert.deepEqual(d.stale.map(s => s.id), [2, 3])
+    assert.equal(d.stale[0].hash, await pf.factsHash(products[0].name, products[0].description))
+})
+
+test('product facts: the block is deterministic, one shared line per screen-protector group, within budget', () => {
+    const facts = new Map(ROWS.map(r => [r.id, `Kutu: test ${r.id}; ${r.group}`]))
+    const block = pf.buildProductFactsBlock(ROWS, facts)
+    assert.equal(block, pf.buildProductFactsBlock([...ROWS].reverse(), facts))
+    assert.ok(block.startsWith('<urun_bilgileri>') && block.endsWith('</urun_bilgileri>'))
+    assert.ok(block.length <= pf.FACTS_BLOCK_MAX_CHARS)
+    const lines = block.split('\n')
+    assert.equal(lines.filter(l => l.startsWith('grup ekran-koruyucu-9d ')).length, 1)
+    assert.ok(!lines.some(l => /^\d+: .*ekran-koruyucu/.test(l)))
+    assert.ok(lines.includes('401: Kutu: test 401; sarj-aleti'))
+    // A protector line loses the phone model of the product it came from
+    const p = ROWS.find(r => r.group === 'ekran-koruyucu-9d' && /iPhone/.test(r.name))
+    const one = pf.buildProductFactsBlock([p], new Map([[p.id, `Uyumlu: ${p.name}`]]))
+    assert.ok(!/iPhone \d/.test(one.split('\n')[2]))
+    // Over budget: shorter lines, then a cut note
+    const long = new Map(ROWS.map(r => [r.id, 'uzun bilgi '.repeat(30)]))
+    const small = pf.buildProductFactsBlock(ROWS, long, 2000)
+    assert.ok(small.length <= 2000)
+    assert.ok(small.includes('# liste kısaltıldı'))
+})
+
+test('product facts: the system message carries <urun_bilgileri> and the rule against guessing', () => {
+    const facts = new Map([[401, 'Kutu: yalnızca adaptör (başlık), kablo yok; Güç: 20W; Hızlı şarj: yok']])
+    const k = knowledge({ productFacts: facts })
+    assert.ok(k.systemMessage.includes('<urun_bilgileri>\n'))
+    assert.ok(k.systemMessage.includes('401: Kutu: yalnızca adaptör (başlık), kablo yok'))
+    assert.ok(!prompt.SYSTEM_RULES.includes('Kutusunda kablo yoksa'))
+    assert.match(prompt.SYSTEM_RULES, /"kutusunda kablo yoksa", "muhtemelen", "genelde" gibi tahmin/)
+    assert.match(prompt.SYSTEM_RULES, /ürün bilgisini esas al/)
+    assert.equal(knowledge({ productFacts: facts }).systemMessage, k.systemMessage)
+    // Without facts (older databases, tests) there is no empty block
+    assert.ok(!K.systemMessage.includes('<urun_bilgileri>\n#'))
+    // The line also reaches the validator's tool text
+    assert.ok(tools.catalogLinesFor(k, [401]).includes('| bilgi: Kutu: yalnızca adaptör'))
+})
+
+test('product facts: get_product returns the facts line', async () => {
+    const k = knowledge({ productFacts: new Map([[413, 'Kutu: adaptör + Type-C kablo']]) })
+    const r = await tools.runTool('get_product', '{"id":413}', toolCtx({ k }))
+    assert.match(r.forModel, /"bilgi":"Kutu: adaptör \+ Type-C kablo"/)
+})
+
+test('product facts: generation with a mocked model, cleaned and stored by hash', async () => {
+    pf.resetFactsMemo()
+    const calls = []
+    const ai = {
+        run: async (model, inputs) => {
+            calls.push({ model, inputs })
+            if (inputs.messages[1].content.includes('BOZUK')) throw new Error('3040')
+            return { choices: [{ message: { content: 'Kutu: yalnızca adaptör\nGüç: 20W; bilgi için https://x.example 0500 000 00 00' } }], usage: { prompt_tokens: 500, completion_tokens: 30 } }
+        },
+    }
+    const g = await pf.generateFacts(ai, CHAT, { id: 1, name: 'Ad', description: DESC_HEAD_ONLY })
+    assert.equal(g.facts, 'Kutu: yalnızca adaptör; Güç: 20W; bilgi için')
+    assert.ok(g.costMicroUsd > 0)
+    const msgs = calls[0].inputs.messages
+    assert.equal(msgs[0].content, pf.FACTS_SYSTEM_PROMPT)
+    assert.match(msgs[1].content, /ad: Ad\naciklama: .*başlıktır/)
+    assert.ok(!msgs[1].content.includes('<p>'))
+    assert.equal(calls[0].inputs.temperature, 0)
+    assert.equal(pf.readAiResult({ result: { response: 'x' } }).text, 'x')
+
+    const sql = []
+    const db = {
+        prepare(q) {
+            const stmt = { args: [], bind(...v) { stmt.args = v; return stmt }, async run() { sql.push([q, stmt.args]); return {} }, async all() { return { results: [] } }, async first() { return null } }
+            return stmt
+        },
+    }
+    const items = [
+        { id: 7, name: 'Ad', description: '<p>x</p>', hash: 'aaaaaaaaaaaaaaaa' },
+        { id: 8, name: 'BOZUK', description: '', hash: 'bbbbbbbbbbbbbbbb' },
+    ]
+    const r = await pf.refreshFacts(db, ai, CHAT, items, { now: new Date('2026-10-22T10:00:00Z') })
+    assert.equal(r.done, 1)
+    assert.equal(r.failed, 1)
+    assert.ok(sql.some(([q]) => q.startsWith('CREATE TABLE IF NOT EXISTS ai_product_facts')))
+    const upsert = sql.find(([q]) => q.startsWith('INSERT INTO ai_product_facts'))
+    assert.deepEqual(upsert[1], [7, 'aaaaaaaaaaaaaaaa', 'Kutu: yalnızca adaptör; Güç: 20W; bilgi için', CHAT, '2026-10-22T10:00:00.000Z'])
+    pf.resetFactsMemo()
 })

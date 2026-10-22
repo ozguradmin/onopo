@@ -7,7 +7,8 @@
  * at most every 10 s per isolate, reads the version: cache_version (admin saves and the price cron bump
  * it) + the active product count + MAX(updated_at). A new, removed or re-priced product therefore reaches
  * the assistant within 10 s. The same round trip reads the assistant settings (kill switch, maintenance,
- * budget, shipping days, campaigns, WhatsApp numbers); a change there also rebuilds the knowledge.
+ * budget, shipping days, campaigns, WhatsApp numbers); a change there also rebuilds the knowledge, and so
+ * does a new or changed product facts line (ai_product_facts: its row count and newest created_at).
  */
 import 'server-only'
 import { getCategories, getMaxInstallments, getShippingSettings } from '@/lib/catalog'
@@ -17,7 +18,8 @@ import { getCmsPageLinks } from '@/lib/cms-pages'
 import { SESSION_HINT_COOKIE } from '@/lib/session-hint'
 import { toCatalogRow } from './catalog-block'
 import { DEFAULT_FACTS, normalizeCutoff, type StoreFacts } from './facts'
-import { budgetExceeded, parseBudgetUsd, type D1Lite } from './limits'
+import { budgetExceeded, parseBudgetUsd, recordExtraCost, type D1Lite } from './limits'
+import { decideFacts, ensureFactsTable, loadStoredFacts, refreshFacts, type FactsProduct, type StaleItem } from './product-facts'
 import { pickStoreWhatsapp, type ProductDetailRow } from './tools'
 import { buildKnowledge, type Knowledge, type TurnDeps } from './turn'
 
@@ -60,17 +62,31 @@ function knowledgeSettings(s: AssistantSettings): string {
 
 async function readVersion(db: D1Database): Promise<VersionState> {
     const placeholders = ASSISTANT_SETTING_KEYS.map(() => '?').join(', ')
-    const [ver, set] = await db.batch([
-        db.prepare("SELECT (SELECT value FROM site_settings WHERE key = 'cache_version') AS v, COUNT(*) AS n, MAX(updated_at) AS u FROM products WHERE is_active = 1"),
-        db.prepare(`SELECT key, value FROM site_settings WHERE key IN (${placeholders})`).bind(...ASSISTANT_SETTING_KEYS),
-    ])
+    const verStmt = db.prepare("SELECT (SELECT value FROM site_settings WHERE key = 'cache_version') AS v, COUNT(*) AS n, MAX(updated_at) AS u FROM products WHERE is_active = 1")
+    const setStmt = db.prepare(`SELECT key, value FROM site_settings WHERE key IN (${placeholders})`).bind(...ASSISTANT_SETTING_KEYS)
+    let ver: D1Result
+    let set: D1Result
+    let factsVersion = '-'
+    try {
+        await ensureFactsTable(db as unknown as D1Lite)
+        const [a, b, c] = await db.batch([verStmt, setStmt, db.prepare('SELECT COUNT(*) AS n, MAX(created_at) AS u FROM ai_product_facts')])
+        ver = a
+        set = b
+        const f = (c.results?.[0] ?? {}) as { n?: unknown; u?: unknown }
+        factsVersion = `${f.n ?? 0}@${f.u ?? ''}`
+    } catch {
+        // No facts table (yet): the catalogue still works, with the deterministic facts
+        const [a, b] = await db.batch([verStmt, setStmt])
+        ver = a
+        set = b
+    }
     const v = (ver.results?.[0] ?? {}) as { v?: unknown; n?: unknown; u?: unknown }
     const settings: AssistantSettings = {}
     for (const r of (set.results ?? []) as { key: string; value: unknown }[]) {
         if ((ASSISTANT_SETTING_KEYS as readonly string[]).includes(r.key)) settings[r.key as SettingKey] = r.value == null ? '' : String(r.value)
     }
     const version = `${v.v ?? '0'}:${v.n ?? 0}:${v.u ?? ''}`
-    return { at: Date.now(), version, key: `${version}|${knowledgeSettings(settings)}`, settings }
+    return { at: Date.now(), version, key: `${version}|${factsVersion}|${knowledgeSettings(settings)}`, settings }
 }
 
 /** Version + settings, re-read at most every 10 s per isolate (one batch of two small queries). */
@@ -98,12 +114,12 @@ export function isMaintenance(s: AssistantSettings): boolean {
 }
 
 const PRODUCT_SQL = `SELECT p.id, p.name, p.slug, p.price, p.original_price, p.category, p.stock, p.images, p.product_code,
-       p.free_shipping, p.whatsapp_order_enabled, p.whatsapp_number, p.updated_at,
+       p.free_shipping, p.whatsapp_order_enabled, p.whatsapp_number, p.updated_at, p.description,
        EXISTS (SELECT 1 FROM product_variations v WHERE v.product_id = p.id) AS has_variations
 FROM products p WHERE p.is_active = 1 ORDER BY p.id`
 
 const PRODUCT_SQL_NO_VARIATIONS = `SELECT p.id, p.name, p.slug, p.price, p.original_price, p.category, p.stock, p.images, p.product_code,
-       p.free_shipping, p.whatsapp_order_enabled, p.whatsapp_number, p.updated_at, 0 AS has_variations
+       p.free_shipping, p.whatsapp_order_enabled, p.whatsapp_number, p.updated_at, p.description, 0 AS has_variations
 FROM products p WHERE p.is_active = 1 ORDER BY p.id`
 
 async function loadRows(db: D1Database) {
@@ -114,7 +130,13 @@ async function loadRows(db: D1Database) {
         // A fresh database without product_variations
         results = (await db.prepare(PRODUCT_SQL_NO_VARIATIONS).all<Record<string, unknown>>()).results
     }
-    return (results ?? []).map(toCatalogRow).filter(r => r.id > 0 && r.slug)
+    const rows = (results ?? []).map(toCatalogRow).filter(r => r.id > 0 && r.slug)
+    const ids = new Set(rows.map(r => r.id))
+    // Descriptions only feed the facts lines; they are not kept in the knowledge
+    const products: FactsProduct[] = (results ?? [])
+        .filter(r => ids.has(Math.trunc(Number(r.id))))
+        .map(r => ({ id: Math.trunc(Number(r.id)), name: String(r.name ?? ''), description: r.description == null ? null : String(r.description) }))
+    return { rows, products }
 }
 
 /** Store facts from the same sources the storefront uses, plus the admin's ai_* settings. */
@@ -135,13 +157,16 @@ async function loadFacts(s: AssistantSettings): Promise<StoreFacts> {
 
 async function buildFromD1(db: D1Database, state: VersionState): Promise<Knowledge> {
     const s = state.settings
-    const [rows, ratings, facts, categories, cmsPages] = await Promise.all([
+    const [{ rows, products }, ratings, facts, categories, cmsPages, stored] = await Promise.all([
         loadRows(db),
         getReviewStatsMapSafe(),
         loadFacts(s),
         getCategories({ hideEmpty: true }).catch(() => []),
         getCmsPageLinks(),
+        loadStoredFacts(db as unknown as D1Lite).catch(() => new Map()),
     ])
+    const productFacts = await decideFacts(products, stored)
+    staleFactsCount = productFacts.stale.length
     return buildKnowledge({
         version: state.version,
         rows,
@@ -150,7 +175,59 @@ async function buildFromD1(db: D1Database, state: VersionState): Promise<Knowled
         categories: categories.map(c => ({ name: c.name, slug: c.slug, icon: c.icon || null, href: c.href, product_count: c.product_count })),
         cmsPages: cmsPages.map(p => ({ slug: p.slug, title: p.title, href: p.href })),
         storeWhatsapp: pickStoreWhatsapp([s.ai_whatsapp_number, s.whatsapp_number, s.footer_phone]),
+        productFacts: productFacts.facts,
     })
+}
+
+// ---------------------------------------------------------------------------------------------
+// Product facts upkeep (lib/assistant/product-facts.ts)
+// ---------------------------------------------------------------------------------------------
+
+/** Products without a fresh facts line in the last built knowledge (-1 = not built yet). */
+let staleFactsCount = -1
+let lastFactsRun = 0
+let factsRunning = false
+const FACTS_RUN_EVERY_MS = 2 * 60 * 1000
+const FACTS_PER_BACKGROUND_RUN = 3
+
+/** Active products whose facts line is missing or older than their description, read fresh (not memoised). */
+export async function staleFactItems(db: D1Database): Promise<{ total: number; ready: number; stale: StaleItem[] }> {
+    const { results } = await db.prepare('SELECT id, name, description FROM products WHERE is_active = 1 ORDER BY id').all<{ id: number; name: string; description: string | null }>()
+    const products = (results ?? []).map(r => ({ id: Number(r.id), name: String(r.name ?? ''), description: r.description ?? null }))
+    const decision = await decideFacts(products, await loadStoredFacts(db as unknown as D1Lite))
+    return { total: products.length, ready: decision.ready, stale: decision.stale }
+}
+
+/** Fills up to the given number of stale facts lines with the chat model and counts the cost in today's budget row. */
+export async function fillProductFacts(env: CloudflareEnv, limit: number, concurrency = 2) {
+    const db = env.DB
+    if (!env.AI) return { done: 0, failed: 0, remaining: -1, total: 0, ready: 0 }
+    const before = await staleFactItems(db)
+    const batch = before.stale.slice(0, Math.max(0, limit))
+    const model = env.AI_CHAT_MODEL || DEFAULT_MODELS.chat
+    const r = batch.length ? await refreshFacts(db as unknown as D1Lite, env.AI, model, batch, { concurrency }) : { done: 0, failed: 0, costMicroUsd: 0 }
+    if (r.costMicroUsd > 0) await recordExtraCost(db as unknown as D1Lite, batch.length, r.costMicroUsd)
+    return { done: r.done, failed: r.failed, remaining: before.stale.length - r.done, total: before.total, ready: before.ready + r.done }
+}
+
+/**
+ * After a chat turn (ctx.waitUntil): a few stale facts lines, at most every 2 minutes per isolate, only
+ * when the last knowledge build found some and today's budget is not used up. Never throws.
+ */
+export async function refreshFactsInBackground(env: CloudflareEnv, settings: AssistantSettings): Promise<void> {
+    if (factsRunning || staleFactsCount === 0 || Date.now() - lastFactsRun < FACTS_RUN_EVERY_MS) return
+    factsRunning = true
+    lastFactsRun = Date.now()
+    try {
+        if (await budgetExceeded(env.DB as unknown as D1Lite, new Date(), parseBudgetUsd(settings.ai_daily_budget_usd))) return
+        const r = await fillProductFacts(env, FACTS_PER_BACKGROUND_RUN)
+        if (r.remaining >= 0) staleFactsCount = r.remaining
+        console.log(`ai_facts done=${r.done} failed=${r.failed} remaining=${r.remaining}`)
+    } catch (err) {
+        console.error('ai_facts_failed', err instanceof Error ? err.name : 'error')
+    } finally {
+        factsRunning = false
+    }
 }
 
 /** The knowledge for the current version (rebuilt when the version or the relevant settings change). */

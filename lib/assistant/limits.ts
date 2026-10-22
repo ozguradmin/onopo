@@ -247,6 +247,24 @@ in_tokens, cached_tokens, out_tokens, cost_micro_usd, first_text_ms, total_ms, o
     }
 }
 
+/**
+ * Model cost outside a chat turn (the product facts lines): added to today's global row without counting
+ * a turn, so the daily budget covers it too. Never throws.
+ */
+export async function recordExtraCost(db: D1Lite, modelCalls: number, cost: number, now: Date = new Date()): Promise<void> {
+    try {
+        localCost += cost
+        await ensureTables(db)
+        await db
+            .prepare(`INSERT INTO ai_usage_daily (day, bucket, turns, model_calls, cost_micro_usd) VALUES (?, 'global', 0, ?, ?)
+ON CONFLICT(day, bucket) DO UPDATE SET model_calls = model_calls + excluded.model_calls, cost_micro_usd = cost_micro_usd + excluded.cost_micro_usd`)
+            .bind(istanbulDay(now), modelCalls, cost)
+            .run()
+    } catch (err) {
+        console.error('ai_extra_cost_failed', err instanceof Error ? err.name : 'error')
+    }
+}
+
 /** One UI beacon row (kind 'ui'). Never throws. */
 export async function recordUiEvent(db: D1Lite, ev: UiEventBody, convHash: string, now: Date = new Date()): Promise<void> {
     try {

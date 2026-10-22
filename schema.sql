@@ -211,3 +211,13 @@ CREATE TABLE IF NOT EXISTS ai_chat_events (
     outcome TEXT                             -- ok | canned | blocked | fallback | busy | error | timeout | aborted | <ui type>
 );
 CREATE INDEX IF NOT EXISTS idx_ai_chat_events_day ON ai_chat_events(day);
+
+-- Onopo Asistan product facts: one short line per product, written by the chat model once per
+-- (name + description) hash (lib/assistant/product-facts.ts). Product data only, no customer data.
+CREATE TABLE IF NOT EXISTS ai_product_facts (
+    product_id INTEGER PRIMARY KEY,
+    desc_hash TEXT NOT NULL,                 -- sha256(name + description), 16 hex chars
+    facts TEXT NOT NULL,
+    model TEXT,
+    created_at TEXT NOT NULL                 -- ISO time (UTC)
+);
