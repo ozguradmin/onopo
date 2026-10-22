@@ -42,7 +42,7 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - `--persist-to` yolunu kısa tut: Windows'un 259 karakterlik yol sınırına takılmasın.
 - `tsc`, `.next/types` altında ödeme callback route'u için eskiden kalan hatalar verir; `next.config.ts` build'de
   tip hatalarını yok sayar (`ignoreBuildErrors`).
-- Birim testleri: `node --test scripts/edge-cache.test.mjs scripts/seo.test.mjs` (Node 23.6+; CI çalıştırmaz).
+- Birim testleri: `node --test scripts/edge-cache.test.mjs scripts/seo.test.mjs scripts/redirects.test.mjs` (Node 23.6+; CI çalıştırmaz).
 
 ## Gizli değişkenler (sadece adlar)
 - Cloudflare Worker secret'ları: `BIRFATURA_TOKEN`, `CRON_SECRET`, `JWT_SECRET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `RESEND_API_KEY`;
@@ -65,7 +65,7 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - Fatura sütunları: `orders.invoice_url, invoice_no, invoice_date` (BirFatura doldurur).
 - `schema.sql` yalnızca `CREATE TABLE/INDEX IF NOT EXISTS` içerir ve her deploy'da canlı DB'de çalışır. Varsayılan
   satırlar `scripts/seed-defaults.sql`'de: sadece boş yerel DB için elle çalıştırılır, canlıda asla.
-  Son eklenen tablo: `two_factor_challenges` (admin 2FA challenge'ı).
+  Son eklenen tablolar: `redirects`, `not_found_log` (eski adres yönlendirmeleri).
 - **`schema.sql` tam şema değil.** `orders`, `order_items`, `payment_settings`, `shipping_settings`, `coupons`,
   `product_variations`, `two_factor_codes` tabloları ve sonradan eklenen sütunlar (ör. `products.slug`,
   `free_shipping`, `price_usd`) `app/api/migrations/*` (admin korumalı) ya da `ALTER TABLE ... ADD COLUMN` ile
@@ -92,6 +92,13 @@ ya da kişisel e-posta yazma. Gizli değerler yalnızca yerel `.env` / `.dev.var
 - **Bakım modu:** bakım render'ı (`data-onopo-maintenance=""` işareti) 503 + `Retry-After: 3600` +
   `X-Robots-Tag: noindex` + `no-store` ile döner; bakımda cache kullanılmaz. `/admin`, `/login`, `/register` ve
   API'ler etkilenmez.
+- **Eski adres yönlendirmeleri** (`lib/redirects.ts`, Admin › Yönlendirmeler): Next'in 404'ü (ve `/_next/image`
+  hataları, `/api/images/<key>` ıskaları) ziyaretçiye gitmeden önce çözülmeye çalışılır: önce `redirects` tablosu
+  (admin), sonra eski platform kalıpları (`/urun/<slug>`, `.html`, `index.php?product_id=`, `/_next/image?url=`,
+  eski görsel klasörleri), sonra sıkı bir isim eşleşmesi (emin değilse tahmin yok). Bulunursa tek 301; hedef her
+  zaman açılan bir sayfa ya da images.onopostore.com (açık yönlendirme yok, `/api` ve `/admin` hiç yönlenmez).
+  Bulunamayanlar `not_found_log`'a (yalnızca yol, sayılar, referrer host; IP/UA yok; Googlebot dışı botlar sayılmaz).
+  Ürün/kategori indeksi isolate başına 10 dk tutulur. Testler: `node --test scripts/redirects.test.mjs`.
 
 ## Admin girişi ve 2FA
 - Admin hesabı `admin@onopo.com` (`lib/login-alias.ts`). Sahip kişisel bir takma adresle (alias) de giriş

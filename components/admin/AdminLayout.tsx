@@ -24,7 +24,8 @@ import {
     Mail,
     Truck,
     Sparkles,
-    MessagesSquare
+    MessagesSquare,
+    Signpost
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -40,6 +41,7 @@ const navItems = [
     { href: '/admin/settings/integrations', label: 'Entegrasyonlar', icon: Share2 },
     { href: '/admin/pages', label: 'Sayfalar', icon: FileText },
     { href: '/admin/header', label: 'Menü Yönetimi', icon: Menu },
+    { href: '/admin/yonlendirmeler', label: 'Yönlendirmeler', icon: Signpost },
     { href: '/admin/reviews', label: 'Yorumlar', icon: MessageSquare },
     { href: '/admin/coupons', label: 'Kuponlar', icon: Ticket },
     { href: '/admin/users', label: 'Kullanıcılar', icon: Users },
