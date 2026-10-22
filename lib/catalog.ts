@@ -110,6 +110,14 @@ export interface PublicSiteSettings {
     products_per_page: number
     /** Optional override for the announcement bar (site_settings.topbar_messages JSON array). */
     topbar_messages: string[] | null
+    /** Kill switch of the Onopo Asistan chat (Admin › AI Asistan). Off: no launcher, the API answers 503. */
+    ai_assistant_enabled: boolean
+    /**
+     * The assistant's WhatsApp number (Admin › AI Asistan; '' = not set). Public so the chat UI picks the same
+     * number as the server (ai_whatsapp_number → whatsapp_number → footer_phone) before its first reply and on
+     * error rows that never get a `meta` event. Every wa.me link the chat shows contains it anyway.
+     */
+    ai_whatsapp_number: string
 }
 
 export interface ShippingSettings {
@@ -307,6 +315,8 @@ const DEFAULT_SETTINGS: PublicSiteSettings = {
     maintenance_mode: false,
     products_per_page: 20,
     topbar_messages: null,
+    ai_assistant_enabled: false,
+    ai_whatsapp_number: '',
 }
 
 const DEFAULT_SHIPPING: ShippingSettings = { freeShippingThreshold: 500, shippingCost: 100 }
@@ -330,12 +340,13 @@ function toPublicSettings(rows: Record<string, any>[]): PublicSiteSettings {
         if (kv[k] != null) (s as any)[k] = kv[k]
     }
     ;(['site_name', 'site_description', 'site_url', 'footer_text', 'footer_email', 'footer_phone', 'footer_address',
-        'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url', 'linkedin_url', 'tiktok_url', 'whatsapp_number'] as const).forEach(text)
+        'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url', 'linkedin_url', 'tiktok_url', 'whatsapp_number', 'ai_whatsapp_number'] as const).forEach(text)
     if (!s.site_name.trim()) s.site_name = DEFAULT_SETTINGS.site_name
     s.logo_url = kv.logo_url?.trim() || null
     s.favicon_url = kv.favicon_url?.trim() || null
     s.footer_social_visible = bool(kv.footer_social_visible)
     s.maintenance_mode = bool(kv.maintenance_mode)
+    s.ai_assistant_enabled = bool(kv.ai_assistant_enabled)
     const perPage = parseInt(kv.products_per_page || '', 10)
     s.products_per_page = Number.isFinite(perPage) && perPage > 0 && perPage <= 200 ? perPage : DEFAULT_SETTINGS.products_per_page
     const footerCats = parseJson<unknown>(kv.footer_categories, [])

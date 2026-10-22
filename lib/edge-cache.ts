@@ -57,7 +57,7 @@ export function hasAuthCookie(cookieHeader: string | null): boolean {
 
 // Never cached, whatever the other rules say
 const DENY = [
-    /^\/api\/(orders|auth|birfatura|payment|cron|analytics|favorites|user|installment-token|admin)/,
+    /^\/api\/(orders|auth|birfatura|payment|cron|analytics|favorites|user|installment-token|admin|ai)/,
     /^\/(admin|odeme|profile|orders|login|register|siparis-)/,
 ]
 

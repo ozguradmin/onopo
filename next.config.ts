@@ -47,7 +47,8 @@ const nextConfig: NextConfig = {
     ]
     const noStore = [{ key: 'Cache-Control', value: 'private, no-store' }]
     // APIs whose responses are personal, admin-only, payment/auth/order related, integrations or cron
-    const privateApis = 'admin|auth|orders|birfatura|payment|cron|user|favorites|coupons|installment-token|analytics|migrations|upload|fix-db|seed-pages'
+    // (ai: the Onopo Asistan chat stream and its beacons)
+    const privateApis = 'admin|auth|orders|birfatura|payment|cron|user|favorites|coupons|installment-token|analytics|migrations|upload|fix-db|seed-pages|ai'
     // Pages that belong to one visitor (account, checkout, admin)
     const privatePages = 'admin|odeme|profile|orders|login|register|siparis-basarili|siparis-hata'
     // JSON/API responses are never indexed. Not on /api/images/* (stored product image URLs must stay

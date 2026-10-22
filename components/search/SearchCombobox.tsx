@@ -13,11 +13,13 @@
  * - variant "desktop": dropdown under the field. variant "mobile": the field lives in the header's
  *   second row; focusing it turns its container into a full-screen sheet (the same input element
  *   keeps focus, so the iOS keyboard stays open) with a "Vazgeç" button.
+ * - Onopo Asistan (only while ai_assistant_enabled is on): with 0–2 results the first row is "Asistana sor:
+ *   “…”", which opens the chat with the query as the first message (the chat chunk preloads on pointerdown).
  */
 import * as React from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { ArrowRight, ChevronRight, History, MessageCircle, RotateCcw, Search, SearchX, TrendingUp, X } from 'lucide-react'
+import { ArrowRight, ChevronRight, History, MessageCircle, RotateCcw, Search, SearchX, Sparkles, TrendingUp, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { matchesSearch, prepareQuery, searchItems, splitDisplayName, type PreparedQuery } from '@/lib/search'
 import { displayPrice, formatTL } from '@/lib/format'
@@ -32,6 +34,8 @@ import { CONNECTOR_LINKS, POPULAR_SEARCHES, PRODUCT_TYPE_LINKS, whatsappHref } f
 import { useSearchIndex, type SearchIndexItem } from './search-index'
 import { addRecentSearch, clearRecentSearches, useRecentSearches } from './recent-searches'
 import { Highlight } from './Highlight'
+import { ASSISTANT_EXCLUDED_PATH, useAssistantStore } from '@/components/assistant/assistant-store'
+import { preloadAssistant } from '@/components/assistant/preload'
 
 type Option =
     | { kind: 'product'; href: string; item: SearchIndexItem }
@@ -39,6 +43,7 @@ type Option =
     | { kind: 'all'; href: string; count: number }
     | { kind: 'query'; query: string; source: 'recent' | 'popular' }
     | { kind: 'clear' }
+    | { kind: 'assistant'; query: string }
 
 const MAX_PRODUCTS = 6
 const MAX_LINKS = 4
@@ -64,6 +69,9 @@ export function SearchCombobox({ variant, onBeforeOpen, className }: SearchCombo
     const sheetOpen = useShellUI(s => s.searchOpen)
     const setSheetOpen = useShellUI(s => s.setSearchOpen)
     const isMobile = variant === 'mobile'
+    // Typed by the settings change of the assistant's API package; read defensively until then
+    const assistantOn = (settings as typeof settings & { ai_assistant_enabled?: boolean }).ai_assistant_enabled === true
+        && !ASSISTANT_EXCLUDED_PATH.test(pathname || '/')
 
     const [value, setValue] = React.useState('')
     const [focused, setFocused] = React.useState(false)
@@ -119,6 +127,8 @@ export function SearchCombobox({ variant, onBeforeOpen, className }: SearchCombo
             return list
         }
         const list: Option[] = []
+        // Few or no results: offer the assistant first
+        if (assistantOn && index.status === 'ready' && matches.length <= 2) list.push({ kind: 'assistant', query: deferred.trim() })
         matches.slice(0, MAX_PRODUCTS).forEach(item => list.push({ kind: 'product', href: productPath(item.slug), item }))
         linkMatches.forEach(l => list.push(l))
         if (matches.length > 0 || index.status !== 'ready') {
@@ -128,7 +138,7 @@ export function SearchCombobox({ variant, onBeforeOpen, className }: SearchCombo
             popular.forEach(q => list.push({ kind: 'query', query: q, source: 'popular' }))
         }
         return list
-    }, [hasQuery, recent, popular, matches, linkMatches, index.status, deferred])
+    }, [hasQuery, recent, popular, matches, linkMatches, index.status, deferred, assistantOn])
 
     // Reset the highlighted option whenever the result list changes
     React.useEffect(() => {
@@ -231,6 +241,10 @@ export function SearchCombobox({ variant, onBeforeOpen, className }: SearchCombo
             case 'clear':
                 clearRecentSearches()
                 inputRef.current?.focus()
+                break
+            case 'assistant':
+                close(true)
+                useAssistantStore.getState().openAssistant({ source: 'search', prompt: opt.query })
                 break
         }
     }
@@ -488,6 +502,7 @@ function SearchPopup(props: SearchPopupProps) {
     const clearOpt = indexed.find(x => x.opt.kind === 'clear')
     const links = indexed.filter(x => x.opt.kind === 'link')
     const all = indexed.find(x => x.opt.kind === 'all')
+    const assistant = indexed.find(x => x.opt.kind === 'assistant')
 
     const common = (i: number, opt: Option) => ({
         id: optionId(i),
@@ -578,6 +593,20 @@ function SearchPopup(props: SearchPopupProps) {
             )}
 
             {/* ---------- with a query ---------- */}
+            {hasQuery && assistant && assistant.opt.kind === 'assistant' && (
+                <div
+                    {...common(assistant.i, assistant.opt)}
+                    onPointerDown={preloadAssistant}
+                    className="flex min-h-11 cursor-pointer items-center gap-3 rounded-card px-2 py-1 aria-selected:bg-surface"
+                >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600" aria-hidden="true">
+                        <Sparkles className="h-[18px] w-[18px]" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">Asistana sor: “{assistant.opt.query}”</span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-subtle" aria-hidden="true" />
+                </div>
+            )}
+
             {loading && products.length === 0 && (
                 <div aria-hidden="true" className="flex flex-col gap-1 p-1">
                     {[0, 1, 2].map(k => (

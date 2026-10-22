@@ -21,6 +21,8 @@
  * - Analytics: one POST /api/analytics/track per store page view, also on client-side navigations
  *   (same body as before: { page: pathname }).
  * - Optional `returnDays` (CMS return window from getSiteSeo) feeds the trust badges; default 14.
+ * - Onopo Asistan: the launcher (components/assistant/AssistantRoot) only while the public setting
+ *   ai_assistant_enabled is on, and never on checkout. Off, nothing of it renders or loads.
  */
 import * as React from 'react'
 import { usePathname } from 'next/navigation'
@@ -30,6 +32,7 @@ import { Footer } from "@/components/layout/Footer"
 import { CartDrawer } from "@/components/cart/CartDrawer"
 import { MobileNav } from "@/components/layout/MobileNav"
 import { MobileMenu } from "@/components/layout/MobileMenu"
+import { AssistantRoot } from "@/components/assistant/AssistantRoot"
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary'
 import { DEFAULT_SHELL_FACTS, ShellChromeContext, ShellFactsContext, StoreDataProvider } from '@/components/layout/store-data'
 import { syncSavedCart, useCartStore, watchSavedCart } from "@/store/cart-store"
@@ -74,6 +77,8 @@ export function LayoutProvider({
     // An empty category list means the layout data could not be loaded (the store always has
     // categories with products): never let the edge cache keep that render.
     const degraded = showChrome && data.categories.length === 0
+    // Typed by the settings change of the assistant's API package; read defensively until then
+    const assistantOn = (data.settings as PublicSiteSettings & { ai_assistant_enabled?: boolean }).ai_assistant_enabled === true
 
     const facts = React.useMemo(
         () => ({ returnDays: returnDays && returnDays > 0 && returnDays <= 365 ? Math.round(returnDays) : DEFAULT_SHELL_FACTS.returnDays }),
@@ -149,6 +154,7 @@ export function LayoutProvider({
                     </Main>
                     {chrome && <Footer fromShell variant={variant} />}
                     {chrome && !isCheckout && <MobileNav fromShell />}
+                    {chrome && !isCheckout && assistantOn && <AssistantRoot />}
                 </ShellChromeContext.Provider>
             </ShellFactsContext.Provider>
         </StoreDataProvider>

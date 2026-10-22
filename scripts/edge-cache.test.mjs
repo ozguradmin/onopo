@@ -82,6 +82,15 @@ test('isCacheableRequest: only anonymous plain GETs', () => {
     assert.equal(isCacheableRequest(req('https://onopostore.com/api/products/?includeAll=true')), false)
 })
 
+test('Onopo Asistan endpoints are never cached and never flush the cache', () => {
+    for (const p of ['/api/ai/chat/', '/api/ai/event/', '/api/ai/chat']) {
+        assert.equal(isCacheablePath(p), false, p)
+        assert.equal(isCacheableRequest(req(`https://onopostore.com${p}`)), false, p)
+        assert.equal(shouldBumpCacheVersion(p, 'POST', true), false, p)
+    }
+    assert.equal(isCacheablePath('/api/admin/assistant/'), false)
+})
+
 test('isStorableResponse: header rules', () => {
     assert.equal(isStorableResponse(res(200, { 'content-type': HTML, 'cache-control': NEXT_DEFAULT })), true)
     assert.equal(isStorableResponse(res(200, { 'content-type': 'application/json' })), true)

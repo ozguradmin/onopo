@@ -1,8 +1,13 @@
 // Shared by /api/site-settings (admin view on the same URL) and /api/site-settings/public (cacheable).
 
 // Settings that only the admin panel may read (e.g. where 2FA codes and order notifications go,
-// and when the last admin password-reset mail was sent by /api/admin/forgot-password)
-export const ADMIN_ONLY_KEYS = new Set(['admin_email', 'admin_reset_last_sent'])
+// and when the last admin password-reset mail was sent by /api/admin/forgot-password), plus the
+// Onopo Asistan configuration (Admin › AI Asistan; the chat API reads them on the server). Its WhatsApp
+// number, ai_whatsapp_number, stays public: the chat UI needs it for the WhatsApp cards it builds itself.
+export const ADMIN_ONLY_KEYS = new Set([
+    'admin_email', 'admin_reset_last_sent',
+    'ai_daily_budget_usd', 'ai_ship_days', 'ai_ship_cutoff', 'ai_support_hours', 'ai_campaigns',
+])
 
 // Internal bookkeeping rows that no client needs (cache_version is the edge-cache version, see worker.ts)
 export const INTERNAL_KEYS = new Set(['cache_version'])
