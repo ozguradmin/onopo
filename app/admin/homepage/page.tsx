@@ -49,7 +49,8 @@ export default function AdminHomepagePage() {
     const [showAddModal, setShowAddModal] = React.useState(false)
 
     const fetchSections = React.useCallback(() => {
-        fetch('/api/homepage-sections')
+        // includeAll: hidden sections too (admin sessions only), so they can be switched back on
+        fetch('/api/homepage-sections?includeAll=true')
             .then(r => r.json())
             .then(data => {
                 setSections(data || [])
@@ -139,7 +140,7 @@ export default function AdminHomepagePage() {
                 {sections.map((section, idx) => (
                     <div
                         key={section.id}
-                        className={`bg-white rounded-xl border shadow-sm p-4 ${section.is_active ? 'border-slate-200' : 'border-slate-200 opacity-60'
+                        className={`rounded-xl border shadow-sm p-4 ${section.is_active ? 'bg-white border-slate-200' : 'bg-slate-50 border-dashed border-slate-300'
                             }`}
                     >
                         <div className="flex items-center gap-4">
@@ -170,7 +171,14 @@ export default function AdminHomepagePage() {
                             </div>
 
                             <div className="flex-1">
-                                <p className="font-medium text-slate-900">{section.title}</p>
+                                <p className="font-medium text-slate-900">
+                                    {section.title}
+                                    {!section.is_active && (
+                                        <span className="ml-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800">
+                                            Gizli
+                                        </span>
+                                    )}
+                                </p>
                                 <p className="text-sm text-slate-500 capitalize">{section.type.replace('_', ' ')}</p>
                             </div>
 
@@ -180,6 +188,8 @@ export default function AdminHomepagePage() {
                                     size="icon"
                                     onClick={() => toggleSection(section.id)}
                                     className={section.is_active ? 'text-green-600' : 'text-slate-400'}
+                                    title={section.is_active ? 'Gizle' : 'Yayına al'}
+                                    aria-label={section.is_active ? 'Gizle' : 'Yayına al'}
                                 >
                                     {section.is_active ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                                 </Button>

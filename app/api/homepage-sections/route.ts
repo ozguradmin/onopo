@@ -3,12 +3,24 @@ import { getDB } from '@/lib/db'
 import { verifyJWT } from '@/lib/auth'
 import { cookies } from 'next/headers'
 
-// GET: Get all homepage sections
-export async function GET() {
+async function isAdminSession(): Promise<boolean> {
+    const token = (await cookies()).get('auth_token')?.value
+    if (!token) return false
+    const payload = await verifyJWT(token)
+    return !!payload && payload.role === 'admin'
+}
+
+// GET: Get all active homepage sections. Admin › Ana Sayfa asks with ?includeAll=true and then, for a
+// verified admin session only, also gets the hidden ones (is_active = 0) so they can be switched back on.
+// includeAll requests and requests with auth_token are never edge-cached (lib/edge-cache.ts).
+export async function GET(req: NextRequest) {
     try {
         const db = await getDB()
+        const includeHidden = req.nextUrl.searchParams.get('includeAll') === 'true' && await isAdminSession()
         const { results } = await db.prepare(
-            'SELECT * FROM homepage_sections WHERE is_active = 1 ORDER BY display_order ASC'
+            includeHidden
+                ? 'SELECT * FROM homepage_sections ORDER BY display_order ASC, id ASC'
+                : 'SELECT * FROM homepage_sections WHERE is_active = 1 ORDER BY display_order ASC'
         ).all()
 
         // Parse JSON config for each section
@@ -30,7 +42,7 @@ export async function GET() {
             }
         })
 
-        return NextResponse.json(sections)
+        return NextResponse.json(sections, includeHidden ? { headers: { 'Cache-Control': 'private, no-store' } } : undefined)
     } catch (error: any) {
         console.error('Sections fetch error:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })
