@@ -26,6 +26,12 @@ binding = "AI"
 # Workers AI has no local simulation: wrangler dev calls the real models (billed) with the developer's login
 remote = true
 
+# Cloudflare Images binding: resized WebP variants (v/<w>/<key>.webp) made on the server after admin uploads and
+# by the daily cron (lib/image-variants-auto.ts). Billed per unique transformation per month; 5,000 free on the
+# Images Free plan (over it new transformations fail with 9422, nothing is charged).
+[images]
+binding = "IMAGES"
+
 # AI assistant throttles (Workers Rate Limiting; counted per Cloudflare location, approximate)
 [[ratelimits]]
 name = "CHAT_RL_BURST"

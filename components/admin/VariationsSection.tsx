@@ -68,7 +68,7 @@ export function VariationsSection({ variations, onChange }: VariationsSectionPro
             const res = await fetch('/api/admin/upload', { method: 'POST', body: formData })
             if (!res.ok) throw new Error('Upload failed')
             const result = await res.json()
-            void uploadImageVariants(file, result.url) // resized WebP copies; never blocks saving
+            void uploadImageVariants(file, result) // resized WebP copies (unless the server makes them); never blocks saving
             updateVariation(index, 'image_url', result.url)
         } catch (error) {
             console.error('Upload error:', error)

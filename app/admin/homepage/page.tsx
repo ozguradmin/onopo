@@ -453,7 +453,7 @@ function SectionEditor({ section, onClose, onSave }: { section: Section, onClose
                                             })
                                             const data = await res.json()
                                             if (data.url) {
-                                                void uploadImageVariants(file, data.url) // resized WebP copies; never blocks saving
+                                                void uploadImageVariants(file, data) // resized WebP copies (unless the server makes them); never blocks saving
                                                 setConfig({ ...config, image_url: data.url })
                                             }
                                         } catch (err) {
