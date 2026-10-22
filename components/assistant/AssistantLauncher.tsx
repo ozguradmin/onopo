@@ -1,8 +1,10 @@
 'use client'
 
 /**
- * Onopo Asistan launcher (SPEC §10.3), part of the shell: a 48 px circle on phones, an "Asistana sor" pill
- * on desktop. Rendered only after hydration and an idle callback (AssistantRoot), so it changes nothing in
+ * Onopo Asistan launcher (SPEC §10.3, redesigned in w7 because the owner did not like the plain round icon),
+ * part of the shell: a 52 px brand-blue circle with a crisp chat-bubble-and-sparkle glyph on phones, an
+ * "Asistana sor" pill with the same glyph on desktop; a soft blue shadow and one short entrance (no constant
+ * animation; none under reduced motion). Rendered only after hydration and an idle callback (AssistantRoot), so it changes nothing in
  * the server HTML, LCP or CLS, and it makes no request: the chat chunk starts loading on pointerdown, hover
  * or focus (preloadAssistant) and the panel mounts on the first tap.
  *
@@ -24,12 +26,27 @@ import { useShellUI } from '@/components/layout/shell-ui'
 import { useAssistantStore } from './assistant-store'
 import { preloadAssistant } from './preload'
 
-/** Chat bubble with a sparkle (also used by the panel header through icons.tsx). */
-export function AssistantIcon({ className }: { className?: string }) {
+const BUBBLE = 'M12 4C7.03 4 3 7.25 3 11.25c0 2.05 1.05 3.9 2.77 5.21L5.2 19.6l3.53-1.6c1.03.33 2.13.5 3.27.5 4.97 0 9-3.25 9-7.25S16.97 4 12 4Z'
+const SPARKLE = 'M12 7.6c.35 2.05 1.6 3.3 3.65 3.65-2.05.35-3.3 1.6-3.65 3.65-.35-2.05-1.6-3.3-3.65-3.65 2.05-.35 3.3-1.6 3.65-3.65Z'
+
+/**
+ * Chat bubble with a four-point sparkle, drawn on a 24 px grid. "line" (panel header, on a light chip): the
+ * bubble outlined and the sparkle filled in currentColor. "solid" (launcher, on brand blue): a white bubble
+ * with the sparkle cut out in brand blue. Also used by the panel through icons.tsx.
+ */
+export function AssistantIcon({ className, variant = 'line' }: { className?: string; variant?: 'line' | 'solid' }) {
+    if (variant === 'solid') {
+        return (
+            <svg viewBox="0 0 24 24" className={className} aria-hidden="true" focusable="false">
+                <path d={BUBBLE} fill="currentColor" />
+                <path d={SPARKLE} className="fill-brand-600" />
+            </svg>
+        )
+    }
     return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true" focusable="false">
-            <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
-            <path d="M12 7.2l1.2 2.6 2.6 1.2-2.6 1.2-1.2 2.6-1.2-2.6-2.6-1.2 2.6-1.2z" fill="currentColor" strokeWidth={1} />
+        <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true" focusable="false">
+            <path d={BUBBLE} stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" />
+            <path d={SPARKLE} fill="currentColor" />
         </svg>
     )
 }
@@ -177,14 +194,17 @@ export function AssistantLauncher() {
                 onPointerEnter={preloadAssistant}
                 onFocus={preloadAssistant}
                 className={cn(
-                    'relative flex h-12 items-center justify-center gap-2 rounded-full bg-brand-600 text-white shadow-raised ring-1 ring-black/5 transition-colors hover:bg-brand-700 md:w-auto md:px-4 md:shadow-overlay',
-                    intro ? 'px-4' : 'w-12',
+                    'animate-ai-launcher-in relative flex h-[52px] items-center justify-center gap-2 rounded-full text-white',
+                    'bg-[linear-gradient(135deg,#0090C8_0%,#0077A8_100%)] shadow-[0_8px_22px_-6px_rgb(0_119_168/0.55),0_2px_6px_rgb(11_18_32/0.12)] ring-1 ring-inset ring-white/15',
+                    'transition-[scale,filter] duration-150 hover:brightness-110 active:scale-[0.96] motion-reduce:transition-none',
+                    'md:h-12 md:w-auto md:pl-3.5 md:pr-[18px]',
+                    intro ? 'px-4' : 'w-[52px]',
                 )}
             >
-                <AssistantIcon className="h-[22px] w-[22px]" />
+                <AssistantIcon variant="solid" className="h-6 w-6 shrink-0 md:h-[22px] md:w-[22px]" />
                 <span className={intro ? 'text-[15px] font-semibold md:hidden' : 'hidden'}>Asistan</span>
-                <span className="hidden text-[15px] font-semibold md:inline">{label}</span>
-                {unread && <span aria-hidden="true" className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-sale ring-2 ring-white" />}
+                <span className="hidden text-[15px] font-semibold tracking-[-0.01em] md:inline">{label}</span>
+                {unread && <span aria-hidden="true" className="absolute right-0.5 top-0.5 h-3 w-3 rounded-full bg-sale ring-2 ring-white" />}
             </button>
         </div>
     )

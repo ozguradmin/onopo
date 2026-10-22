@@ -517,6 +517,13 @@ body:has([data-hide-bottom-nav]) [data-bottom-nav] {
   --color-whatsapp-50: #ECF8F5;
   --animate-ai-shimmer: ai-shimmer 1.6s linear infinite;
   --animate-ai-caret: ai-caret 1s steps(1) infinite;
+  /* The launcher's one entrance when it first appears (no constant animation) */
+  --animate-ai-launcher-in: ai-launcher-in 320ms cubic-bezier(.2, .8, .2, 1) both;
+
+  @keyframes ai-launcher-in {
+    from { opacity: 0; transform: translateY(10px) scale(.92); }
+    to { opacity: 1; transform: none; }
+  }
 
   @keyframes ai-shimmer {
     from { background-position: 100% 0; }
@@ -545,7 +552,8 @@ body:has([data-hide-bottom-nav]) [data-bottom-nav] {
     color: var(--color-muted);
   }
 
-  .animate-ai-caret {
+  .animate-ai-caret,
+  .animate-ai-launcher-in {
     animation: none !important;
   }
 }
