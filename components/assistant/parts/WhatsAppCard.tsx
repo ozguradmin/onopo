@@ -95,19 +95,22 @@ export function WhatsAppCard({ card, beaconShown = true }: { card: WhatsappEvent
     )
 }
 
-/** The compact row: also used under error rows and the "stuck" notice with its own label. */
-export function WhatsAppRow({ href, onClick, label = 'Sorunu WhatsApp\'tan da sorabilirsin' }: { href: string; onClick?: () => void; label?: string }) {
+/**
+ * The compact row: a small WhatsApp pill. It sits under every answer since w7 (owner decision), so it is
+ * deliberately quiet (no border, one line). Also used under error rows and the "stuck" notice with a label.
+ */
+export function WhatsAppRow({ href, onClick, label = "Ekibimize WhatsApp'tan sor" }: { href: string; onClick?: () => void; label?: string }) {
     return (
         <a
             href={href}
             target="_blank"
             rel="noopener noreferrer"
             onClick={onClick}
-            className="flex min-h-11 items-center gap-2.5 rounded-card border border-line px-3 py-2.5 text-[13px] leading-5 text-ink-2 hover:border-whatsapp"
+            className="inline-flex min-h-10 max-w-full items-center gap-2 rounded-full bg-whatsapp-50 py-2 pl-3 pr-3.5 text-[13px] font-semibold leading-5 text-whatsapp transition-colors hover:bg-[#DCF1EB]"
         >
-            <WhatsAppGlyph className="h-[18px] w-[18px] shrink-0 text-whatsapp" />
-            <span className="min-w-0 flex-1">{label}</span>
-            <span className="shrink-0 font-semibold text-whatsapp">Yaz →</span>
+            <WhatsAppGlyph className="h-4 w-4 shrink-0" />
+            <span className="min-w-0">{label}</span>
+            <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
         </a>
     )
 }

@@ -10,9 +10,12 @@
  * is followed through visualViewport (--kb) so it never covers the composer. Desktop: no backdrop, no trap;
  * focus goes to the composer on open, Escape closes and focus returns to the launcher.
  *
- * Header: title, "Yapay zekâ asistanı · Türkçe", a WhatsApp button (only when a wa.me base is known), a menu
- * (Yeni sohbet, Telefon modelini değiştir) and close. The KVKK notice shows until dismissed (localStorage
- * onopo:assistant:notice); the short privacy line under the composer is always there.
+ * Header (kept calm on purpose, the owner found the first version cluttered): title with a small
+ * "Yapay zekâ" tag, a WhatsApp button (only when a wa.me base is known), the ⋯ menu (Yeni sohbet, Telefon
+ * modelini değiştir, Aydınlatma Metni) and close. The KVKK notice is no longer a box above the chat nor a
+ * line under the composer: the empty chat has one muted line "Yapay zekâ asistanı · Aydınlatma Metni için
+ * tıkla", and the notice itself opens in a small sheet inside the panel (role="dialog", focus moves into it
+ * and back, Escape closes it first).
  */
 import * as React from 'react'
 import Link from 'next/link'
@@ -30,7 +33,6 @@ import { EmptyState } from './parts/EmptyState'
 import { Composer } from './parts/Composer'
 import { CartStrip } from './parts/CartStrip'
 
-const NOTICE_KEY = 'onopo:assistant:notice'
 const PHONE_QUERY = '(max-width: 767px)'
 const SWIPE_CLOSE_PX = 80
 
@@ -43,14 +45,6 @@ function subscribePhone(cb: () => void) {
 /** True under 768 px: the panel is the phone sheet. */
 function usePhone(): boolean {
     return React.useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE_QUERY).matches, () => false)
-}
-
-function readNoticeDismissed(): boolean {
-    try {
-        return localStorage.getItem(NOTICE_KEY) === '1'
-    } catch {
-        return false
-    }
 }
 
 export default function AssistantPanel() {
@@ -68,7 +62,7 @@ export default function AssistantPanel() {
     const { scrollRef, contentRef, away, scrollToBottom } = useStickToBottom()
     const [draft, setDraft] = React.useState('')
     const [menuOpen, setMenuOpen] = React.useState(false)
-    const [notice, setNotice] = React.useState(() => !readNoticeDismissed())
+    const [noticeOpen, setNoticeOpen] = React.useState(false)
     const [entered, setEntered] = React.useState(false)
 
     // The bottom nav slides away under the sheet (MobileNav reads open && !minimized && isSheet)
@@ -87,6 +81,7 @@ export default function AssistantPanel() {
         if (!visible) {
             setEntered(false)
             setMenuOpen(false)
+            setNoticeOpen(false)
             return
         }
         // Two frames: the first one lays the frame out (it was display: none), the second starts the slide
@@ -106,7 +101,7 @@ export default function AssistantPanel() {
 
     useScrollLock(visible && isSheet)
     useFocusTrap(frameRef, visible && isSheet, composerRef, { restore: true })
-    useEscape(visible, () => (menuOpen ? setMenuOpen(false) : dismiss()))
+    useEscape(visible, () => (noticeOpen ? closeNotice() : menuOpen ? setMenuOpen(false) : dismiss()))
 
     // Desktop: focus goes to the composer on open (the phone sheet's focus trap does it there)
     React.useEffect(() => {
@@ -176,13 +171,14 @@ export default function AssistantPanel() {
         })
     }
 
-    const dismissNotice = () => {
-        setNotice(false)
-        try {
-            localStorage.setItem(NOTICE_KEY, '1')
-        } catch {
-            // storage blocked: shown again next time
-        }
+    const openNotice = () => {
+        setMenuOpen(false)
+        setNoticeOpen(true)
+    }
+    function closeNotice() {
+        setNoticeOpen(false)
+        // Focus goes back where the visitor was: the composer (the menu that opened it is closed now)
+        requestAnimationFrame(() => composerRef.current?.focus({ preventScroll: true }))
     }
 
     // blockedUntil goes back to 0 when a rate-limit wait is over (useAssistantChat)
@@ -212,13 +208,13 @@ export default function AssistantPanel() {
                 {isSheet && <DragHandle onClose={minimize} />}
 
                 {/* ---- header ---- */}
-                <div className="flex h-14 shrink-0 items-center gap-3 border-b border-line pl-4 pr-1.5">
+                <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-line/70 pl-4 pr-1.5">
                     <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
                         <AssistantIcon className="h-[18px] w-[18px]" />
                     </span>
-                    <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
                         <h2 id="assistant-title" className="truncate text-[15px] font-bold leading-5 text-ink">Onopo Asistan</h2>
-                        <p className="truncate text-xs leading-4 text-muted">Yapay zekâ asistanı · Türkçe</p>
+                        <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold leading-4 text-muted">Yapay zekâ</span>
                     </div>
                     {chat.waBase && (
                         <button
@@ -241,7 +237,7 @@ export default function AssistantPanel() {
                         >
                             <MoreHorizontal aria-hidden="true" className="h-5 w-5" />
                         </button>
-                        {menuOpen && <HeaderMenu onClose={() => setMenuOpen(false)} onNewChat={chat.newChat} onChangeDevice={changeDevice} />}
+                        {menuOpen && <HeaderMenu onClose={() => setMenuOpen(false)} onNewChat={chat.newChat} onChangeDevice={changeDevice} onNotice={openNotice} />}
                     </div>
                     <button
                         type="button"
@@ -261,7 +257,7 @@ export default function AssistantPanel() {
                 )}
 
                 {device && (
-                    <div className="shrink-0 border-b border-line px-4 py-1.5">
+                    <div className="shrink-0 px-4 pt-2">
                         <button
                             type="button"
                             onClick={changeDevice}
@@ -277,9 +273,8 @@ export default function AssistantPanel() {
                 {/* ---- transcript ---- */}
                 <div className="relative min-h-0 flex-1">
                     <div ref={scrollRef} className="h-full overflow-y-auto overscroll-contain">
-                        <div ref={contentRef} className="space-y-5 px-4 py-4">
-                            {notice && <Notice onDismiss={dismissNotice} onLink={onNavigate} />}
-                            {empty ? <EmptyState onChip={onChip} /> : <MessageList onChip={onChip} />}
+                        <div ref={contentRef} className="px-4 py-4">
+                            {empty ? <EmptyState onChip={onChip} onNotice={openNotice} /> : <MessageList onChip={onChip} />}
                         </div>
                     </div>
                     {away && (
@@ -302,9 +297,9 @@ export default function AssistantPanel() {
                     streaming={chat.streaming}
                     disabled={blocked}
                     textareaRef={composerRef}
-                    onLink={onNavigate}
                 />
                 <p role="status" className="sr-only">{chat.announcement}</p>
+                {noticeOpen && <NoticeSheet onClose={closeNotice} onLink={onNavigate} />}
             </div>
         </AssistantUiContext.Provider>
     )
@@ -342,7 +337,7 @@ function DragHandle({ onClose }: { onClose: () => void }) {
     )
 }
 
-function HeaderMenu({ onClose, onNewChat, onChangeDevice }: { onClose: () => void; onNewChat: () => void; onChangeDevice: () => void }) {
+function HeaderMenu({ onClose, onNewChat, onChangeDevice, onNotice }: { onClose: () => void; onNewChat: () => void; onChangeDevice: () => void; onNotice: () => void }) {
     const ref = React.useRef<HTMLDivElement>(null)
 
     // A tap anywhere else closes it
@@ -375,31 +370,74 @@ function HeaderMenu({ onClose, onNewChat, onChangeDevice }: { onClose: () => voi
             <button type="button" role="menuitem" onClick={onChangeDevice} className={item}>
                 Telefon modelini değiştir
             </button>
+            <button type="button" role="menuitem" onClick={onNotice} className={item}>
+                Aydınlatma Metni
+            </button>
         </div>
     )
 }
 
-/** KVKK first-open notice (SPEC §9.5), dismissible. */
-function Notice({ onDismiss, onLink }: { onDismiss: () => void; onLink: () => void }) {
+/**
+ * The KVKK notice (SPEC §9.5, w7 revision: transcripts are kept masked for up to 12 months) in a small
+ * sheet over the panel. Opened from the empty chat's line or the ⋯ menu; the panel stays underneath.
+ * Focus moves to "Tamam" and is kept inside while it is open; Escape (AssistantPanel) or "Tamam" closes it.
+ */
+function NoticeSheet({ onClose, onLink }: { onClose: () => void; onLink: () => void }) {
+    const ref = React.useRef<HTMLDivElement>(null)
+    const okRef = React.useRef<HTMLButtonElement>(null)
+
+    React.useEffect(() => {
+        const raf = requestAnimationFrame(() => okRef.current?.focus({ preventScroll: true }))
+        return () => cancelAnimationFrame(raf)
+    }, [])
+
+    // Tab stays inside the sheet (the link and the button)
+    const onKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key !== 'Tab' || !ref.current) return
+        const items = Array.from(ref.current.querySelectorAll<HTMLElement>('a[href], button'))
+        if (items.length === 0) return
+        const first = items[0]
+        const last = items[items.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault()
+            last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault()
+            first.focus()
+        }
+    }
+
     return (
-        <div className="relative rounded-card bg-surface p-3 pr-10 text-[13px] leading-5 text-ink-2">
-            <p>
-                <strong className="font-semibold text-ink">Yapay zekâ asistanı.</strong> Bu sohbet bir yapay zekâ ile yürütülür; yanıtlar
-                otomatik üretilir ve hata içerebilir. Geçerli fiyat ve koşullar ürün sayfasında ve ödeme adımında gösterilir. Lütfen ad,
-                telefon, adres, T.C. kimlik ya da kart bilgisi yazma; sipariş ve kişisel işlemler için WhatsApp&apos;tan bize ulaş.
-                Mesajların yalnızca sorunu yanıtlamak için Cloudflare altyapısında işlenir; sohbet içeriği saklanmaz.{' '}
-                <Link href="/policy/" prefetch={false} onClick={onLink} className="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700">
-                    Aydınlatma Metni
-                </Link>
-            </p>
-            <button
-                type="button"
-                aria-label="Bilgilendirmeyi kapat"
-                onClick={onDismiss}
-                className="absolute right-0.5 top-0.5 flex h-10 w-10 items-center justify-center rounded-full text-muted hover:text-ink"
+        <div className="absolute inset-0 z-20 flex items-end rounded-[inherit] bg-ink/30 sm:items-center sm:justify-center sm:p-4" onClick={onClose}>
+            <div
+                ref={ref}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="assistant-notice-title"
+                onClick={e => e.stopPropagation()}
+                onKeyDown={onKeyDown}
+                className="w-full rounded-t-sheet bg-white px-5 pb-[calc(16px+env(safe-area-inset-bottom))] pt-5 shadow-overlay sm:rounded-sheet sm:pb-5"
             >
-                <X aria-hidden="true" className="h-4 w-4" />
-            </button>
+                <h3 id="assistant-notice-title" className="text-[15px] font-bold leading-5 text-ink">Aydınlatma Metni</h3>
+                <div className="mt-2.5 space-y-2 text-[13px] leading-5 text-ink-2">
+                    <p>Onopo Asistan bir yapay zekâdır; yanıtlar otomatik üretilir ve hata içerebilir. Geçerli fiyat ve koşullar ürün sayfasında ve ödeme adımında gösterilir.</p>
+                    <p>Lütfen ad, telefon, adres, T.C. kimlik ya da kart bilgisi yazma; sipariş ve kişisel işlemler için WhatsApp&apos;tan bize ulaş.</p>
+                    <p>Hizmeti geliştirmek için sohbetler, kişisel bilgiler gizlenerek en çok 12 ay saklanır. Sohbetinin silinmesini istersen WhatsApp&apos;tan bize yazman yeterli.</p>
+                </div>
+                <div className="mt-4 flex items-center justify-between gap-3">
+                    <Link href="/policy/" prefetch={false} onClick={onLink} className="text-[13px] font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700">
+                        Gizlilik politikası
+                    </Link>
+                    <button
+                        ref={okRef}
+                        type="button"
+                        onClick={onClose}
+                        className="h-10 rounded-full bg-ink px-5 text-sm font-semibold text-white hover:bg-ink-2"
+                    >
+                        Tamam
+                    </button>
+                </div>
+            </div>
         </div>
     )
 }

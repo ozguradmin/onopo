@@ -3,10 +3,10 @@
 /**
  * Message box (SPEC §10.5): a 16 px textarea (no iOS zoom) that grows to 4 lines, Enter sends and
  * Shift+Enter adds a line, a counter from 400 characters (limit 500), and a send button that turns into
- * "Durdur" while a reply streams. The privacy line under it is part of the KVKK notice (SPEC §9.5).
+ * "Durdur" while a reply streams. No footer line under it any more (w7): the AI notice lives in the empty
+ * chat's line and the ⋯ menu, so the composer stays clean.
  */
 import * as React from 'react'
-import Link from 'next/link'
 import { ArrowUp, Square } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LIMITS } from '@/lib/assistant/contract'
@@ -19,7 +19,6 @@ export interface ComposerProps {
     streaming: boolean
     disabled: boolean
     textareaRef: React.RefObject<HTMLTextAreaElement | null>
-    onLink?: () => void
 }
 
 /** field-sizing: content where supported; elsewhere the height follows the content here. */
@@ -29,13 +28,13 @@ function autosize(el: HTMLTextAreaElement | null) {
     el.style.height = `${el.scrollHeight}px`
 }
 
-export function Composer({ value, onChange, onSend, onStop, streaming, disabled, textareaRef, onLink }: ComposerProps) {
+export function Composer({ value, onChange, onSend, onStop, streaming, disabled, textareaRef }: ComposerProps) {
     const canSend = !disabled && !streaming && value.trim().length > 0
 
     React.useLayoutEffect(() => autosize(textareaRef.current), [value, textareaRef])
 
     return (
-        <div className="border-t border-line bg-white px-3 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2">
+        <div className="border-t border-line/70 bg-white px-3 pb-[calc(10px+env(safe-area-inset-bottom))] pt-2.5">
             <form
                 className="flex items-end gap-2"
                 onSubmit={e => {
@@ -90,12 +89,6 @@ export function Composer({ value, onChange, onSend, onStop, streaming, disabled,
                     {value.length}/{LIMITS.inputMaxChars}
                 </p>
             )}
-            <p className="mt-1.5 text-center text-[11px] leading-4 text-muted">
-                Yapay zekâ asistanı · Kişisel bilgi yazma · Sohbet saklanmaz ·{' '}
-                <Link href="/policy/" prefetch={false} onClick={onLink} className="underline underline-offset-2 hover:text-ink">
-                    Aydınlatma Metni
-                </Link>
-            </p>
         </div>
     )
 }

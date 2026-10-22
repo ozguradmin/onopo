@@ -2,7 +2,8 @@
 
 /**
  * First screen of a new chat (SPEC §10.5): a greeting without a bubble, up to 4 starter chips that fit the
- * page, the cart and the time of day (starters.ts), and a quiet WhatsApp alternative.
+ * page, the cart and the time of day (starters.ts), a quiet WhatsApp alternative and one muted line that
+ * says this is an AI and opens the Aydınlatma Metni (w7: it replaced the notice box and the composer footer).
  */
 import * as React from 'react'
 import { usePathname } from 'next/navigation'
@@ -15,7 +16,7 @@ import { pageContext } from '../page-context'
 import { starters } from '../starters'
 import { useAssistantUi } from '../useAssistantChat'
 
-export function EmptyState({ onChip }: { onChip: (s: Suggestion) => void }) {
+export function EmptyState({ onChip, onNotice }: { onChip: (s: Suggestion) => void; onNotice: () => void }) {
     const { chat } = useAssistantUi()
     const pathname = usePathname() || '/'
     const items = useCartStore(s => s.items)
@@ -51,6 +52,12 @@ export function EmptyState({ onChip }: { onChip: (s: Suggestion) => void }) {
                     da yazabilirsin.
                 </p>
             )}
+            <p className="pt-2 text-xs leading-4 text-muted">
+                Yapay zekâ asistanı ·{' '}
+                <button type="button" onClick={onNotice} className="underline underline-offset-2 hover:text-ink">
+                    Aydınlatma Metni için tıkla
+                </button>
+            </p>
         </div>
     )
 }
