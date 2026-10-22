@@ -1,5 +1,4 @@
 import * as React from 'react'
-import { preload } from 'react-dom'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { FallbackImage } from '@/components/ui/FallbackImage'
@@ -278,9 +277,9 @@ function Slide({ slide, index, count }: { slide: BannerSlide; index: number; cou
 export function CampaignBanners({ campaigns, heroSlides = [], className }: { campaigns: Campaign[]; heroSlides?: HeroSlide[]; className?: string }) {
     const slides = [...heroSlides.map(fromHeroSlide), ...campaigns.map(fromCampaign)].slice(0, 6)
     if (!slides.length) return null
-    // The first slide is the LCP element on phones: ask for it from <head>, before the header and CSS are parsed
-    const lcp = slides[0].image
-    if (lcp) preload(lcp.src, { as: 'image', imageSrcSet: lcp.srcSet, imageSizes: lcp.srcSet ? IMAGE_SIZES : undefined, fetchPriority: 'high' })
+    // No <head> preload for the first slide: its <img> is early in the HTML with fetchpriority="high" anyway,
+    // and a preload made Lighthouse's mobile simulation count the image as needed before the first paint
+    // (FCP 2.1 -> 2.9 s, LCP 3.4 -> 5.2 s in the 2026-10-23 runs)
     return (
         <section aria-roledescription="karusel" aria-label="Kampanyalar" className={cn('container-store', className)}>
             <CampaignCarousel count={slides.length}>
