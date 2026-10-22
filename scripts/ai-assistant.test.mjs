@@ -1947,3 +1947,17 @@ test('site settings: ai_popular_questions is public, its meta is admin-only', as
     assert.deepEqual(Object.keys(settingsObject(rows, false)), ['ai_popular_questions'])
     assert.deepEqual(Object.keys(settingsObject(rows, true)), ['ai_popular_questions', 'ai_popular_questions_meta'])
 })
+
+test('boldProductIds: products named in **bold** match one in-stock row each (Turkish endings tolerated)', () => {
+    const rows = [
+        { id: 1, name: 'Iphone ve Android Uyumlu 20W Type-C Girişli Şarj Başlığı - M3', displayName: 'iPhone ve Android Uyumlu 20W Type-C Girişli Şarj Başlığı - M3', inStock: true },
+        { id: 2, name: '30W Type-C Şarj Adaptörü - M1', displayName: '30W Type-C Şarj Adaptörü - M1', inStock: true },
+        { id: 3, name: '60W Type-C Örgülü Kablo', displayName: '60W Type-C Örgülü Kablo', inStock: false },
+        { id: 4, name: '60W Type-C Kablo 2m', displayName: '60W Type-C Kablo 2m', inStock: true },
+        { id: 5, name: '60W Type-C Kablo 1m', displayName: '60W Type-C Kablo 1m', inStock: true },
+    ]
+    assert.deepEqual(turn.boldProductIds('İki seçenek: **20W Type-C başlık** (269,99 TL) ve **30W Type-C Şarj Adaptörü** (239,99 TL).', rows), [1, 2])
+    // sold out never, and an ambiguous name (two cables) matches nothing
+    assert.deepEqual(turn.boldProductIds('**60W Type-C Örgülü Kablo** ya da **60W Type-C Kablo**', rows), [])
+    assert.deepEqual(turn.boldProductIds('Düz metin, kalın yok.', rows), [])
+})

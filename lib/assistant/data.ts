@@ -28,7 +28,8 @@ import { buildKnowledge, type Knowledge, type TurnDeps } from './turn'
 export const DEFAULT_MODELS = {
     chat: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
     router: '@cf/cloudflare/clef-flash',
-    fallback: '@cf/zai-org/glm-4.7-flash',
+    // The older DeepSeek: glm-4.7-flash answered in poor Turkish and skipped the tools in live tests
+    fallback: '@cf/deepseek-ai/deepseek-v4-flash-0731',
 } as const
 
 /** site_settings keys the assistant reads (admin-only ai_* keys included: this runs on the server). */

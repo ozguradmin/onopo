@@ -34,7 +34,7 @@ import { CANNED, DEFAULT_TEXT, faqAnswer, POLICY_REASON, policyText, policyTopic
 import { buildSuggestions, type TurnEnd } from './suggestions'
 import { detectDevice } from './device'
 import { costMicroUsd } from './limits'
-import { foldTr } from '../search'
+import { foldTr, normalizeText } from '../search'
 import { cmsPagePath } from '../seo'
 
 // ---------------------------------------------------------------------------------------------
@@ -200,7 +200,8 @@ export interface TurnLog {
     outcome: TurnOutcome
 }
 
-const DEFAULT_TIMEOUTS = { routerMs: 700, firstByteMs: 10_000, turnMs: 30_000 }
+// 14 s to the first byte: at 10 s about 1 turn in 10 fell back although DeepSeek answered at 10-12 s (live test)
+const DEFAULT_TIMEOUTS = { routerMs: 700, firstByteMs: 14_000, turnMs: 30_000 }
 
 /** In-isolate circuit breaker: after a 429/3040 from the primary model, use the fallback for 60 s. */
 let circuitOpenUntil = 0
@@ -347,8 +348,10 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
     }
     const turnId = crypto.randomUUID()
     let textSent = false
+    let shownText = ''
     const out = (ev: AssistantEvent) => {
         if (ev.t === 'text') {
+            shownText += ev.v
             textSent = true
             if (log.firstTextMs == null) log.firstTextMs = Date.now() - started
         }
@@ -833,6 +836,20 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
                 flags.add('tool_error')
             }
         }
+        // The model named products in **bold** but did not call show_products: show those (in stock, matched
+        // by name against the catalogue) as real cards, so the visitor can add them
+        if (!state.shown.includes('products') && !state.shown.includes('compare')) {
+            const ids = boldProductIds(shownText, k.rows)
+            if (ids.length) {
+                flags.add('name_rescue')
+                try {
+                    const r = await runTool('show_products', JSON.stringify({ ids }), ctx)
+                    r.events.forEach(out)
+                } catch {
+                    flags.add('tool_error')
+                }
+            }
+        }
         // A short yes to a category offer: the categories, even when the model did something else
         if (followUp?.reply === 'yes' && followUp.offer.kind === 'categories' && !state.shown.includes('links')) {
             flags.add('offer_rescue')
@@ -960,4 +977,25 @@ export function mainCategoryKeys(k: Knowledge): string[] {
         .map(([g]) => `grup:${g}`)
         .filter(key => k.links.has(key))
         .slice(0, 6)
+}
+
+/**
+ * In-stock catalogue rows whose name the text names in **bold** (the model's habit when it lists products
+ * in prose). A bold segment matches a row when every word of it (3+ letters, folded) is in the row's name;
+ * the row must be the only match for that segment. At most 4, in text order.
+ */
+export function boldProductIds(text: string, rows: readonly CatalogRow[]): number[] {
+    const fold = (s: string) => normalizeText(s).split(/\s+/).filter(w => w.length >= 3 || /\d/.test(w))
+    const names = rows.filter(r => r.inStock).map(r => ({ id: r.id, words: fold(`${r.displayName} ${r.name}`) }))
+    // Turkish endings change the stem ("başlık" / "başlığı"): letters match on a prefix, numbers exactly
+    const has = (words: string[], w: string) => /\d/.test(w) ? words.includes(w) : words.some(x => x.startsWith(w.slice(0, Math.max(4, w.length - 2))))
+    const ids: number[] = []
+    for (const m of text.matchAll(/\*\*([^*]{4,120})\*\*/g)) {
+        const words = fold(m[1])
+        if (words.length < 2) continue
+        const hits = names.filter(n => words.every(w => has(n.words, w)))
+        if (hits.length === 1 && !ids.includes(hits[0].id)) ids.push(hits[0].id)
+        if (ids.length >= 4) break
+    }
+    return ids
 }
