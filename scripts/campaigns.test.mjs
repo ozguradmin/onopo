@@ -102,4 +102,12 @@ test('a photo with printed text is used only while its claims are still true', (
     const c = byKey(buildCampaigns({ products: later, freeShippingThreshold: 750, dispatchText: "Saat 18:00'ya kadar aynı gün kargo", photos }))
     for (const k of Object.keys(photos)) assert.equal(c[k].photo, null, k)
     assert.equal(c.firsatlar.title, "%40'a varan indirim")
+
+    // With a text-free twin the banner keeps the photo and gets the live text instead
+    const withPlain = Object.fromEntries(Object.entries(photos).map(([k, v]) => [k, { ...v, plain: `${v.name}-yazisiz` }]))
+    const d = byKey(buildCampaigns({ products: later, freeShippingThreshold: 750, dispatchText: "Saat 18:00'ya kadar aynı gün kargo", photos: withPlain }))
+    for (const k of Object.keys(photos)) {
+        assert.equal(d[k].photo?.name, `${photos[k].name}-yazisiz`, k)
+        assert.equal(d[k].photo?.text, undefined, k)
+    }
 })

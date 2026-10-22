@@ -40,6 +40,11 @@ export interface CampaignPhoto {
     text?: string
     /** What the printed text claims: the photo is shown only while the live data still says so. */
     claims?: CampaignClaims
+    /**
+     * The same photo without text (files /kampanya/<plain>-800.webp / -1600.webp). Shown with the live
+     * text on top when a claim is no longer true, so the banner keeps its photo either way.
+     */
+    plain?: string
 }
 
 export interface CampaignClaims {
@@ -75,38 +80,48 @@ type PhotoMap = Partial<Record<CampaignKey, CampaignPhoto>>
 export const CAMPAIGN_PHOTOS: PhotoMap = {
     firsatlar: {
         name: 'firsatlar',
+        plain: 'firsatlar-yazisiz',
         text: "Fırsatlar: %41'e varan indirim, şarj aleti, kablo ve ekran koruyucuda. İndirimleri gör",
         claims: { minMaxDiscount: 41 },
     },
     'ekran-koruyucu': {
         name: 'ekran-koruyucu',
+        plain: 'ekran-koruyucu-yazisiz',
         text: 'Tek fiyat: 9D cam ekran koruyucu 129,99 TL. Modelini bul',
         claims: { onePrice: 129.99 },
     },
     'turbo-sarj': {
         name: 'turbo-sarj',
+        plain: 'turbo-sarj-yazisiz',
         text: "Turbo şarj: 120W'a kadar hızlı şarj, GaN teknolojili 67W ve 120W setler. Şarj aletlerini gör",
         claims: { minTopWatt: 120 },
     },
     'kargo-bedava': {
         name: 'kargo-bedava',
+        plain: 'kargo-bedava-yazisiz',
         text: "Kargo: 500 TL üzeri kargo bedava, 18:00'e kadar aynı gün kargoda. Alışverişe başla",
         claims: { freeShippingThreshold: 500, dispatchMentions: '18:00' },
     },
 }
 
-/** The campaign's photo, unless the text printed in it is no longer true. */
+function claimsHold(c: CampaignClaims, facts: CampaignFacts): boolean {
+    if (c.minMaxDiscount != null && !((facts.maxDiscount ?? 0) >= c.minMaxDiscount)) return false
+    if (c.onePrice != null && facts.onePrice !== c.onePrice) return false
+    if (c.freeShippingThreshold != null && facts.freeShippingThreshold !== c.freeShippingThreshold) return false
+    if (c.minTopWatt != null && !((facts.topWatt ?? 0) >= c.minTopWatt)) return false
+    if (c.dispatchMentions && !(facts.dispatchText ?? '').includes(c.dispatchMentions)) return false
+    return true
+}
+
+/**
+ * The campaign's photo. When the text printed in it is no longer true: its text-free twin (the banner
+ * then draws the live text itself), else no photo (built-in artwork with the live text).
+ */
 function photoFor(photos: PhotoMap, key: CampaignKey, facts: CampaignFacts): CampaignPhoto | null {
     const photo = photos[key]
     if (!photo) return null
-    const c = photo.claims
-    if (!c) return photo
-    if (c.minMaxDiscount != null && !((facts.maxDiscount ?? 0) >= c.minMaxDiscount)) return null
-    if (c.onePrice != null && facts.onePrice !== c.onePrice) return null
-    if (c.freeShippingThreshold != null && facts.freeShippingThreshold !== c.freeShippingThreshold) return null
-    if (c.minTopWatt != null && !((facts.topWatt ?? 0) >= c.minTopWatt)) return null
-    if (c.dispatchMentions && !(facts.dispatchText ?? '').includes(c.dispatchMentions)) return null
-    return photo
+    if (!photo.claims || claimsHold(photo.claims, facts)) return photo
+    return photo.plain ? { name: photo.plain, focusX: photo.focusX } : null
 }
 
 /** The product fields the campaigns read (a lib/catalog Product works as is). */
