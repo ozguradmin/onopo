@@ -1520,6 +1520,18 @@ test('transcripts: CSV export for Turkish Excel (BOM, ";", quoting, no formulas)
     assert.equal(json[0].messages[1].turn, 1)
 })
 
+test('transcripts: the export follows the list filters (dates and the search box)', async () => {
+    transcripts.resetTranscriptMemo()
+    const db = recordingDb(() => [])
+    await transcripts.exportRows(db, { from: '2026-10-01', to: '2026-10-22', q: 'iade' })
+    await transcripts.exportRows(db, { from: '2026-10-01', to: '2026-10-22' })
+    const [withQ, withoutQ] = db.sql.filter(([q]) => q.startsWith('SELECT m.conv_id'))
+    assert.match(withQ[0], /EXISTS \(SELECT 1 FROM ai_messages m WHERE m\.conv_id = c\.id AND m\.text LIKE \?/)
+    assert.deepEqual(withQ[1], ['2026-10-01', '2026-10-22', '%iade%', transcripts.EXPORT_MAX_MESSAGES])
+    assert.deepEqual(withoutQ[1], ['2026-10-01', '2026-10-22', transcripts.EXPORT_MAX_MESSAGES])
+    transcripts.resetTranscriptMemo()
+})
+
 test('transcripts: a whole runTurn captured the way the chat route stores it', async () => {
     const cap = transcripts.createTurnCapture()
     const ai = mockAi({ chat: [[{ choices: [{ delta: { content: 'İki seçenek var.' } }] }, toolChunk('show_products', { ids: [401, 413] })]] })

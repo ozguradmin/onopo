@@ -425,9 +425,10 @@ export interface ExportRow {
     page?: string | null
 }
 
-export async function exportRows(db: D1Lite, p: Pick<ListParams, 'from' | 'to'>): Promise<ExportRow[]> {
+/** The messages of the conversations in the range; with `q`, only the conversations the list shows for it. */
+export async function exportRows(db: D1Lite, p: Pick<ListParams, 'from' | 'to'> & { q?: string }): Promise<ExportRow[]> {
     await ensureTranscriptTables(db)
-    const { where, args } = whereFor({ ...p, q: '' })
+    const { where, args } = whereFor({ from: p.from, to: p.to, q: p.q ?? '' })
     const { results } = await db
         .prepare(`SELECT m.conv_id, m.created_at, m.turn, m.role, m.text, m.events, c.device, c.page FROM ai_messages m JOIN ai_conversations c ON c.id = m.conv_id
 WHERE ${where} ORDER BY c.started_at, m.conv_id, m.id LIMIT ?`)
