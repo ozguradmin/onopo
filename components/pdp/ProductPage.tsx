@@ -9,16 +9,19 @@ import { SectionHeader } from '@/components/ui/SectionHeader'
 import { JsonLd } from '@/components/seo/JsonLd'
 import { ProductMachineData } from '@/components/seo/ProductMachineData'
 import { ProductCard } from '@/components/product/ProductCard'
-import { breadcrumbJsonLd, categoryPath, productBrand, type SiteSeo } from '@/lib/seo'
+import { breadcrumbJsonLd, categoryPath, faqPageJsonLd, productBrand, type SiteSeo } from '@/lib/seo'
 import { brandOf, displayName, specChips } from '@/lib/search'
 import { guideForProduct, guidePath } from '@/lib/guides'
 import { formatDateTR, formatTL } from '@/lib/format'
 import { productImageSrcSet, productImageUrl } from '@/lib/images'
 import type { ProductPageData } from '@/lib/product-data'
 import { getReviewStatsMapSafe } from '@/lib/reviews'
+import { buildProductFaq } from '@/lib/product-faq'
+import { unitPrice } from '@/lib/pricing'
 import { ProductGallery } from './ProductGallery'
 import { BuyBox } from './BuyBox'
 import { InfoSection } from './InfoSection'
+import { ProductFaq } from './ProductFaq'
 import { ProductDescription, SpecsTable } from './ProductDescription'
 import { ProductRail, ProductRailItem } from './ProductRail'
 import { ReviewForm } from './ReviewForm'
@@ -129,11 +132,28 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
     const threshold = shipping.freeShippingThreshold
     const hasDescription = parsed.blocks.length > 0 || !!parsed.tagline
 
+    // ---- "Sık sorulan sorular": only questions the data answers (lib/product-faq.ts); the FAQPage JSON-LD
+    // carries exactly the visible items. Shipping from shipping_settings as read (no defaults), like the JSON-LD.
+    const faq = buildProductFaq({
+        product: {
+            name: product.name,
+            price: unitPrice(product.price),
+            in_stock: product.in_stock,
+            free_shipping: product.free_shipping,
+            installment_info: infoText(product.installment_info) || null,
+        },
+        shipping: { freeShippingThreshold: site.freeShippingThreshold, shippingCost: site.shippingCost },
+        handlingTime: site.handlingTime,
+        returnPolicy,
+        maxInstallments,
+    })
+
     return (
         <>
             {/* Akakçe / Google contract: Product JSON-LD + hidden #product-info, once, server-rendered */}
             <ProductMachineData product={product} site={site} reviews={reviewStats.count > 0 ? reviewStats : null} reviewItems={reviews} />
             <JsonLd data={crumbLd} />
+            {faq.length > 0 && <JsonLd data={faqPageJsonLd(faq)} />}
             {data.partial && <div hidden data-onopo-nocache="" />}
 
             <div className="bg-canvas">
@@ -323,6 +343,9 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                         </div>
                     </Container>
                 </div>
+
+                {/* ---------------- FAQ ---------------- */}
+                <ProductFaq items={faq} />
 
                 {/* ---------------- Reviews ---------------- */}
                 <section id="yorumlar" aria-labelledby="yorumlar-baslik" className="scroll-mt-24 border-t border-line">
