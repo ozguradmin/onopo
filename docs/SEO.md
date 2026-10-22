@@ -33,6 +33,8 @@ and carry no query string. The only exception is `?page=N` (N ≥ 2) on listings
 | Guide | `/rehber/<slug>/` | `guidePath(slug)` | Text in code (`lib/guides`); unknown slug 404, other case 308 |
 | `/llms.txt` | (a text file, no canonical) | | Store summary for AI assistants (§13). Not in the sitemap; reserved slug, live redirect target |
 | `/<INDEXNOW_KEY>.txt` | (a text file) | | IndexNow key file, answered by `worker.ts` (§13) |
+| Devices hub | `/cihaz/` | `DEVICES_PATH` | "Cihaza göre": brands and models with counts; see §14 |
+| Device page | `/cihaz/<slug>/` | `devicePath(slug)` | Brand or model with ≥ 3 active products (`lib/devices`); unknown slug 404, other case 308; no in-stock product → noindex (200) |
 | Utility pages | (no canonical, noindex) | `privatePageMetadata` | `/odeme/ /profile/ /orders/ /login/ /register/ /siparis-basarili/ /siparis-hata/ /maintenance/ /admin/*`. `/admin` and `/admin/*` also send `X-Robots-Tag: noindex, nofollow` (`next.config.ts`), because the admin client app has no page metadata |
 
 `LEGACY_CATEGORY_TARGETS` lives in `lib/seo.ts` (client-safe, so the menus can use it) and is re-exported from
@@ -188,6 +190,8 @@ Render with `<JsonLd data={…} />` from `components/seo/JsonLd.tsx`, on the ser
 | CMS | `breadcrumbJsonLd` |
 | Guide (`/rehber/<slug>/`) | `breadcrumbJsonLd` (Anasayfa › Rehberler › title) + `articleJsonLd` (publisher/author = the store's Organization `@id`, datePublished/dateModified) + `faqPageJsonLd` (only the FAQ shown on the page) + `itemListJsonLd` of the related products shown |
 | Guides hub | `breadcrumbJsonLd` + `itemListJsonLd` of the guides |
+| Device page (`/cihaz/<slug>/`) | `breadcrumbJsonLd` (Anasayfa › Cihazlar › [brand ›] page) + `itemListJsonLd` of the products shown (left out when noindex) |
+| Devices hub | `breadcrumbJsonLd` + `itemListJsonLd` of the indexable device pages |
 
 `productJsonLd` (used by `ProductMachineData`) builds the following, from real data only:
 
@@ -340,6 +344,8 @@ return buildMetadata({ title, description, path: '/products/', query: ls.canonic
   - **every active product, in stock or not**, at `/<slug>/`, lastmod = `updated_at`, else `created_at`
   - CMS pages at `/page/<slug>/`, lastmod = `pages.updated_at`
   - `/rehber/` and every guide at `/rehber/<slug>/`, lastmod = the guide's `dateModified` (`guideSitemapEntries()`)
+  - `/cihaz/` and every device page with an in-stock product, lastmod = newest product change on the page
+    (`deviceSitemapEntries()`)
 - No utility pages and no query strings.
 - Same XML shape as before (`<url><loc><lastmod><changefreq><priority>`), because Akakçe reads it.
 - Image entries are implemented but switched off (`INCLUDE_IMAGES`).
@@ -475,7 +481,7 @@ Contract details:
   no includeSubDomains, no preload: worker.ts `withHsts`, static assets via `public/_headers`); do not also switch
   it on in the Cloudflare SSL/TLS settings with includeSubDomains (printfast.onopostore.com is another service).
 - The regression harness (`onopo-tasarim-yedek/regresyon`, `sitemapAdditionKind`) must allow the new sitemap URLs
-  `/rehber/` and `/rehber/<slug>/`, or it warns about them as unexpected additions.
+  `/rehber/`, `/rehber/<slug>/`, `/cihaz/` and `/cihaz/<slug>/`, or it warns about them as unexpected additions.
 
 ## 11. Google Merchant feed (`/api/feeds/google`, items in `lib/google-feed.ts`)
 
@@ -547,3 +553,26 @@ details and the reviews, native `<details>` rows (no client JS), 4–6 questions
 quantity), handling days, shipping cost (settings + the product's free-shipping flag / price), returns, payment and
 installments. A question whose data is missing is left out. The FAQPage JSON-LD carries exactly the visible items.
 Tests: `node --test scripts/indexnow.test.mjs scripts/product-faq.test.mjs`.
+## 14. Device pages (`/cihaz/`)
+
+- Pages come from the ACTIVE product names, not from a list in code: `lib/devices/match.ts` (`buildDeviceCatalog`).
+  Brands: iPhone, Samsung (phones), Xiaomi ve Redmi, Infinix, iPad, Samsung Galaxy Tab (Tab and SM-T/SM-P codes),
+  Huawei (MediaPad/MatePad). A brand or model gets a page with at least `MIN_DEVICE_PRODUCTS` (3) products; a smaller
+  model is only listed on its brand page (search link, nofollow), a smaller brand only on the hub.
+- A product names a model when the brand/series word is followed by it; the next word must not make it another model
+  ("iPhone 15" is not "iPhone 15 Pro", "Redmi Note 12" is not "12 Pro" or "12S"); a list names each model ("iPhone 13 /
+  13 Pro"). Screen sizes and numbers with units are never models. A brand: its brand word, or Lightning for iPhone.
+- Connector rules only where the port is certain: iPhone up to 14 (and SE/X/XR/XS) Lightning, iPhone 15+ and Galaxy S8+
+  USB-C. Chargers, cables and car chargers (`lib/product-type.ts`) whose name has that connector and no other phone
+  connector are listed on those model pages, and the intro says why. Android brands as a whole get no rule.
+- Page: H1 "<label> aksesuarları", 2–3 sentences from real counts and types (no prices, no promises), breadcrumbs, models
+  (brand pages), products grouped by type (ekran koruyucu, şarj aleti, kablo, araç şarjı, powerbank, diğer; in stock
+  first; compact `ProductCard`), sibling models, related guides (`guideForProduct` tally). Title: label + product types
+  (≤ 52); description: `categoryMetaDescription`. No in-stock product → noindex,follow (200) and not in the sitemap.
+- Product pages link one device page ("Bu cihaz için diğer ürünler"): the single model page the name names, else the
+  single brand page; connector rules never pick a page. `/kategoriler/` has a "Cihaza göre" block (brand pages).
+- Edge cache: `/cihaz/` and `/cihaz/<slug>/` are on the allowlist (admin writes bump `cache_version` as usual). Old-URL
+  resolver: both are live targets (same rules on the index's product names); `/cihaz/<slug>.html` → the page; any other
+  path under `/cihaz/` stays a 404 (no fuzzy match to a product). `cihaz` is a reserved slug everywhere.
+- URL list for other consumers (llms.txt, IndexNow): `devicePagePaths(products)` (pure) or `getDevicePageUrls()`
+  (server, absolute). Tests: `node --test scripts/devices.test.mjs` (rules on `scripts/fixtures/guide-catalog.json`).

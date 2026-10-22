@@ -12,6 +12,9 @@ import { ProductCard } from '@/components/product/ProductCard'
 import { breadcrumbJsonLd, categoryPath, faqPageJsonLd, productBrand, type SiteSeo } from '@/lib/seo'
 import { brandOf, displayName, specChips } from '@/lib/search'
 import { guideForProduct, guidePath } from '@/lib/guides'
+import { devicePath } from '@/lib/devices'
+import { getDevicePageForProduct } from '@/lib/devices/server'
+import { deviceIcon } from '@/components/devices/DeviceLinks'
 import { formatDateTR, formatTL } from '@/lib/format'
 import { productImageSrcSet, productImageUrl } from '@/lib/images'
 import type { ProductPageData } from '@/lib/product-data'
@@ -63,6 +66,9 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
     const parsed = parseDescription(product.description, product.name)
     // One shopping guide that fits the product (lib/guides PRODUCT_GUIDE_ORDER), linked under the description
     const guide = guideForProduct(product)
+    // The one device page the product belongs to (lib/devices: exactly one model page, else exactly one brand page)
+    const device = await getDevicePageForProduct(product)
+    const DeviceIcon = device ? deviceIcon(device.brand) : null
 
     // ---- facts -------------------------------------------------------------------------------
     const code = product.product_code
@@ -289,6 +295,22 @@ export async function ProductPage({ data, site }: { data: ProductPageData; site:
                                         <span className="min-w-0 flex-1 text-sm leading-5">
                                             <span className="block text-[13px] text-muted">İlgili rehber</span>
                                             <span className="block font-semibold text-ink group-hover:text-brand-700">{guide.title}</span>
+                                        </span>
+                                        <ChevronRight className="h-4 w-4 shrink-0 text-subtle" aria-hidden="true" />
+                                    </Link>
+                                )}
+                                {device && DeviceIcon && (
+                                    <Link
+                                        href={devicePath(device.slug)}
+                                        prefetch={false}
+                                        className={`group my-4 flex min-h-14 items-center gap-3 rounded-card border border-line bg-surface px-4 py-3 transition-colors duration-150 hover:border-brand-100 hover:bg-brand-50 lg:mb-0 ${guide ? 'lg:mt-3' : 'lg:mt-8'}`}
+                                    >
+                                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-brand-600 shadow-card" aria-hidden="true">
+                                            <DeviceIcon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                                        </span>
+                                        <span className="min-w-0 flex-1 text-sm leading-5">
+                                            <span className="block text-[13px] text-muted">Bu cihaz için diğer ürünler</span>
+                                            <span className="block font-semibold text-ink group-hover:text-brand-700">{device.label}</span>
                                         </span>
                                         <ChevronRight className="h-4 w-4 shrink-0 text-subtle" aria-hidden="true" />
                                     </Link>

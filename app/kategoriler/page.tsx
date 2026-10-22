@@ -3,8 +3,11 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { CategoriesGrid } from '@/components/home/ShortcutTiles'
 import { QuickSearchChips } from '@/components/home/HomeHero'
 import { GuideLinkList } from '@/components/guides/GuideCards'
+import { DeviceBrandLinks } from '@/components/devices/DeviceLinks'
 import { SectionHeader } from '@/components/ui/SectionHeader'
 import { GUIDES, GUIDES_PATH } from '@/lib/guides'
+import { DEVICES_PATH, type DeviceBrandEntry } from '@/lib/devices'
+import { getDeviceData } from '@/lib/devices/server'
 import { getHomeData } from '@/lib/home-data'
 import { formatAmount } from '@/lib/format'
 import { buildMetadata } from '@/lib/seo'
@@ -13,8 +16,8 @@ import { getSiteSeo } from '@/lib/seo-server'
 /**
  * /kategoriler/: every way into the catalogue on one page (the bottom nav's "Kategoriler" tab, the drawer's
  * "Tüm kategorileri gör" and the home page's "Tüm kategoriler" link). Product types (listing filters), the
- * real categories with products, and the device searches, all with live counts from lib/home-data; then the
- * shopping guides (/rehber/).
+ * real categories with products, all with live counts from lib/home-data; the device pages ("Cihaza göre",
+ * /cihaz/, lib/devices; the device search chips when there is none); then the shopping guides (/rehber/).
  * Indexable hub page; the old /categories/ URL still redirects to /products/ (lib/seo-routing).
  */
 export async function generateMetadata(): Promise<Metadata> {
@@ -27,8 +30,18 @@ export async function generateMetadata(): Promise<Metadata> {
     })
 }
 
+/** Brands of the device pages, or null when the catalogue could not be read. */
+async function deviceBrands(): Promise<DeviceBrandEntry[] | null> {
+    try {
+        return (await getDeviceData()).catalog.brands
+    } catch (error) {
+        console.error('[kategoriler] device pages could not be loaded', error)
+        return null
+    }
+}
+
 export default async function CategoriesHubPage() {
-    const data = await getHomeData()
+    const [data, devices] = await Promise.all([getHomeData(), deviceBrands()])
     const types = data.shortcuts.filter(s => s.kind === 'type')
     const categories = data.shortcuts.filter(s => s.kind === 'category')
     const stats = data.stats
@@ -38,7 +51,7 @@ export default async function CategoriesHubPage() {
 
     return (
         <div className="bg-canvas pb-14 pt-4 lg:pb-16 lg:pt-6">
-            {data.failed.length > 0 && <div hidden data-onopo-nocache="" />}
+            {(data.failed.length > 0 || !devices) && <div hidden data-onopo-nocache="" />}
             <div className="container-store">
                 <Breadcrumb items={[{ label: 'Anasayfa', href: '/' }, { label: 'Kategoriler' }]} jsonLd />
                 <h1 className="type-h1 mt-3 text-ink">Kategoriler</h1>
@@ -48,11 +61,18 @@ export default async function CategoriesHubPage() {
             <CategoriesGrid id="kategoriler-turler" title="Ürün türleri" items={types} className="mt-6 lg:mt-8" />
             <CategoriesGrid id="kategoriler-kategoriler" title="Kategoriler" items={categories} className="mt-8 lg:mt-10" />
 
-            <QuickSearchChips
-                items={data.quickSearches}
-                className="container-store mt-8 lg:mt-10"
-                listClassName="flex-wrap"
-            />
+            {devices && devices.some(b => b.hasPage) ? (
+                <section aria-labelledby="kategoriler-cihaz" className="container-store mt-10 lg:mt-12">
+                    <SectionHeader id="kategoriler-cihaz" title="Cihaza göre" href={DEVICES_PATH} linkLabel="Tüm cihazlar" />
+                    <DeviceBrandLinks brands={devices} />
+                </section>
+            ) : (
+                <QuickSearchChips
+                    items={data.quickSearches}
+                    className="container-store mt-8 lg:mt-10"
+                    listClassName="flex-wrap"
+                />
+            )}
 
             <section aria-labelledby="kategoriler-rehberler" className="container-store mt-10 lg:mt-12">
                 <SectionHeader id="kategoriler-rehberler" title="Alışveriş rehberleri" href={GUIDES_PATH} linkLabel="Tüm rehberler" />
