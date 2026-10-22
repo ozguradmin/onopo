@@ -18,12 +18,13 @@ export interface SectionHeaderProps {
 
 /**
  * Section title row: heading (h2 = 18→24/700) with an optional muted description and a "Tümünü gör"
- * link on the right. Server-friendly.
+ * link on the right, on the heading's (first) baseline. The link box is only as tall as its text so
+ * the baselines can meet; a pseudo-element gives it the 44px hit area. Server-friendly.
  */
 export function SectionHeader({ title, description, href, linkLabel = 'Tümünü gör', as = 'h2', id, className }: SectionHeaderProps) {
     const Heading = as
     return (
-        <div className={cn('mb-4 flex items-end justify-between gap-4 lg:mb-6', className)}>
+        <div className={cn('mb-4 flex items-baseline justify-between gap-4 lg:mb-6', className)}>
             <div className="min-w-0">
                 <Heading id={id} className={cn(as === 'h1' ? 'type-h1' : as === 'h3' ? 'type-h3' : 'type-h2', 'text-ink')}>
                     {title}
@@ -34,7 +35,7 @@ export function SectionHeader({ title, description, href, linkLabel = 'Tümünü
                 <Link
                     href={href}
                     prefetch={false}
-                    className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-thumb py-1 text-sm font-semibold text-brand-600 underline-offset-4 hover:text-brand-700 hover:underline"
+                    className="relative inline-flex shrink-0 items-center gap-1 rounded-thumb text-sm font-semibold text-brand-600 underline-offset-4 before:absolute before:-inset-x-2 before:-inset-y-3 before:content-[''] hover:text-brand-700 hover:underline"
                 >
                     {linkLabel}
                     <ArrowRight className="h-4 w-4" aria-hidden="true" />
