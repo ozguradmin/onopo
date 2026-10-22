@@ -10,7 +10,8 @@
  * - Maintenance mode comes from site_settings (server data, passed in `data`). When it is on, every
  *   path except /admin/*, /maintenance, /login and /register renders the maintenance message in the
  *   server HTML (API routes never pass through layouts, so they are unaffected). That HTML carries the
- *   edge-cache "do not store" marker.
+ *   edge-cache "do not store" marker and the maintenance marker, for which worker.ts answers 503 with
+ *   Retry-After and X-Robots-Tag: noindex (crawlers must not index the maintenance text as the page).
  * - Cart: rehydrates the persisted zustand store once on mount (the store uses skipHydration), then
  *   seeds its shipping rule from the server data (the drawer and /odeme still re-read
  *   /api/shipping-settings, so the totals always equal what the order API charges).
@@ -36,6 +37,11 @@ const MAINTENANCE_EXEMPT = ['/maintenance', '/login', '/register']
 /** Tells the edge cache in worker.ts not to store this response (error and fallback renders). */
 function NoEdgeCache() {
     return <div hidden data-onopo-nocache="" />
+}
+
+/** Tells worker.ts that this HTML is the maintenance render: it is sent as 503 (lib/edge-cache.ts). */
+function MaintenanceMarker() {
+    return <div hidden data-onopo-maintenance="" />
 }
 
 function normalizePath(pathname: string | null): string {
@@ -138,6 +144,7 @@ function MaintenanceView({ settings }: { settings: PublicSiteSettings }) {
     return (
         <div className="flex min-h-screen items-center justify-center bg-ink px-4 py-16 text-white">
             <NoEdgeCache />
+            <MaintenanceMarker />
             <div className="max-w-lg text-center">
                 <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-sheet bg-white/10" aria-hidden="true">
                     <Wrench className="h-8 w-8" />

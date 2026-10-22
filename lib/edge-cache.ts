@@ -12,6 +12,10 @@
 // Entries live for EDGE_CACHE_TTL_SECONDS. The key contains the deployed build id and the content
 // version (site_settings.cache_version), which worker.ts bumps after every successful admin/content write
 // and after the daily price cron, so edits show up at once (within the ~10 s version memo per isolate).
+//
+// Also here (pure rules used by worker.ts): tracking parameters stripped before Next renders, the browser
+// Cache-Control of anonymous allowlisted HTML (bfcache), the maintenance render (503) and the readable
+// session hint cookie kept in sync with auth_token.
 
 // Set to false to switch the edge cache off completely (every response is then BYPASS).
 export const EDGE_CACHE_ENABLED = true
@@ -92,8 +96,29 @@ const API_ALLOW = [
 // Query parameters that only admin screens use: such requests are never cached
 const ADMIN_PARAMS = ['includeAll']
 
-// Tracking parameters that don't change the response; dropped from the cache key
-const IGNORED_PARAMS = /^(utm_[a-z_]+|fbclid|gclid|gbraid|wbraid|msclkid|yclid)$/i
+// Tracking parameters that don't change the response: dropped from the cache key, and worker.ts removes them
+// from the URL Next renders (stripTrackingParams), so a stored page never carries one visitor's click ids.
+// Google: utm_*, gclid, gclsrc, gbraid, wbraid, dclid, srsltid (Merchant Center auto-tagging), _gl/_ga
+// (cross-domain linker); Meta: fbclid, igshid/igsh; Microsoft: msclkid; Yandex: yclid; TikTok: ttclid;
+// X: twclid; Mailchimp: mc_cid, mc_eid; LinkedIn: li_fat_id.
+const IGNORED_PARAMS = /^(utm_\w+|fbclid|gclid|gclsrc|gbraid|wbraid|dclid|srsltid|_gl|_ga|msclkid|yclid|ttclid|twclid|igshid|igsh|mc_cid|mc_eid|li_fat_id)$/i
+
+export function isTrackingParam(name: string): boolean {
+    return IGNORED_PARAMS.test(name)
+}
+
+/**
+ * The URL without tracking parameters (order of the others kept), or null when it has none.
+ * worker.ts hands this URL to Next; the address in the browser is not changed.
+ */
+export function stripTrackingParams(url: URL): URL | null {
+    const params = [...url.searchParams]
+    const kept = params.filter(([key]) => !isTrackingParam(key))
+    if (kept.length === params.length) return null
+    const clean = new URL(url.href)
+    clean.search = kept.length ? new URLSearchParams(kept).toString() : ''
+    return clean
+}
 
 // Requests made by the Next.js client router (RSC payloads share the page URL) or server actions
 const NEXT_INTERNAL_HEADERS = ['rsc', 'next-router-prefetch', 'next-router-state-tree', 'next-router-segment-prefetch', 'next-action', 'x-prerender-revalidate']
@@ -179,7 +204,7 @@ export function isStorableBody(pathname: string, contentType: string | null, bod
 export function cacheKeyUrl(url: URL, buildId: string, version: string): string {
     const params = new URLSearchParams()
     for (const [key, value] of url.searchParams) {
-        if (!IGNORED_PARAMS.test(key)) params.append(key, value)
+        if (!isTrackingParam(key)) params.append(key, value)
     }
     params.sort()
     const query = params.toString()
@@ -187,13 +212,101 @@ export function cacheKeyUrl(url: URL, buildId: string, version: string): string 
 }
 
 // Successful writes to these change what the storefront shows: bump the content version afterwards
+// (product reviews included: the product page and the cards show them). Customer endpoints (/api/auth,
+// /api/orders, /api/favorites, /api/analytics, /api/user, /api/coupons) are not on the list at all.
 const CONTENT_WRITE = /^\/api\/(admin|products|categories|homepage-sections|hero|hero-slides|menus|pages|site-settings|shipping-settings|upload|migrations|seed-pages|fix-db)(\/|$)/
-// ...except these, which change nothing the storefront shows (and some are reachable without a session)
-const CONTENT_WRITE_EXCEPTIONS = /^\/api\/admin\/(forgot-password|reset-password|log)(\/|$)/
+// ...except these, which change nothing the storefront shows (and some are reachable without a session):
+// password reset and the client error log; optimize-images only checks image URLs (one POST per product
+// from the admin button); email/send only sends mail; profile changes the admin's own login; users is
+// read-only.
+const CONTENT_WRITE_EXCEPTIONS = /^\/api\/admin\/(forgot-password|reset-password|log|optimize-images|email|profile|users)(\/|$)/
 
 export function shouldBumpCacheVersion(pathname: string, method: string, hasSession: boolean): boolean {
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false
     // Every content write needs a logged-in user, so anonymous requests can't be used to flush the cache
     if (!hasSession) return false
     return CONTENT_WRITE.test(pathname) && !CONTENT_WRITE_EXCEPTIONS.test(pathname)
+}
+
+// ---- browser cache of anonymous allowlisted HTML ----
+
+/**
+ * Cache-Control sent to the browser with anonymous allowlisted HTML (edge-cache HIT and MISS). Next's default
+ * for dynamic pages contains no-store, which keeps every store page out of the back/forward cache; no-cache
+ * still makes the browser revalidate before reusing it. Personal, admin and checkout responses (BYPASS)
+ * keep their own header.
+ */
+export const ANONYMOUS_HTML_CACHE_CONTROL = 'private, no-cache'
+
+// ---- maintenance ----
+
+// Rendered by the maintenance view (components/layout/LayoutProvider.tsx, app/maintenance) as an HTML
+// attribute; matched with ="" like NO_CACHE_MARKER so RSC payloads that only mention it don't count
+export const MAINTENANCE_MARKER = 'data-onopo-maintenance=""'
+export const MAINTENANCE_RETRY_AFTER_SECONDS = 3600
+
+/** Whether this HTML response is the maintenance render (worker.ts then answers 503). */
+export function isMaintenanceBody(contentType: string | null, body: string): boolean {
+    return needsBodyCheck(contentType) && body.includes(MAINTENANCE_MARKER)
+}
+
+/**
+ * Page GETs that can show the maintenance render and that worker.ts inspects while maintenance is on.
+ * APIs (PayTR, BirFatura, feeds), /admin and the crawler files never render it and are passed through.
+ */
+export function mayRenderMaintenance(pathname: string): boolean {
+    if (pathname === '/api' || pathname.startsWith('/api/')) return false
+    if (pathname === '/admin' || pathname.startsWith('/admin/')) return false
+    if (pathname.startsWith('/_next/')) return false
+    return !CRAWLER_FILES.has(pathname)
+}
+
+/** Headers of the 503 maintenance answer (the body is the maintenance render itself). */
+export function maintenanceHeaders(): Record<string, string> {
+    return {
+        'Retry-After': String(MAINTENANCE_RETRY_AFTER_SECONDS),
+        'X-Robots-Tag': 'noindex',
+        'Cache-Control': 'no-store',
+    }
+}
+
+// ---- readable session hint (lib/session-hint.ts) ----
+
+const SESSION_HINT_MAX_AGE = 60 * 60 * 24 * 7 // like auth_token
+
+function cookieName(setCookie: string): string {
+    return setCookie.slice(0, setCookie.indexOf('=')).trim()
+}
+
+/** Whether a Set-Cookie line removes its cookie (empty value, Max-Age <= 0 or an Expires in the past). */
+export function isCookieRemoval(setCookie: string, now = Date.now()): boolean {
+    const [pair, ...attributes] = setCookie.split(';')
+    if (pair.slice(pair.indexOf('=') + 1).trim() === '') return true
+    for (const attribute of attributes) {
+        const [rawName, ...rest] = attribute.split('=')
+        const name = rawName.trim().toLowerCase()
+        const value = rest.join('=').trim()
+        if (name === 'max-age' && Number(value) <= 0) return true
+        if (name === 'expires') {
+            const time = Date.parse(value)
+            if (Number.isFinite(time) && time <= now) return true
+        }
+    }
+    return false
+}
+
+/**
+ * The Set-Cookie line that brings the readable session hint in line with auth_token, or null when nothing
+ * has to change. The session state is the one after this response: a login/logout response that sets or
+ * removes auth_token decides it, otherwise the request's cookie does. A response that already sets the hint
+ * itself is left alone. hintName is SESSION_HINT_COOKIE (lib/session-hint.ts).
+ */
+export function sessionHintSetCookie(hintName: string, requestCookie: string | null, responseSetCookies: string[]): string | null {
+    if (responseSetCookies.some(c => cookieName(c) === hintName)) return null
+    const authLine = responseSetCookies.find(c => cookieName(c) === 'auth_token')
+    const loggedIn = authLine ? !isCookieRemoval(authLine) : hasAuthCookie(requestCookie)
+    const hasHint = (requestCookie || '').split(';').some(part => part.trim() === `${hintName}=1`)
+    if (loggedIn && !hasHint) return `${hintName}=1; Path=/; Max-Age=${SESSION_HINT_MAX_AGE}; Secure; SameSite=Lax`
+    if (!loggedIn && hasHint) return `${hintName}=; Path=/; Max-Age=0; Secure; SameSite=Lax`
+    return null
 }
