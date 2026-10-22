@@ -6,9 +6,9 @@
  * reserved from the first paint (body has pb-16 on mobile). Only the cart badge fills in after mount.
  * - "Kategoriler" opens the menu drawer, "Ara" the full-screen search sheet, "Sepet" the cart drawer.
  * - Not rendered on /odeme, /siparis-basarili and /siparis-hata (LayoutProvider, and by pathname here).
- *   Slid away while a drawer or the search sheet is open. display: none (so out of the tab order and
- *   the accessibility tree) on pages that render an element with `data-hide-bottom-nav` (e.g. the
- *   product page's sticky buy bar), see app/globals.css.
+ *   Slid away while a drawer, the search sheet or the assistant's phone sheet is open. display: none
+ *   (so out of the tab order and the accessibility tree) on pages that render an element with
+ *   `data-hide-bottom-nav` (e.g. the product page's sticky buy bar), see app/globals.css.
  * - No login check on load: "Hesabım" always goes to /profile/ (which sends guests to the login).
  */
 import * as React from "react"
@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 import { useCartStore } from "@/store/cart-store"
 import { useShellChrome } from "@/components/layout/store-data"
 import { openMobileSearch, useShellUI } from "@/components/layout/shell-ui"
+import { useAssistantStore } from "@/components/assistant/assistant-store"
 
 export function MobileNav({ fromShell = false }: { fromShell?: boolean }) {
     const shellChrome = useShellChrome()
@@ -39,8 +40,10 @@ function MobileNavInner() {
     const menuOpen = useShellUI(s => s.menuOpen)
     const searchOpen = useShellUI(s => s.searchOpen)
     const openMenu = useShellUI(s => s.openMenu)
+    // The assistant's phone sheet (< 768 px; the panel sets isSheet) covers the page like a drawer
+    const assistantSheetOpen = useAssistantStore(s => s.open && !s.minimized && s.isSheet)
     const count = items.reduce((n, i) => n + (Number(i.quantity) || 0), 0)
-    const overlayOpen = cartOpen || menuOpen || searchOpen
+    const overlayOpen = cartOpen || menuOpen || searchOpen || assistantSheetOpen
 
     // Never on checkout and PayTR's result pages (not in the DOM at all, so not focusable or tappable)
     if (NO_BOTTOM_NAV_PATHS.includes(path)) return null
