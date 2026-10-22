@@ -94,9 +94,14 @@ const FA_STYLESHEET = /font-?awesome/i
 /**
  * Admin "Özel HTML/CSS/JS" section, rendered in the browser only (spec §8.6): the server HTML holds
  * an empty, isolated container, so malformed admin HTML can never break the page markup or
- * hydration. Like before, scripts are not executed (they are dropped). Font Awesome <i> icons are
- * swapped for inline lucide SVGs, and when every icon could be swapped the Font Awesome stylesheet
- * (≈190 KB with its font) is not loaded at all. Animations pause while hovered or focused.
+ * hydration. Font Awesome <i> icons are swapped for inline lucide SVGs, and when every icon could be
+ * swapped the Font Awesome stylesheet (≈190 KB with its font) is not loaded at all. Animations pause
+ * while hovered or focused.
+ *
+ * Trust: this is NOT a sanitizer. <script> elements are dropped (as with the old innerHTML rendering),
+ * but everything else the admin wrote runs on the live page with the store's origin: inline event
+ * handlers (onerror, onload, onclick…), javascript: links, iframes and forms. That is acceptable only
+ * because just admins can save this content; treat it like code the admin deploys.
  */
 export function CustomCodeSection({ html, className }: { html: string; className?: string }) {
     const hostRef = React.useRef<HTMLDivElement>(null)
@@ -124,7 +129,8 @@ export function CustomCodeSection({ html, className }: { html: string; className
             const tpl = document.createElement('template')
             tpl.innerHTML = html
             const frag = tpl.content
-            // Never run admin scripts (same as the previous innerHTML rendering)
+            // Admin <script> elements are not run (same as the previous innerHTML rendering); inline
+            // handlers and javascript: URLs in the rest of the markup still are, see above
             frag.querySelectorAll('script').forEach(s => s.remove())
 
             const iconEls = Array.from(frag.querySelectorAll<HTMLElement>('i[class*="fa-"], span[class*="fa-"]'))
