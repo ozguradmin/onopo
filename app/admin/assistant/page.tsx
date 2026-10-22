@@ -5,12 +5,14 @@
  * support facts the assistant may state, owner-approved campaigns, the daily budget and the usage of the
  * last 7 days. Values are site_settings keys saved through the existing POST /api/site-settings (which
  * also bumps cache_version, so the storefront picks up the switch). Only changed keys are sent.
- * No chat text exists anywhere, so none is shown.
+ * Also here: how many conversations were stored (the transcripts themselves are on
+ * /admin/assistant/sohbetler/) and the product facts lines, with a button that fills the missing ones.
  */
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Save, Sparkles, MessageCircle, Truck, Megaphone, Wallet, BarChart3 } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowLeft, Save, Sparkles, MessageCircle, Truck, Megaphone, Wallet, BarChart3, MessagesSquare, PackageSearch, Download, RefreshCw } from 'lucide-react'
 import { waBaseOf } from '@/lib/assistant/tools'
 
 const KEYS = ['ai_assistant_enabled', 'ai_whatsapp_number', 'ai_ship_days', 'ai_ship_cutoff', 'ai_support_hours', 'ai_campaigns', 'ai_daily_budget_usd'] as const
@@ -30,6 +32,7 @@ const DEFAULTS: Values = {
 interface UsageDay {
     day: string
     turns: number
+    conversations?: number
     modelCalls: number
     costUsd: number
     outcomes: { fallback: number; busy: number; error: number; timeout: number; blocked: number }
@@ -37,6 +40,20 @@ interface UsageDay {
     addToCart: number
     waClicks: number
     firstTextP50: number | null
+}
+
+interface ConversationCounts {
+    today: number
+    last7: number
+    last30: number
+    total: number
+    messages30: number
+}
+
+interface FactsStatus {
+    total: number
+    ready: number
+    missing: number
 }
 
 const CAMPAIGNS_MAX = 600
@@ -65,6 +82,10 @@ export default function AdminAssistantPage() {
     const [siteNumbers, setSiteNumbers] = React.useState<string[]>([])
     const [usage, setUsage] = React.useState<UsageDay[] | null>(null)
     const [usageError, setUsageError] = React.useState(false)
+    const [counts, setCounts] = React.useState<ConversationCounts | null>(null)
+    const [facts, setFacts] = React.useState<FactsStatus | null>(null)
+    const [factsBusy, setFactsBusy] = React.useState(false)
+    const [factsNote, setFactsNote] = React.useState('')
 
     React.useEffect(() => {
         fetch('/api/site-settings', { cache: 'no-store' })
@@ -80,9 +101,39 @@ export default function AdminAssistantPage() {
             .finally(() => setLoading(false))
         fetch('/api/admin/assistant/', { cache: 'no-store' })
             .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-            .then(d => setUsage(Array.isArray(d?.days) ? d.days : []))
+            .then(d => {
+                setUsage(Array.isArray(d?.days) ? d.days : [])
+                setCounts(d?.conversations ?? null)
+            })
             .catch(() => setUsageError(true))
+        fetch('/api/admin/assistant/facts/', { cache: 'no-store' })
+            .then(r => (r.ok ? r.json() : null))
+            .then(d => setFacts(d && typeof d.total === 'number' ? d : null))
+            .catch(() => {})
     }, [])
+
+    /** Fills the missing product facts lines a few at a time until none is left (or nothing moves). */
+    const refreshFacts = async () => {
+        setFactsBusy(true)
+        setFactsNote('')
+        let done = 0
+        try {
+            for (let i = 0; i < 40; i++) {
+                const res = await fetch('/api/admin/assistant/facts/', { method: 'POST' })
+                const d = await res.json().catch(() => null)
+                if (!res.ok || !d) throw new Error(String(res.status))
+                done += Number(d.done) || 0
+                setFacts({ total: d.total, ready: d.ready, missing: Math.max(0, d.remaining) })
+                setFactsNote(`${done} ürün güncellendi, ${Math.max(0, d.remaining)} kaldı...`)
+                if (d.remaining <= 0 || d.done === 0) break
+            }
+            setFactsNote(done ? `${done} ürünün bilgisi yenilendi.` : 'Yenilenecek ürün yok.')
+        } catch {
+            setFactsNote(done ? `${done} ürün yenilendi; kalanlar için tekrar dene.` : 'Yenilenemedi, lütfen tekrar dene.')
+        } finally {
+            setFactsBusy(false)
+        }
+    }
 
     const set = (k: Key, v: string) => setValues(prev => ({ ...prev, [k]: v }))
     const enabled = values.ai_assistant_enabled === 'true'
@@ -119,8 +170,8 @@ export default function AdminAssistantPage() {
     if (loading) return <div>Yükleniyor...</div>
 
     const totals = (usage ?? []).reduce(
-        (a, d) => ({ turns: a.turns + d.turns, calls: a.calls + d.modelCalls, cost: a.cost + d.costUsd }),
-        { turns: 0, calls: 0, cost: 0 },
+        (a, d) => ({ turns: a.turns + d.turns, conversations: a.conversations + (d.conversations ?? 0), calls: a.calls + d.modelCalls, cost: a.cost + d.costUsd }),
+        { turns: 0, conversations: 0, calls: 0, cost: 0 },
     )
 
     return (
@@ -230,6 +281,59 @@ export default function AdminAssistantPage() {
                     </div>
                 </Section>
 
+                <Section icon={MessagesSquare} title="Sohbetler">
+                    <p className="text-sm text-slate-600">
+                        Müşterilerin asistanla yazışmaları, kişisel bilgiler gizlenmiş olarak 12 ay saklanır. Ne sorulduğunu görüp
+                        siteyi ve asistanı buna göre geliştirebilirsin.
+                    </p>
+                    {counts ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {[
+                                ['Bugün', counts.today],
+                                ['Son 7 gün', counts.last7],
+                                ['Son 30 gün', counts.last30],
+                                ['Toplam (12 ay)', counts.total],
+                            ].map(([label, n]) => (
+                                <div key={label} className="rounded-lg border border-slate-200 p-3">
+                                    <div className="text-xs text-slate-500">{label}</div>
+                                    <div className="text-2xl font-semibold tabular-nums">{n}</div>
+                                    <div className="text-xs text-slate-500">sohbet</div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        !usageError && <p className="text-sm text-slate-500">{usage ? 'Henüz kayıtlı sohbet yok.' : 'Yükleniyor...'}</p>
+                    )}
+                    {counts && <p className="text-xs text-slate-500">Son 30 günde müşteriler {counts.messages30} mesaj yazdı.</p>}
+                    <div className="flex flex-wrap gap-3">
+                        <Link href="/admin/assistant/sohbetler/" className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                            <MessagesSquare className="w-4 h-4" /> Sohbet geçmişi
+                        </Link>
+                        <a href="/api/admin/assistant/conversations/export/?format=csv" className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50">
+                            <Download className="w-4 h-4" /> Excel için indir (CSV)
+                        </a>
+                    </div>
+                </Section>
+
+                <Section icon={PackageSearch} title="Ürün bilgileri">
+                    <p className="text-sm text-slate-600">
+                        Asistan her ürünün açıklamasından kısa bir bilgi çıkarır (kutu içeriği, güç, hızlı şarj, kablo tipi, garanti) ve
+                        sorulara buna göre cevap verir. Açıklamayı değiştirdiğin ürünler kendiliğinden yenilenir; hepsini hemen yenilemek için düğmeyi kullan.
+                    </p>
+                    {facts && (
+                        <p className="text-sm">
+                            <span className="font-semibold tabular-nums">{facts.ready}</span> / {facts.total} ürün hazır
+                            {facts.missing > 0 && <span className="text-amber-700"> · {facts.missing} ürün bekliyor (şimdilik açıklamadan otomatik özet kullanılıyor)</span>}
+                        </p>
+                    )}
+                    <div className="flex items-center gap-3">
+                        <Button type="button" variant="outline" onClick={refreshFacts} disabled={factsBusy}>
+                            <RefreshCw className={`w-4 h-4 mr-2${factsBusy ? ' animate-spin' : ''}`} /> {factsBusy ? 'Yenileniyor...' : 'Ürün bilgilerini yenile'}
+                        </Button>
+                        {factsNote && <span className="text-sm text-slate-600" role="status">{factsNote}</span>}
+                    </div>
+                </Section>
+
                 <Section icon={BarChart3} title="Kullanım (son 7 gün)">
                     {usageError && <p className="text-sm text-red-600">Kullanım verisi alınamadı.</p>}
                     {!usageError && !usage && <p className="text-sm text-slate-500">Yükleniyor...</p>}
@@ -239,7 +343,8 @@ export default function AdminAssistantPage() {
                                 <thead>
                                     <tr className="text-left text-slate-500 border-b">
                                         <th scope="col" className="py-2 pr-3 font-medium">Gün</th>
-                                        <th scope="col" className="py-2 pr-3 font-medium text-right">Tur</th>
+                                        <th scope="col" className="py-2 pr-3 font-medium text-right">Sohbet</th>
+                                        <th scope="col" className="py-2 pr-3 font-medium text-right">Mesaj</th>
                                         <th scope="col" className="py-2 pr-3 font-medium text-right">Model çağrısı</th>
                                         <th scope="col" className="py-2 pr-3 font-medium text-right">Maliyet ($)</th>
                                         <th scope="col" className="py-2 pr-3 font-medium text-right">WhatsApp&apos;a yönlendirme</th>
@@ -253,6 +358,7 @@ export default function AdminAssistantPage() {
                                     {usage.map(d => (
                                         <tr key={d.day} className="border-b last:border-0 tabular-nums">
                                             <td className="py-2 pr-3">{d.day}</td>
+                                            <td className="py-2 pr-3 text-right">{d.conversations ?? '–'}</td>
                                             <td className="py-2 pr-3 text-right">{d.turns}</td>
                                             <td className="py-2 pr-3 text-right">{d.modelCalls}</td>
                                             <td className="py-2 pr-3 text-right">{d.costUsd.toFixed(3)}</td>
@@ -267,6 +373,7 @@ export default function AdminAssistantPage() {
                                 <tfoot>
                                     <tr className="font-semibold tabular-nums">
                                         <td className="py-2 pr-3">Toplam</td>
+                                        <td className="py-2 pr-3 text-right">{totals.conversations}</td>
                                         <td className="py-2 pr-3 text-right">{totals.turns}</td>
                                         <td className="py-2 pr-3 text-right">{totals.calls}</td>
                                         <td className="py-2 pr-3 text-right">{totals.cost.toFixed(3)}</td>
