@@ -944,27 +944,28 @@ export interface ListingFacts {
     productNames?: string[]
 }
 
+/**
+ * Lead of a listing description: "<Name>[ - Sayfa N]: <count> ürün, <min price> TL'den başlayan fiyatlarla. <Types> Onopo'da."
+ * The page marker sits in the name, in front, so a cut never drops it and page N never repeats page 1's description.
+ */
+function listingLead(name: string, facts: ListingFacts, maxTypes: number, page?: number): string {
+    const types = detectProductTypes(facts.productNames || []).slice(0, maxTypes).map((t) => t.plural)
+    const price = facts.minPrice && facts.minPrice > 0 ? `, ${formatTL(roundPrice(facts.minPrice))} TL'den başlayan fiyatlarla` : ''
+    return `${name}${pageSuffix(page)}: ${facts.count} ürün${price}${types.length ? `. ${capitalizeTr(joinTr(types))} Onopo'da` : ''}.`
+}
+
 /** Meta description for a category page, from the real product count, price range and product types. */
 export function categoryMetaDescription(name: string, facts: ListingFacts, site: SiteSeo = DEFAULT_SITE_SEO, page?: number): string {
-    const types = detectProductTypes(facts.productNames || []).slice(0, 3).map((t) => t.plural)
-    const price = facts.minPrice && facts.minPrice > 0 ? `, ${formatTL(roundPrice(facts.minPrice))} TL'den başlayan fiyatlarla` : ''
-    const lead = `${name}: ${facts.count} ürün${price}${types.length ? `. ${capitalizeTr(joinTr(types))} Onopo'da` : ''}.${page && page > 1 ? ` Sayfa ${page}.` : ''}`
-    return fitDescription(lead, factsTail(site), { fillers: ["Onopo Store'da."] })
+    return fitDescription(listingLead(name, facts, 3, page), factsTail(site), { fillers: ["Onopo Store'da."] })
 }
 
 /** Meta description for /products/ (all products) or a search result page. */
 export function listingMetaDescription(facts: ListingFacts, site: SiteSeo = DEFAULT_SITE_SEO, opts: { query?: string; page?: number } = {}): string {
-    const types = detectProductTypes(facts.productNames || []).slice(0, 4).map((t) => t.plural)
     if (opts.query) {
         const q = truncateWords(opts.query, 40)
         return fitDescription(`"${q}" araması için ${facts.count} ürün bulundu.`, factsTail(site), { min: 120, fillers: ["Onopo Store'da."] })
     }
-    const price = facts.minPrice && facts.minPrice > 0 ? ` ${formatTL(roundPrice(facts.minPrice))} TL'den başlayan fiyatlar.` : ''
-    const lead = `Tüm ürünler: ${types.length ? `${joinTr(types)}, ` : ''}toplam ${facts.count} ürün.${price}${page_(opts.page)}`
-    return fitDescription(lead, factsTail(site), { fillers: ["Onopo Store'da."] })
-}
-function page_(page?: number): string {
-    return page && page > 1 ? ` Sayfa ${page}.` : ''
+    return fitDescription(listingLead('Tüm ürünler', facts, 4, opts.page), factsTail(site), { fillers: ["Onopo Store'da."] })
 }
 
 /** Home page <title> (absolute, no template) from the product types actually sold. */
