@@ -16,8 +16,9 @@ import * as React from "react"
 import Link from "next/link"
 import { ChevronDown, Facebook, Instagram, Linkedin, Lock, Mail, MapPin, MessageCircle, Phone, Twitter, Youtube } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { originalImageUrl } from "@/lib/images"
+import { FallbackImage } from "@/components/ui/FallbackImage"
 import { useShellChrome, useStoreData } from "@/components/layout/store-data"
+import { LOGO_SIZES, logoSources } from "./Header"
 import { PaymentMarks, TrustBand } from "./trust"
 import { SUPPORT_LINKS, telHref, whatsappHref } from "./nav-data"
 
@@ -48,6 +49,7 @@ function FooterInner({ variant }: { variant: 'store' | 'checkout' }) {
     const { settings: s, categories: allCategories } = useStoreData()
     const siteName = s.site_name || 'Onopo'
     const text = footerText(s.footer_text, siteName)
+    const logo = logoSources(s.logo_url)
 
     const bottomBar = (
         <div className="border-t border-white/10">
@@ -109,16 +111,19 @@ function FooterInner({ variant }: { variant: 'store' | 'checkout' }) {
                     {/* Brand */}
                     <div className="pb-4 lg:col-span-4 lg:pb-0 lg:pr-8">
                         <Link href="/" prefetch={false} aria-label={`${siteName} ana sayfa`} className="inline-flex rounded-thumb">
-                            {s.logo_url ? (
-                                // Black wordmark → white, the cyan "STORE" keeps its hue (invert + 180° hue rotation)
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                    src={originalImageUrl(s.logo_url)}
+                            {logo.length > 0 ? (
+                                // Black wordmark → white, the cyan "STORE" keeps its hue (invert + 180° hue rotation).
+                                // Same URLs as the header logo (variant, then the original once), so it is one download.
+                                <FallbackImage
+                                    src={logo[0].src}
+                                    srcSet={logo[0].srcSet}
+                                    sizes={LOGO_SIZES}
+                                    fallbackSrc={logo[1]?.src}
+                                    placeholderSrc={null}
                                     alt={`${siteName} Store`}
                                     width={1080}
                                     height={216}
                                     loading="lazy"
-                                    decoding="async"
                                     className="h-8 w-auto [filter:invert(1)_hue-rotate(180deg)_saturate(1.4)]"
                                 />
                             ) : (

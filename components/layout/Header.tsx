@@ -21,7 +21,7 @@ import { usePathname } from "next/navigation"
 import { ChevronLeft, Heart, Lock, Menu, ShoppingBag, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatTL } from "@/lib/format"
-import { originalImageUrl } from "@/lib/images"
+import { originalImageUrl, productImageSrcSet, productImageUrl } from "@/lib/images"
 import { hasSessionHint } from "@/lib/session-hint"
 import { itemsTotal } from "@/lib/pricing"
 import { useCartStore } from "@/store/cart-store"
@@ -208,16 +208,39 @@ function CheckoutHeader() {
     )
 }
 
-/** Logo from Admin › Ayarlar (logo_url, 5:1), site name as text if it is missing or fails to load. */
+/** Rendered logo width: 28px tall on phones, 32px from lg, at 5:1. */
+export const LOGO_SIZES = '(min-width: 1024px) 160px, 140px'
+
+/**
+ * Logo image candidates, in fallback order. With image variants on (lib/images), the 200w/400w WebP
+ * copies (alpha kept) come first and the 1080px original is the one-shot fallback; otherwise only the
+ * original. The footer uses the same URLs, so the browser downloads the logo once.
+ */
+export function logoSources(url: string | null | undefined): { src: string; srcSet?: string }[] {
+    if (!url) return []
+    const original = originalImageUrl(url)
+    const variant = productImageUrl(url, 400)
+    if (variant === original) return [{ src: original }]
+    return [{ src: variant, srcSet: productImageSrcSet(url, [200, 400]) }, { src: original }]
+}
+
+/**
+ * Logo from Admin › Ayarlar (logo_url, 5:1): the variant, then the original once, then the site name as
+ * text. React preloads this <img> from the server render (a Link header for a plain src, a
+ * <link rel="preload" imagesrcset> in <head> when it has a srcset), so the preload always names the URL
+ * the <img> really uses.
+ */
 function Logo({ className }: { className?: string }) {
     const settings = useSiteSettings()
     const siteName = settings.site_name || 'Onopo'
-    const src = settings.logo_url ? originalImageUrl(settings.logo_url) : null
-    const [failed, setFailed] = React.useState(false)
+    const sources = React.useMemo(() => logoSources(settings.logo_url), [settings.logo_url])
+    const [stage, setStage] = React.useState(0)
+    const current = sources[stage]
     const imgRef = React.useRef<HTMLImageElement>(null)
     React.useEffect(() => {
+        // Failed before hydration (React's onError missed it)
         const img = imgRef.current
-        if (img && img.complete && img.naturalWidth === 0) setFailed(true)
+        if (img && img.complete && img.naturalWidth === 0) setStage(s => s + 1)
     }, [])
 
     return (
@@ -227,16 +250,18 @@ function Logo({ className }: { className?: string }) {
             aria-label={`${siteName} ana sayfa`}
             className={cn('flex shrink-0 items-center rounded-thumb', className)}
         >
-            {src && !failed ? (
+            {current ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                     ref={imgRef}
-                    src={src}
+                    src={current.src}
+                    srcSet={current.srcSet}
+                    sizes={current.srcSet ? LOGO_SIZES : undefined}
                     alt={`${siteName} Store`}
                     width={1080}
                     height={216}
                     decoding="async"
-                    onError={() => setFailed(true)}
+                    onError={() => setStage(s => s + 1)}
                     className="h-7 w-auto lg:h-8"
                 />
             ) : (
