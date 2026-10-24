@@ -580,7 +580,8 @@ const worker = {
             try {
                 const res: Response = await handler.fetch(new Request(`${baseUrl}/api/cron/automation/?job=${job}&ms=${ms}`, {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${env.CRON_SECRET}` },
+                    // An in-process Request has no Host header: name the site (the IndexNow job checks it)
+                    headers: { Authorization: `Bearer ${env.CRON_SECRET}`, 'x-forwarded-host': new URL(baseUrl).host },
                 }), env, ctx)
                 const text = await res.text()
                 console.log(`[cron] automation ${job} ${res.status}: ${text.slice(0, 300)}`)
