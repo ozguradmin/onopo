@@ -298,3 +298,13 @@ test('local D1: every active product has a unique title and meta description', {
     for (const r of rows) assert.ok(seo.productMetaDescription(r, site).length <= 160)
     db.close()
 })
+
+test('product JSON-LD: shippingDetails always has deliveryTime (handling from the CMS text, transit default 1-2 days)', () => {
+    const site = { ...seo.DEFAULT_SITE_SEO, shippingCost: 100, freeShippingThreshold: 500 }
+    const offer = d => { const o = d.offers; return Array.isArray(o) ? o[0] : o }
+    const dt = offer(seo.productJsonLd(F8, { site })).shippingDetails.deliveryTime
+    assert.equal(dt['@type'], 'ShippingDeliveryTime')
+    assert.deepEqual([dt.handlingTime.minValue, dt.handlingTime.maxValue, dt.transitTime.minValue, dt.transitTime.maxValue], [0, 1, 1, 2])
+    const parsed = { ...site, handlingTime: seo.parseHandlingTime("kısacası siparişiniz 0-1 iş günü içinde kargoya verilir") }
+    assert.deepEqual(parsed.handlingTime, { minDays: 0, maxDays: 1 }, 'the live CMS sentence parses')
+})

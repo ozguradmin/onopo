@@ -92,12 +92,18 @@ export interface SiteSeo {
     shippingCost: number | null
     returnPolicy: ReturnPolicyInfo | null
     handlingTime: HandlingTime | null
-    /**
-     * Transit (carrier) time. The site states no transit time today, so this is null and
-     * deliveryTime is left out of the Product JSON-LD until the owner provides real numbers.
-     */
+    /** Transit (carrier) time when the site states one; null uses DEFAULT_TRANSIT_TIME in the JSON-LD. */
     transitTime: HandlingTime | null
 }
+
+/**
+ * Delivery time in the Product JSON-LD (offers.shippingDetails.deliveryTime; Search Console flags it when missing).
+ * Handling: orders until 18:00 ship the same day, later ones the next working day (the CMS shipping page says
+ * "0-1 iş günü"; this default is used only when that text cannot be parsed). Transit: the product pages say
+ * "ertesi gün teslim edilir" and Merchant Center's shipping policy allows at most 2 transit days (owner, 2026-10).
+ */
+export const DEFAULT_HANDLING_TIME: HandlingTime = { minDays: 0, maxDays: 1 }
+export const DEFAULT_TRANSIT_TIME: HandlingTime = { minDays: 1, maxDays: 2 }
 
 export const DEFAULT_SITE_SEO: SiteSeo = {
     name: SITE.name,
@@ -1357,21 +1363,19 @@ export function productJsonLd(
     const priceValidUntil = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
     const shippingValue = shippingFact(site, price, Boolean(Number(p.free_shipping))) === 'Kargo bedava' ? 0 : site.shippingCost
+    const handling = site.handlingTime ?? DEFAULT_HANDLING_TIME
+    const transit = site.transitTime ?? DEFAULT_TRANSIT_TIME
     const shippingDetails = shippingValue === null || shippingValue === undefined
         ? null
         : {
             '@type': 'OfferShippingDetails',
             shippingRate: { '@type': 'MonetaryAmount', value: shippingValue, currency: SITE.currency },
             shippingDestination: { '@type': 'DefinedRegion', addressCountry: SITE.country },
-            ...(site.handlingTime && site.transitTime
-                ? {
-                    deliveryTime: {
-                        '@type': 'ShippingDeliveryTime',
-                        handlingTime: { '@type': 'QuantitativeValue', minValue: site.handlingTime.minDays, maxValue: site.handlingTime.maxDays, unitCode: 'DAY' },
-                        transitTime: { '@type': 'QuantitativeValue', minValue: site.transitTime.minDays, maxValue: site.transitTime.maxDays, unitCode: 'DAY' },
-                    },
-                }
-                : {}),
+            deliveryTime: {
+                '@type': 'ShippingDeliveryTime',
+                handlingTime: { '@type': 'QuantitativeValue', minValue: handling.minDays, maxValue: handling.maxDays, unitCode: 'DAY' },
+                transitTime: { '@type': 'QuantitativeValue', minValue: transit.minDays, maxValue: transit.maxDays, unitCode: 'DAY' },
+            },
         }
 
     // The admin's barcode field first, else a barcode in the description's spec table; only valid GS1 codes

@@ -210,7 +210,8 @@ Render with `<JsonLd data={…} />` from `components/seo/JsonLd.tsx`, on the ser
   - `seller`
 - `shippingDetails` (TR):
   - rate 0 when `free_shipping=1` or the price ≥ the `shipping_settings` threshold, otherwise the real shipping cost
-  - `deliveryTime` is left out until the owner gives a real carrier transit time (`SiteSeo.transitTime`)
+  - `deliveryTime`: handling from the CMS shipping page ("0-1 iş günü", default 0-1), transit 1-2 days
+    (`DEFAULT_TRANSIT_TIME`: product pages say "ertesi gün teslim", Merchant Center allows at most 2 transit days)
 - `hasMerchantReturnPolicy` (TR, 14 days, by mail, free return with the contracted carrier). It comes from the CMS
   "shipping" page and is left out if that text no longer states a return window.
 - `aggregateRating` only when the product has reviews (pass `{ count, average }` from the `reviews` table). Never
@@ -457,8 +458,6 @@ Contract details:
 
 - `site_settings.instagram_url` points to another shop's account (`gulergozluksaat`). It is left out of `sameAs`;
   fix it in Admin › Ayarlar. The admin form's default was `instagram.com/onopostorecom`.
-- Carrier transit time (days) is needed for `deliveryTime` in the Product JSON-LD. Handling time is "1-3 iş
-  günü" from the CMS shipping page. The home page says "Saat 18:00'e kadar aynı gün kargo"; align the two texts.
 - The footer address (`footer_address`) and the address on the CMS help page differ. Choose one. No address is
   put in structured data until they match.
 - Brand assets:
