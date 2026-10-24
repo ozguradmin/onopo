@@ -37,7 +37,8 @@ function latest(dates: Array<string | null>): string | undefined {
  * https://onopostore.com/sitemap.xml (read by Google, Bing and the Akakçe crawler, which fetches it on www):
  * - home and /products/ (lastmod = newest product change)
  * - /kategori/<slug>/ for categories with at least one active product (lastmod = newest product change in it)
- * - every active product, in stock or not, at its canonical /<slug>/ (lastmod = updated_at, else created_at)
+ * - every active product, in stock or not, at its canonical /<slug>/ (lastmod = updated_at, else created_at,
+ *   never before PRODUCT_PAGES_REVISED)
  * - CMS pages at /page/<slug>/ (lastmod = updated_at)
  * - the shopping guides: /rehber/ and /rehber/<slug>/ (lastmod = the guide's dateModified, from lib/guides)
  * - the device pages: /cihaz/ and every /cihaz/<slug>/ with an in-stock product (lib/devices; lastmod = newest
@@ -45,6 +46,18 @@ function latest(dates: Array<string | null>): string | undefined {
  * No utility pages, no query-string URLs, no lastmod = "now".
  * On a database error this throws (HTTP 500) so crawlers retry later instead of reading a truncated list.
  */
+/**
+ * When every product page last changed as a page (not as a database row): the product name fixes, the FAQ
+ * block and the shipping deliveryTime in the JSON-LD (2026-10-22..24). A product's lastmod is the later of
+ * this and its own updated_at, so Google re-crawls pages whose row did not change. Move it forward only when
+ * the product page itself changes for every product.
+ */
+const PRODUCT_PAGES_REVISED = '2026-10-24T00:00:00.000Z'
+
+function notBefore(iso: string | undefined, floor: string): string {
+    return iso && iso > floor ? iso : floor
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const db = (await getDB()) as unknown as D1Like
 
@@ -88,7 +101,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
 
     for (const p of productRows) {
-        const lastModified = d1DateToIso(p.updated_at) || d1DateToIso(p.created_at)
+        const lastModified = notBefore(d1DateToIso(p.updated_at) || d1DateToIso(p.created_at) || undefined, PRODUCT_PAGES_REVISED)
         const images = INCLUDE_IMAGES
             ? parseImages(p.images).slice(0, 5).map((i) => resolveImageUrl(i)).filter((x): x is string => Boolean(x)).map(xmlSafeUrl)
             : []

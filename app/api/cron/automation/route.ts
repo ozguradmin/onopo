@@ -22,6 +22,7 @@ import { sweepImageVariants } from '@/lib/image-variants-server'
 import { sweepReviewRequests } from '@/lib/review-requests-server'
 import { runIndexNowSweep } from '@/lib/indexnow-server'
 import sitemap from '@/app/sitemap'
+import { logSystemEvent, type SystemLogDb } from '@/lib/system-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,11 +50,22 @@ export async function POST(req: Request) {
             return NextResponse.json({ job, stopped: s.stopped, candidates: s.candidates ?? null, sent: s.sent ?? 0, failed: s.failed ?? 0 }, { headers })
         }
         if (job === 'indexnow') {
-            // The cron calls this in-process on NEXT_PUBLIC_BASE_URL: the host is the production one only there
+            // The cron calls this in-process on NEXT_PUBLIC_BASE_URL and names that host in x-forwarded-host: the
+            // in-process Request has no Host header, and the URL OpenNext rebuilds from it is not the production host
+            // (the sweep skipped itself on every run until 2026-10-24)
+            const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || url.hostname
             const entries = (await sitemap()).map(e => ({ url: e.url, lastModified: e.lastModified ?? null }))
-            const r = await runIndexNowSweep(env, url.hostname, entries)
-            console.log(`automation_indexnow status=${r.status} changed=${r.changed} removed=${r.removed}`)
-            return NextResponse.json({ job, ...r }, { headers })
+            const r = await runIndexNowSweep(env, host, entries)
+            console.log(`automation_indexnow host=${host} status=${r.status} changed=${r.changed} removed=${r.removed}`)
+            if (r.status === 'skipped') {
+                await logSystemEvent(env.DB as unknown as SystemLogDb, {
+                    source: 'indexnow',
+                    level: 'warn',
+                    message: 'Arama motoru bildirimi (IndexNow) bu gece gönderilmedi.',
+                    detail: `Anahtar ya da site adresi geçerli değil (host: ${host || '-'})`,
+                })
+            }
+            return NextResponse.json({ job, host, ...r }, { headers })
         }
         if (job === 'images') {
             const r = await sweepImageVariants(env, deadline)
