@@ -518,7 +518,7 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
         out({ t: 'step', id: 'understand', state: 'active' })
         const route = await routeP
         if (route.flag) flags.add(route.flag)
-        log.costMicroUsd += costMicroUsd(deps.models.router, { inTokens: route.inputTokens, cachedTokens: 0, outTokens: 0 })
+        log.costMicroUsd += costMicroUsd(deps.models.router, { inTokens: route.inputTokens, cachedTokens: 0, outTokens: route.outputTokens ?? 0 })
         const decision: RouteDecision = decide(route.answers, masked.length)
         decision.flags.forEach(f => flags.add(f))
         log.intent = decision.intent
