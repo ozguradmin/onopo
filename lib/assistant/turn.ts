@@ -28,6 +28,7 @@ import { buildMessages, buildSystemMessage, buildTurnContext, computeCart, type 
 import { sanitize } from './request'
 import { buildRouterState, decide, NOTES, routeTurn, type RouteDecision } from './router'
 import { parseWorkersAiSse, type Usage } from './sse-parser'
+import { isRunwareModel } from './ai-provider'
 import { DATA_TOOLS, TOOL_STEP, TOOLS, catalogLinesFor, flushCart, isKnownTool, newToolState, runTool, waBaseOf, whatsappEvents, type ProductDetailRow, type ToolContext, type ToolResult } from './tools'
 import { addToolText, collectAllowed, createTextGuard } from './validator'
 import { CANNED, DEFAULT_TEXT, faqAnswer, POLICY_REASON, policyText, policyTopic, smallTalkText } from './canned'
@@ -785,7 +786,10 @@ export async function runTurn(req: ChatRequest, deps: TurnDeps, emit: (ev: Assis
                 reasoning = ''
                 toolCalls.length = 0
                 usage = undefined
-                if (primary && retryable && !textSent && attempt === 1 && switchToFallback('primary_error')) {
+                // A fallback on the other host (Runware ↔ Workers AI) also covers that host's 400/401/403: a
+                // rejected parameter or a bad key there says nothing about the other one
+                const otherHost = !!fallbackModel && isRunwareModel(model) !== isRunwareModel(fallbackModel)
+                if (primary && (retryable || otherHost) && !textSent && attempt === 1 && switchToFallback('primary_error')) {
                     model = fallbackModel!
                     primary = false
                     continue

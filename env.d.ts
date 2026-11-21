@@ -19,6 +19,8 @@ interface CloudflareEnv {
     AI_ROUTER_MODEL?: string;
     AI_FALLBACK_MODEL?: string;
     AI_GATEWAY_ID?: string;
+    /** Runware API key (secret; lib/assistant/ai-provider.ts). Unset = the chat runs on Workers AI. */
+    RUNWARE_API_KEY?: string;
     /** IndexNow key (wrangler.toml [vars]; lib/indexnow.ts). */
     INDEXNOW_KEY?: string;
 }

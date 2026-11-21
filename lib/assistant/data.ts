@@ -25,14 +25,45 @@ import { logSystemEvent } from '@/lib/system-log'
 import { pickStoreWhatsapp, type ProductDetailRow } from './tools'
 import { analyzePopular, type AnalyzeResult } from './popular'
 import { buildKnowledge, type Knowledge, type TurnDeps } from './turn'
+import { createAiRunner, isRunwareModel, type AiRunner } from './ai-provider'
 
 /** Code defaults for the model ids (wrangler.toml [vars] override them). */
 export const DEFAULT_MODELS = {
-    chat: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+    // Runware (lib/assistant/ai-provider.ts): the same DeepSeek V4.1 Flash the shop ran on Workers AI
+    chat: 'deepseek:v4.1@flash-1017',
+    // Clef exists only on Workers AI
     router: '@cf/cloudflare/clef-flash',
+    // On Workers AI on purpose: a Runware outage or key problem falls back to the other host
+    fallback: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+} as const
+
+/** Workers AI models used while RUNWARE_API_KEY is not set (the setup before Runware). */
+export const WORKERS_MODELS = {
+    chat: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
     // The older DeepSeek: glm-4.7-flash answered in poor Turkish and skipped the tools in live tests
     fallback: '@cf/deepseek-ai/deepseek-v4-flash-0731',
 } as const
+
+/** Runs both hosts: Runware AIR ids with RUNWARE_API_KEY, "@cf/…" ids on env.AI. */
+export function aiRunnerOf(env: CloudflareEnv): AiRunner {
+    return createAiRunner({ workersAi: env.AI, runwareKey: env.RUNWARE_API_KEY })
+}
+
+/** The chat model: a Runware model only once its key is set, otherwise the Workers AI one. */
+export function chatModelOf(env: CloudflareEnv): string {
+    const m = (env.AI_CHAT_MODEL || DEFAULT_MODELS.chat).trim()
+    return isRunwareModel(m) && !env.RUNWARE_API_KEY?.trim() ? WORKERS_MODELS.chat : m
+}
+
+/** The fallback model (null = none): never the chat model itself, never a Runware model without its key. */
+export function fallbackModelOf(env: CloudflareEnv): string | null {
+    // An explicitly empty AI_FALLBACK_MODEL disables the fallback (canned busy only)
+    let f = (env.AI_FALLBACK_MODEL ?? DEFAULT_MODELS.fallback).trim()
+    if (!f) return null
+    if (isRunwareModel(f) && !env.RUNWARE_API_KEY?.trim()) f = WORKERS_MODELS.fallback
+    if (f === chatModelOf(env)) f = f === WORKERS_MODELS.fallback ? '' : WORKERS_MODELS.fallback
+    return f || null
+}
 
 /** site_settings keys the assistant reads (admin-only ai_* keys included: this runs on the server). */
 export const ASSISTANT_SETTING_KEYS = [
@@ -222,8 +253,8 @@ function factsRunDeps(env: CloudflareEnv, settings: AssistantSettings): FactsRun
     const limiter = env.CHAT_RL_MODEL
     return {
         db,
-        ai: env.AI,
-        model: env.AI_CHAT_MODEL || DEFAULT_MODELS.chat,
+        ai: aiRunnerOf(env),
+        model: chatModelOf(env),
         takeSlot: limiter ? async () => (await limiter.limit({ key: 'deepseek' })).success : undefined,
         budgetOk: async () => {
             try {
@@ -362,8 +393,8 @@ export async function runPopularAnalysis(env: CloudflareEnv, now: Date = new Dat
     const settings = (await getVersionState(db)).settings
     return analyzePopular({
         db: db as unknown as D1Lite,
-        ai: env.AI,
-        model: env.AI_CHAT_MODEL || DEFAULT_MODELS.chat,
+        ai: aiRunnerOf(env),
+        model: chatModelOf(env),
         now,
         budgetExceeded: () => budgetExceeded(db as unknown as D1Lite, now, parseBudgetUsd(settings.ai_daily_budget_usd)),
         recordCost: (calls, cost) => recordExtraCost(db as unknown as D1Lite, calls, cost, now),
@@ -436,16 +467,13 @@ export function clientIp(req: Request): string {
 /** runTurn's dependencies from the Worker env (SPEC 8.1). */
 export function makeTurnDeps(env: CloudflareEnv, req: Request, settings: AssistantSettings): TurnDeps {
     const db = env.DB
-    const ai = env.AI
-    if (!ai) throw new Error('ai_binding_missing')
-    const fallback = env.AI_FALLBACK_MODEL ?? DEFAULT_MODELS.fallback
+    if (!env.AI) throw new Error('ai_binding_missing')
     return {
-        ai,
+        ai: aiRunnerOf(env),
         models: {
-            chat: env.AI_CHAT_MODEL || DEFAULT_MODELS.chat,
+            chat: chatModelOf(env),
             router: env.AI_ROUTER_MODEL || DEFAULT_MODELS.router,
-            // An explicitly empty AI_FALLBACK_MODEL disables the fallback (canned busy only)
-            fallback: fallback.trim() ? fallback.trim() : null,
+            fallback: fallbackModelOf(env),
         },
         gatewayId: env.AI_GATEWAY_ID?.trim() || null,
         now: () => new Date(),

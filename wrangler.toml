@@ -66,9 +66,12 @@ NEXT_PUBLIC_BASE_URL = "https://onopostore.com"
 R2_ENDPOINT = "https://3c39c225b3a27de7822833feb24b65b1.r2.cloudflarestorage.com"
 R2_BUCKET_NAME = "onopo-storage"
 CLOUDFLARE_ACCOUNT_ID = "3c39c225b3a27de7822833feb24b65b1"
-AI_CHAT_MODEL = "@cf/deepseek-ai/deepseek-v4.1-flash-1017"
+# Chat model on Runware (AIR id; needs the RUNWARE_API_KEY secret, else the Workers AI DeepSeek is used).
+# "@cf/…" ids run on Workers AI. The router (Clef) exists only on Workers AI; the fallback stays there so a
+# Runware outage never silences the assistant (lib/assistant/ai-provider.ts, lib/assistant/data.ts).
+AI_CHAT_MODEL = "deepseek:v4.1@flash-1017"
 AI_ROUTER_MODEL = "@cf/cloudflare/clef-flash"
-AI_FALLBACK_MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"
+AI_FALLBACK_MODEL = "@cf/deepseek-ai/deepseek-v4.1-flash-1017"
 # Set to an AI Gateway id (created in the dashboard with logs OFF) to get gateway analytics/spend limits; empty = no gateway
 AI_GATEWAY_ID = ""
 # IndexNow key (lib/indexnow.ts). Public by design: worker.ts serves it at https://onopostore.com/<key>.txt so Bing,
@@ -78,6 +81,7 @@ INDEXNOW_KEY = "0f7a3bf951e623b67e1fcecbe80d3025"
 # Secrets (add via: npx wrangler secret put R2_ACCESS_KEY_ID)
 # R2_ACCESS_KEY_ID
 # R2_SECRET_ACCESS_KEY
+# RUNWARE_API_KEY
 # RESEND_API_KEY
 # JWT_SECRET
 # CRON_SECRET (used by the scheduled handler in worker.ts)
