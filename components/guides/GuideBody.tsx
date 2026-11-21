@@ -101,7 +101,32 @@ export function GuideToc({ sections, faq, className }: { sections: GuideSection[
     )
 }
 
-/** The FAQ, always visible (the FAQPage JSON-LD carries exactly these questions). */
+/** "Kısa cevaplar": the searched questions answered at the top of the guide (also in the FAQPage JSON-LD). */
+export function GuideQuickAnswers({ items, className }: { items: GuideFaq[]; className?: string }) {
+    if (!items.length) return null
+    return (
+        <section aria-labelledby="kisa-cevaplar" className={className}>
+            <div className="rounded-sheet border border-brand-100 bg-brand-50 px-4 py-4 lg:px-5">
+                <h2 id="kisa-cevaplar" className="flex items-center gap-2 text-[15px] font-semibold text-ink">
+                    <Lightbulb className="h-5 w-5 shrink-0 text-brand-600" aria-hidden="true" />
+                    Kısa cevaplar
+                </h2>
+                <dl className="mt-3 space-y-3">
+                    {items.map((item, i) => (
+                        <div key={i}>
+                            <dt className="text-[15px] font-semibold leading-6 text-ink">{item.q}</dt>
+                            <dd className="mt-0.5 text-[15px] leading-6 text-ink-2">
+                                <InlineText text={item.a} />
+                            </dd>
+                        </div>
+                    ))}
+                </dl>
+            </div>
+        </section>
+    )
+}
+
+/** The FAQ, always visible (the FAQPage JSON-LD carries these questions and the quick answers). */
 export function GuideFaqList({ items }: { items: GuideFaq[] }) {
     if (!items.length) return null
     return (

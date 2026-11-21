@@ -54,7 +54,12 @@ export interface Guide {
     datePublished: string
     dateModified: string
     sections: GuideSection[]
-    /** Shown on the page as "Sık sorulan sorular"; the FAQPage JSON-LD carries exactly these. */
+    /**
+     * "Kısa cevaplar" under the intro: the questions people actually search (Search Console queries that show this
+     * guide), each answered in one or two sentences at the top of the page. Also in the FAQPage JSON-LD.
+     */
+    quickAnswers?: GuideFaq[]
+    /** Shown on the page as "Sık sorulan sorular"; the FAQPage JSON-LD carries these and quickAnswers. */
     faq: GuideFaq[]
     /** Heading of the related products row. */
     productsTitle: string

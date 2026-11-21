@@ -2,11 +2,11 @@ import type { Guide } from '../types'
 
 export const hizliSarjGuide: Guide = {
     slug: 'hizli-sarj-nedir-pd-watt-amper',
-    title: 'Hızlı şarj nedir: PD, watt ve amper',
-    description: 'Watt, volt ve amper ne demek? PD, PPS ve Quick Charge farkı ne? Telefonunuzu hızlı şarj etmek için adaptörde ve kabloda nelere bakmanız gerektiğini anlattık.',
+    title: 'Hızlı şarj nedir? PD 20W, watt ve amper',
+    description: 'PD 20W ne demek, süper hızlı şarj kaç watt, fast charge nedir? Kısa cevaplarla açıkladık; adaptör ve kablo seçerken nelere bakmanız gerektiği de bu rehberde.',
     intro: 'Şarj aletlerinin üzerinde 20W, 3A, PD, QC gibi pek çok ifade görürsünüz. Hepsini ezberlemenize gerek yok: birkaç temel kavram, telefonunuza uygun adaptörü ve kabloyu seçmeye yeter.',
     datePublished: '2026-10-22',
-    dateModified: '2026-10-22',
+    dateModified: '2026-11-21',
     sections: [
         {
             id: 'watt-volt-amper',
@@ -86,6 +86,28 @@ export const hizliSarjGuide: Guide = {
                 },
                 { type: 'p', text: 'Kısacası en hızlı şarj için telefonunuzun desteklediği standartta (çoğu zaman PD) bir başlık, o gücü taşıyabilen bir kablo ve serin bir ortam yeterlidir. iPhone\'a özel ayrıntılar [iPhone şarj rehberimizde](/rehber/iphone-sarj-aleti-ve-kablo-secimi/).' },
             ],
+        },
+    ],
+    quickAnswers: [
+        {
+            q: 'PD 20W ne demek?',
+            a: 'PD (USB Power Delivery), USB-C üzerinden çalışan ortak hızlı şarj standardıdır. 20W, adaptörün en fazla 20 watt verdiğini gösterir; iPhone 8 ve sonrası ile PD destekleyen Android telefonlar bu güçte hızlı şarj olur.',
+        },
+        {
+            q: 'Süper hızlı şarj kaç watt?',
+            a: 'Samsung\'un "Süper Hızlı Şarj" özelliği 25W, "Süper Hızlı Şarj 2.0" ise 45W\'tır; ikisi de PPS destekli USB-C PD adaptör ve Type-C kablo ister. Diğer markalarda hızlı şarj gücü modele göre değişir.',
+        },
+        {
+            q: 'Fast charge ne demek?',
+            a: 'Telefonun standart 5V / 10W yerine daha yüksek voltaj ya da akımla şarj olmasıdır. Telefon, adaptör ve kablonun aynı standardı (PD, PPS ya da Quick Charge) desteklemesi gerekir. Samsung\'daki "Adaptive Fast Charging", 15W\'lık eski hızlı şarj modudur.',
+        },
+        {
+            q: 'Telefon şarj aleti kaç volt verir?',
+            a: 'USB çıkışları standart olarak 5 volttur. Hızlı şarjda adaptör telefonla anlaşıp 9V ya da daha yüksek voltaja çıkar. Bu yüzden asıl bakılacak değer watt\'tır: watt = volt × amper, örneğin 5V × 3A = 15W.',
+        },
+        {
+            q: 'Hızlı şarj kablosu nedir?',
+            a: 'Yüksek akımı (genellikle 3A) güvenle taşıyan ve hızlı şarj standardına uygun kablodur. PD hızlı şarj için iki ucu Type-C ya da Type-C to Lightning kablo gerekir; USB-A uçlu kablolarla PD hızlı şarj olmaz.',
         },
     ],
     faq: [

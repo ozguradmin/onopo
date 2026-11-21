@@ -2,11 +2,11 @@ import type { Guide } from '../types'
 
 export const iphoneSarjGuide: Guide = {
     slug: 'iphone-sarj-aleti-ve-kablo-secimi',
-    title: 'iPhone için doğru şarj aleti ve kablo seçimi',
-    description: 'iPhone\'unuz Lightning mi USB-C mi? Hızlı şarj için hangi adaptör ve kablo gerekir, kaç watt yeterli? Doğru şarj aleti ve kablo seçimini sade bir dille anlattık.',
+    title: 'iPhone şarj girişi: Lightning mi USB-C mi?',
+    description: 'iPhone şarj girişinin adı ne? iPhone 14 ve öncesi Lightning, iPhone 15 ve sonrası USB-C girişli. Hızlı şarj için hangi adaptör ve kablo gerektiğini de anlattık.',
     intro: 'iPhone\'a şarj aleti alırken iki soruyu yanıtlamak yeterli: telefonunuzun girişi hangisi ve ne kadar hızlı şarj etmek istiyorsunuz? Bu rehberde girişleri, hızlı şarjın şartlarını ve kablo seçimini adım adım anlatıyoruz.',
     datePublished: '2026-10-22',
-    dateModified: '2026-10-22',
+    dateModified: '2026-11-21',
     sections: [
         {
             id: 'giris-tipi',
@@ -80,6 +80,24 @@ export const iphoneSarjGuide: Guide = {
                 },
                 { type: 'p', text: 'Telefon şarj olurken çok ısınıyorsa kalın kılıfı çıkarmak ve ekranı kapalı tutmak, şarjın daha düzenli ilerlemesine yardımcı olur.' },
             ],
+        },
+    ],
+    quickAnswers: [
+        {
+            q: 'iPhone şarj girişinin adı ne?',
+            a: 'iPhone 5\'ten iPhone 14\'e kadar bütün modellerde giriş Lightning\'dir. iPhone 15 ve sonrası USB-C (Type-C) girişlidir.',
+        },
+        {
+            q: 'iPhone 14\'ün şarj girişi nedir?',
+            a: 'iPhone 14, 14 Plus, 14 Pro ve 14 Pro Max Lightning girişlidir. Hızlı şarj için USB-C girişli bir PD adaptör (20W ve üstü) ve Type-C to Lightning kablo gerekir.',
+        },
+        {
+            q: 'iPhone şarj aleti çeşitleri nelerdir?',
+            a: 'İki ana tür vardır: USB-A girişli klasik adaptörler (standart hız) ve USB-C girişli PD adaptörler (hızlı şarj). Kablo da telefonun girişine göre Lightning ya da USB-C uçlu seçilir.',
+        },
+        {
+            q: 'iPhone hızlı şarj için kaç watt gerekir?',
+            a: '20W PD adaptör iPhone\'u hızlı şarj eder; Apple\'a göre uygun modeller bu şekilde yaklaşık 30 dakikada %50\'ye ulaşır. Daha yüksek watt\'lı PD adaptör de kullanılabilir; telefon ihtiyacı kadarını çeker.',
         },
     ],
     faq: [
