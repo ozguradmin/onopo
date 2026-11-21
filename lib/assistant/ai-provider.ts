@@ -1,9 +1,9 @@
 /**
  * Onopo Asistan: one `run(model, inputs, options)` for both model hosts.
  *
- * Why: the chat models run on Runware (owner's choice, 2026-11-21) through its OpenAI-compatible chat
- * completions API, while the Clef router only exists on Workers AI and the emergency fallback stays there too,
- * so a Runware outage or key problem never silences the assistant. Callers keep the Workers AI call shape
+ * Why: every assistant model runs on Runware since 2026-11-21 (owner: off Workers AI) through its
+ * OpenAI-compatible chat completions API. "@cf/…" ids still go to env.AI if that binding is ever added back
+ * (it is not bound in wrangler.toml any more). Callers keep the Workers AI call shape
  * (env.AI.run): a Runware call with `returnRawResponse` gives back the fetch Response (SSE body when
  * `stream: true`), otherwise the parsed JSON (OpenAI shape, read by readAiResult) or an Error with `.status`
  * (classified by facts-auto's classifyAiError).

@@ -29,40 +29,34 @@ import { createAiRunner, isRunwareModel, type AiRunner } from './ai-provider'
 
 /** Code defaults for the model ids (wrangler.toml [vars] override them). */
 export const DEFAULT_MODELS = {
-    // Runware (lib/assistant/ai-provider.ts): the same DeepSeek V4.1 Flash the shop ran on Workers AI
+    // All on Runware since 2026-11-21 (owner: no Workers AI; lib/assistant/ai-provider.ts).
+    // The same DeepSeek V4.1 Flash the shop ran on Workers AI
     chat: 'deepseek:v4.1@flash-1017',
-    // Clef exists only on Workers AI
-    router: '@cf/cloudflare/clef-flash',
-    // On Workers AI on purpose: a Runware outage or key problem falls back to the other host
-    fallback: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+    // Small, fast chat model answering the router questions as JSON (lib/assistant/router.ts)
+    router: 'google:gemini@3.5-flash-lite',
+    // The older DeepSeek (Workers AI's fallback was its 0731 build): another model when the main one is busy
+    fallback: 'deepseek:v4@flash',
 } as const
 
-/** Workers AI models used while RUNWARE_API_KEY is not set (the setup before Runware). */
-export const WORKERS_MODELS = {
-    chat: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
-    // The older DeepSeek: glm-4.7-flash answered in poor Turkish and skipped the tools in live tests
-    fallback: '@cf/deepseek-ai/deepseek-v4-flash-0731',
-} as const
-
-/** Runs both hosts: Runware AIR ids with RUNWARE_API_KEY, "@cf/…" ids on env.AI. */
+/** Runware AIR ids with RUNWARE_API_KEY; a "@cf/…" id would still use env.AI if that binding is ever added back. */
 export function aiRunnerOf(env: CloudflareEnv): AiRunner {
     return createAiRunner({ workersAi: env.AI, runwareKey: env.RUNWARE_API_KEY })
 }
 
-/** The chat model: a Runware model only once its key is set, otherwise the Workers AI one. */
 export function chatModelOf(env: CloudflareEnv): string {
-    const m = (env.AI_CHAT_MODEL || DEFAULT_MODELS.chat).trim()
-    return isRunwareModel(m) && !env.RUNWARE_API_KEY?.trim() ? WORKERS_MODELS.chat : m
+    return (env.AI_CHAT_MODEL || DEFAULT_MODELS.chat).trim()
 }
 
-/** The fallback model (null = none): never the chat model itself, never a Runware model without its key. */
+/** Whether the chat model can run: its Runware key, or the Workers AI binding for a "@cf/…" model. */
+export function aiReady(env: CloudflareEnv): boolean {
+    return isRunwareModel(chatModelOf(env)) ? !!env.RUNWARE_API_KEY?.trim() : !!env.AI
+}
+
+/** The fallback model (null = none, never the chat model itself). */
 export function fallbackModelOf(env: CloudflareEnv): string | null {
     // An explicitly empty AI_FALLBACK_MODEL disables the fallback (canned busy only)
-    let f = (env.AI_FALLBACK_MODEL ?? DEFAULT_MODELS.fallback).trim()
-    if (!f) return null
-    if (isRunwareModel(f) && !env.RUNWARE_API_KEY?.trim()) f = WORKERS_MODELS.fallback
-    if (f === chatModelOf(env)) f = f === WORKERS_MODELS.fallback ? '' : WORKERS_MODELS.fallback
-    return f || null
+    const f = (env.AI_FALLBACK_MODEL ?? DEFAULT_MODELS.fallback).trim()
+    return f && f !== chatModelOf(env) ? f : null
 }
 
 /** site_settings keys the assistant reads (admin-only ai_* keys included: this runs on the server). */
@@ -245,10 +239,10 @@ export async function staleFactItems(db: D1Database): Promise<{ total: number; r
 
 /**
  * The runner's dependencies from the Worker env (lib/assistant/facts-auto.ts): the chat model, the chat's own
- * DeepSeek slot limiter, today's budget and the cost recorded in today's budget row. null without env.AI.
+ * DeepSeek slot limiter, today's budget and the cost recorded in today's budget row. null when the chat model cannot run (aiReady).
  */
 function factsRunDeps(env: CloudflareEnv, settings: AssistantSettings): FactsRunDeps | null {
-    if (!env.AI) return null
+    if (!aiReady(env)) return null
     const db = env.DB as unknown as D1Lite
     const limiter = env.CHAT_RL_MODEL
     return {
@@ -389,7 +383,7 @@ export async function refreshFactsInBackground(env: CloudflareEnv, settings: Ass
  */
 export async function runPopularAnalysis(env: CloudflareEnv, now: Date = new Date()): Promise<AnalyzeResult> {
     const db = env.DB
-    if (!env.AI) throw new Error('ai_binding_missing')
+    if (!aiReady(env)) throw new Error('ai_binding_missing')
     const settings = (await getVersionState(db)).settings
     return analyzePopular({
         db: db as unknown as D1Lite,
@@ -467,7 +461,7 @@ export function clientIp(req: Request): string {
 /** runTurn's dependencies from the Worker env (SPEC 8.1). */
 export function makeTurnDeps(env: CloudflareEnv, req: Request, settings: AssistantSettings): TurnDeps {
     const db = env.DB
-    if (!env.AI) throw new Error('ai_binding_missing')
+    if (!aiReady(env)) throw new Error('ai_binding_missing')
     return {
         ai: aiRunnerOf(env),
         models: {

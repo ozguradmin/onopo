@@ -38,6 +38,7 @@ export const MODEL_PRICES: readonly { match: string; price: ModelPrice }[] = [
     { match: 'deepseek-v4-flash-0731', price: { input: 0.44, cached: 0.014, output: 1.32 } },
     // Runware (AIR ids), runware.ai/docs/models/deepseek-v4-1-flash, 2026-11
     { match: 'deepseek:v4.1@flash', price: { input: 0.15, cached: 0.01, output: 0.6 } },
+    { match: 'gemini@3.5-flash-lite', price: { input: 0.3, cached: 0.03, output: 2.5 } },
     { match: 'deepseek', price: { input: 0.3, cached: 0.006, output: 1.2 } },
 ]
 const FALLBACK_PRICE: ModelPrice = { input: 0.3, cached: 0.006, output: 1.2 }

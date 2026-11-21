@@ -563,6 +563,55 @@ test('router: state stays under 2,000 characters and sends the Clef body shape',
     assert.equal(r.answers.intent.choice, 'product_search')
 })
 
+test('router (Runware chat model): JSON prompt body, compact answer → Clef shape, tokens counted', async () => {
+    router.resetRouterParams()
+    const state = router.buildRouterState({ masked: 'iphone 15 kablo lazım', history: [], page: 'anasayfa', device: null, cartItems: 0 })
+    let seen
+    const content = 'Tamam: {"intent":"product_search","intent_conf":0.93,"group":"kablo","group_conf":"0.8","handoff":0.05,"buying_stage":1.5,"needs_reasoning":0.1,"injection":0,"personal_data":0,"anger":0}'
+    const ai = { run: async (m, i, o) => { seen = { m, i, o }; return new Response(JSON.stringify({ choices: [{ message: { content } }], usage: { prompt_tokens: 700, completion_tokens: 60 } })) } }
+    const r = await router.routeTurn(ai, 'google:gemini@3.5-flash-lite', state, 500)
+    assert.equal(seen.m, 'google:gemini@3.5-flash-lite')
+    assert.equal(seen.o.returnRawResponse, true)
+    assert.equal(seen.i.messages[0].role, 'system')
+    assert.ok(seen.i.messages[0].content.includes('product_search') && seen.i.messages[0].content.includes('ekran-koruyucu-9d'))
+    assert.deepEqual(JSON.parse(seen.i.messages[1].content), state)
+    assert.equal(seen.i.reasoning_effort, 'none')
+    assert.equal(r.flag, null)
+    assert.equal(r.inputTokens, 700)
+    assert.equal(r.outputTokens, 60)
+    assert.deepEqual(r.answers.intent, { choice: 'product_search', confidence: 0.93 })
+    assert.deepEqual(r.answers.group, { choice: 'kablo', confidence: 0.8 })
+    assert.deepEqual(r.answers.buying_stage, { score: 1.5 })
+    assert.deepEqual(r.answers.injection, { noul: 0 })
+    const d = router.decide(r.answers, 20)
+    assert.equal(d.group, 'kablo')
+    assert.equal(d.intent, 'product_search')
+})
+
+test('router (Runware chat model): junk is dropped, numbers clamped, no JSON → router_error', () => {
+    const a = router.llmAnswersToClef('{"intent":"hack","group":"__proto__","handoff":7,"anger":-2,"injection":"x"}')
+    assert.deepEqual(a, { handoff: { noul: 1 }, anger: { score: 0 } })
+    assert.equal(router.llmAnswersToClef('bilmiyorum'), null)
+    assert.equal(router.llmAnswersToClef('{bozuk'), null)
+    assert.equal(router.llmAnswersToClef('[1,2]'), null)
+})
+
+test('router (Runware chat model): a 400 for reasoning_effort is retried once without it, and remembered', async () => {
+    router.resetRouterParams()
+    const state = router.buildRouterState({ masked: 'merhaba', history: [], page: 'anasayfa', device: null, cartItems: 0 })
+    const bodies = []
+    const ok = new Response(JSON.stringify({ choices: [{ message: { content: '{"intent":"smalltalk","intent_conf":0.95}' } }] }))
+    const ai = { run: async (_m, i) => { bodies.push(i); return 'reasoning_effort' in i ? new Response('bad', { status: 400 }) : ok.clone() } }
+    const r = await router.routeTurn(ai, 'google:gemini@3.5-flash-lite', state, 500)
+    assert.equal(r.answers.intent.choice, 'smalltalk')
+    assert.deepEqual(bodies.map(b => 'reasoning_effort' in b), [true, false])
+    await router.routeTurn(ai, 'google:gemini@3.5-flash-lite', state, 500)
+    assert.deepEqual(bodies.map(b => 'reasoning_effort' in b), [true, false, false])
+    const err = await router.routeTurn({ run: async () => new Response('x', { status: 503 }) }, 'google:gemini@3.5-flash-lite', state, 500)
+    assert.equal(err.flag, 'router_error')
+    router.resetRouterParams()
+})
+
 // ---------------------------------------------------------------------------------------------
 // 9. Prompt
 // ---------------------------------------------------------------------------------------------

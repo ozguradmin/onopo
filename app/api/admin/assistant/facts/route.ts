@@ -11,7 +11,7 @@
  */
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
-import { fillProductFacts, staleFactItems } from '@/lib/assistant/data'
+import { aiReady, fillProductFacts, staleFactItems } from '@/lib/assistant/data'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
             : []
         const { getCloudflareContext } = await import('@opennextjs/cloudflare')
         const { env } = await getCloudflareContext({ async: true })
-        if (!env.AI) return NextResponse.json({ error: 'Yapay zekâ bağlantısı yok.' }, { status: 503, headers })
+        if (!aiReady(env)) return NextResponse.json({ error: 'Yapay zekâ bağlantısı yok.' }, { status: 503, headers })
         const r = await fillProductFacts(env, { deadline: Date.now() + REQUEST_WINDOW_MS, exclude })
         return NextResponse.json(r, { headers })
     } catch (err) {

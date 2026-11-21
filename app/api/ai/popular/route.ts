@@ -7,7 +7,7 @@
  * cache version when `changed` is true so the storefront picks up the new chips. No chat text is logged.
  */
 import { NextResponse } from 'next/server'
-import { runPopularAnalysis } from '@/lib/assistant/data'
+import { aiReady, runPopularAnalysis } from '@/lib/assistant/data'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     try {
         const { getCloudflareContext } = await import('@opennextjs/cloudflare')
         const { env } = await getCloudflareContext({ async: true })
-        if (!env.AI) return NextResponse.json({ error: 'ai_binding_missing' }, { status: 503, headers })
+        if (!aiReady(env)) return NextResponse.json({ error: 'ai_binding_missing' }, { status: 503, headers })
         const r = await runPopularAnalysis(env)
         console.log(`ai_popular status=${r.status} messages=${r.messages} n=${r.questions.length}`)
         return NextResponse.json({ status: r.status, questions: r.questions, messages: r.messages, changed: r.status === 'updated' }, { headers })

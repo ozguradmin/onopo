@@ -15,7 +15,7 @@ import { ERROR_STATUS, encodeEvent, type AssistantEvent, type ErrorCode } from '
 import { parseChatRequest } from '@/lib/assistant/request'
 import { maskInput, runTurn, sha16, type TurnLog } from '@/lib/assistant/turn'
 import { createTurnCapture, pageLabel, recordTranscript } from '@/lib/assistant/transcripts'
-import { clientIp, getAssistantSettings, isAssistantEnabled, isMaintenance, makeTurnDeps, refreshFactsInBackground, type AssistantSettings } from '@/lib/assistant/data'
+import { aiReady, clientIp, getAssistantSettings, isAssistantEnabled, isMaintenance, makeTurnDeps, refreshFactsInBackground, type AssistantSettings } from '@/lib/assistant/data'
 import { countIpTurn, IP_DAILY_TURNS, ipKey, recordTurn, type D1Lite } from '@/lib/assistant/limits'
 import { secondsUntilIstanbulMidnight } from '@/lib/assistant/facts'
 
@@ -76,7 +76,7 @@ export async function POST(req: Request) {
     }
     if (!isAssistantEnabled(settings)) return fail('off')
     if (isMaintenance(settings)) return fail('maintenance')
-    if (!env.AI) return fail('off')
+    if (!aiReady(env)) return fail('off')
 
     // 4. Workers Rate Limiting (a missing binding allows)
     const ip = clientIp(req)
