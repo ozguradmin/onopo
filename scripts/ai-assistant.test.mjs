@@ -862,6 +862,22 @@ test('runTurn: primary 429 → the fallback model answers, mode fallback', async
     assert.equal(events.filter(e => e.t === 'text').map(e => e.v).join(''), 'Yedekten cevap.')
 })
 
+test('runTurn: a Runware chat model rejected with 401/400 falls back to the Workers AI model; same host does not', async () => {
+    const RW = 'deepseek:v4.1@flash-1017'
+    for (const status of [400, 401, 403]) {
+        const ai = mockAi({ chat: [() => new Response('{"error":"x"}', { status })], fallback: [textChunks('Workers cevabı.')] })
+        const { events, log } = await runIt(ai, {}, { models: { chat: RW, router: ROUTER, fallback: FALLBACK } })
+        assert.deepEqual(ai.chatCalls().map(c => c.model), [RW, FALLBACK], `status ${status}`)
+        assert.equal(log.mode, 'fallback')
+        assert.equal(events.filter(e => e.t === 'text').map(e => e.v).join(''), 'Workers cevabı.')
+    }
+    // Both on Workers AI: a 400 is our request's fault, the fallback would fail the same way
+    const ai = mockAi({ chat: [() => new Response('{"error":"x"}', { status: 400 })], fallback: [textChunks('Yedek.')] })
+    const { log } = await runIt(ai)
+    assert.deepEqual(ai.chatCalls().map(c => c.model), [CHAT])
+    assert.equal(log.outcome, 'error')
+})
+
 test('runTurn: primary and fallback both fail → busy text, full WhatsApp card, done(error)', async () => {
     const fail = () => new Response('busy', { status: 503 })
     const ai = mockAi({ chat: [fail], fallback: [fail] })

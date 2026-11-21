@@ -48,8 +48,10 @@ export async function* parseWorkersAiSse(body: ReadableStream<Uint8Array>): Asyn
             let j: any
             try { j = JSON.parse(data) } catch { continue }
             if (j.error) throw new Error(typeof j.error === 'string' ? j.error : JSON.stringify(j.error))
+            // Runware's native error shape
+            if (Array.isArray(j.errors) && j.errors.length) throw new Error('runware_stream_error')
             const choices: any[] | undefined = j.choices
-            if ((!choices || choices.length === 0) && j.usage) usage = j.usage      // cumulative tail
+            if ((!choices || choices.length === 0 || choices[0]?.finish_reason) && j.usage) usage = j.usage // cumulative tail
             if (typeof j.response === 'string' && j.response) yield { t: 'text', v: j.response } // native delta
             if (Array.isArray(j.tool_calls)) j.tool_calls.forEach(addCall)          // native tool calls
             const c = choices?.[0]

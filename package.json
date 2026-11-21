@@ -18,7 +18,7 @@
     "iyzipay": "^2.0.64",
     "jose": "^6.1.3",
     "lucide-react": "^0.563.0",
-    "next": "^16.4.2",
+    "next": "^16.4.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "resend": "^6.9.1",
@@ -37,7 +37,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "^16.4.2",
+    "eslint-config-next": "^16.4.6",
     "tailwindcss": "^4",
     "typescript": "^5",
     "wrangler": "^4.151.0"
