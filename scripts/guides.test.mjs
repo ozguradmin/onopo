@@ -369,3 +369,16 @@ test('redirects: /rehber/ pages are live targets, never redirected from, and not
     assert.equal(await resolveTarget('/blog/powerbank-secimi-mah-ve-cikis-gucu/'), guide)
     assert.equal(R.isLegacyPattern('/rehber/x'), false)
 })
+
+test('guides: quick answers are short questions with short answers, none repeated in the FAQ', () => {
+    for (const g of G.GUIDES) {
+        const qa = g.quickAnswers ?? []
+        for (const item of qa) {
+            assert.match(item.q, /\?$/, `${g.slug}: "${item.q}" ends with ?`)
+            assert.ok(item.a.length >= 40 && item.a.length <= 320, `${g.slug}: answer to "${item.q}" is 40-320 characters (${item.a.length})`)
+        }
+        const faqQs = new Set(g.faq.map(f => f.q.toLocaleLowerCase('tr')))
+        for (const item of qa) assert.ok(!faqQs.has(item.q.toLocaleLowerCase('tr')), `${g.slug}: "${item.q}" is not also in the FAQ`)
+    }
+    assert.ok(G.GUIDES.filter(g => (g.quickAnswers ?? []).length > 0).length >= 4)
+})

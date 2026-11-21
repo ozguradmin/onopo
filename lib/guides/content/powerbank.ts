@@ -2,11 +2,11 @@ import type { Guide } from '../types'
 
 export const powerbankGuide: Guide = {
     slug: 'powerbank-secimi-mah-ve-cikis-gucu',
-    title: 'Powerbank seçerken mAh ve çıkış gücü',
-    description: '10000 mAh mı, 20000 mAh mı? Powerbank telefonu kaç kez şarj eder, çıkış gücü neden önemli, uçağa alınır mı? Powerbank seçerken bilmeniz gerekenleri anlattık.',
+    title: 'Powerbank: mAh ne demek, kaç kez şarj eder?',
+    description: 'Powerbank mAh ne demek, 20000 mAh telefonu kaç kez şarj eder, kaç volt çıkış verir? Kısa cevaplarla açıkladık; 10000 mAh mı 20000 mAh mı, seçimi de anlattık.',
     intro: 'Powerbank alırken herkes önce mAh değerine bakar. Oysa telefonunuzu kaç kez ve ne hızda şarj edeceğinizi kapasiteyle birlikte çıkış gücü belirler. Bu rehberde ikisini birlikte değerlendirmeyi, doğru boyutu seçmeyi ve yolculukta dikkat edilecekleri anlatıyoruz.',
     datePublished: '2026-10-22',
-    dateModified: '2026-10-22',
+    dateModified: '2026-11-21',
     sections: [
         {
             id: 'mah-nedir',
@@ -85,6 +85,28 @@ export const powerbankGuide: Guide = {
                 },
                 { type: 'p', text: 'Kalan kapasiteyi gösteren LED gösterge, powerbankı ne zaman şarja takmanız gerektiğini bilmek için kullanışlıdır. Gösterge son seviyeye indiğinde şarj etmek, bir sonraki ihtiyacınızda powerbankın hazır olmasını sağlar.' },
             ],
+        },
+    ],
+    quickAnswers: [
+        {
+            q: 'Powerbank mAh ne demek?',
+            a: 'mAh (miliamper saat), powerbankın içindeki pillerin kapasitesidir. Değer büyüdükçe daha çok enerji depolar; ama aktarımda kayıp olduğu için etikette yazan kapasitenin tamamı telefona geçmez.',
+        },
+        {
+            q: '20000 mAh powerbank kaç kere şarj eder?',
+            a: 'Pratikte etiket kapasitesinin yaklaşık üçte ikisi telefona ulaşır. 4000 mAh bataryalı bir telefonu 20000 mAh powerbank yaklaşık 3 kez, 10000 mAh powerbank yaklaşık 1,5 kez doldurur.',
+        },
+        {
+            q: 'Powerbank kaç volt çıkış verir?',
+            a: 'USB çıkışları standart olarak 5 volt verir. PD ya da Quick Charge destekli powerbanklar hızlı şarjda 9V veya 12V\'a çıkabilir. İçindeki pillerin voltajı ise genellikle 3,7 volttur.',
+        },
+        {
+            q: 'Powerbank PD ne demek?',
+            a: 'PD (Power Delivery) destekli powerbank, USB-C çıkışından hızlı şarj verir. Telefonunuz PD destekliyorsa Type-C kabloyla normalden belirgin şekilde daha hızlı dolar.',
+        },
+        {
+            q: 'Powerbank kaç mAh olmalı?',
+            a: 'Günlük kullanım ve bir tam şarj için 10000 mAh yeterlidir; hafiftir, cepte taşınır. Uzun yolculuk, kamp ya da iki cihaz için 20000 mAh daha rahattır.',
         },
     ],
     faq: [

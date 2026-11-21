@@ -4,7 +4,7 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { SectionHeader } from '@/components/ui/SectionHeader'
 import { JsonLd } from '@/components/seo/JsonLd'
 import { ProductRail } from '@/components/home/ProductRail'
-import { GuideBody, GuideFaqList, GuideToc, InlineText } from '@/components/guides/GuideBody'
+import { GuideBody, GuideFaqList, GuideQuickAnswers, GuideToc, InlineText } from '@/components/guides/GuideBody'
 import { GuideCards } from '@/components/guides/GuideCards'
 import { GuideArt } from '@/components/guides/GuideArt'
 import { getShippingSettings } from '@/lib/catalog'
@@ -54,6 +54,7 @@ export default async function GuidePage({ params }: { params: Params }) {
     const [{ products, failed }, guideImages, shipping, site] = await Promise.all([getGuideProducts(guide), getGuideImages(), getShippingSettings(), getSiteSeo()])
     const others = GUIDES.filter(g => g.slug !== guide.slug)
     const path = guidePath(guide.slug)
+    const faqItems = [...(guide.quickAnswers ?? []), ...guide.faq]
     const photos = guideImages.images[guide.slug] ?? []
     const jsonLd = [
         articleJsonLd({
@@ -65,7 +66,8 @@ export default async function GuidePage({ params }: { params: Params }) {
             // Originals, like every JSON-LD image (lib/images)
             images: photos.map(p => absoluteImageUrl(p.image)),
         }, site),
-        guide.faq.length > 0 ? faqPageJsonLd(guide.faq.map(f => ({ question: f.q, answer: plain(f.a) }))) : null,
+        // Every visible question: the quick answers at the top and the FAQ at the end
+        faqItems.length > 0 ? faqPageJsonLd(faqItems.map(f => ({ question: f.q, answer: plain(f.a) }))) : null,
         products.length > 0 ? itemListJsonLd(products.map(p => ({ path: productPath(p.slug), name: p.name })), { name: guide.productsTitle }) : null,
     ]
 
@@ -91,6 +93,8 @@ export default async function GuidePage({ params }: { params: Params }) {
                             </p>
                             <GuideArt images={photos} variant="hero" eager className="mt-5" />
                         </header>
+
+                        <GuideQuickAnswers items={guide.quickAnswers ?? []} className="mt-6 max-w-[68ch]" />
 
                         <GuideToc sections={guide.sections} faq={guide.faq.length > 0} className="mt-6 rounded-sheet border border-line bg-surface px-4 py-3 lg:hidden" />
 

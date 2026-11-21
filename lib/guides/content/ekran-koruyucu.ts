@@ -2,11 +2,11 @@ import type { Guide } from '../types'
 
 export const ekranKoruyucuGuide: Guide = {
     slug: 'ekran-koruyucu-secimi-9d-12d-seramik',
-    title: 'Ekran koruyucu seçimi: 9D, 12D seramik, anti-static',
-    description: '9D cam mı, 12D seramik mi? Anti-static ne işe yarar? Telefonunuza uygun ekran koruyucuyu seçmek ve kabarcıksız takmak için bilmeniz gerekenleri anlattık.',
+    title: '9D ekran koruyucu nedir? 9D, 12D seramik farkı',
+    description: '9D ekran koruyucu nedir, 12D seramikten farkı ne, anti-static ne işe yarar? Kısa cevaplarla açıkladık; koruyucuyu kabarcıksız takmanın yolunu da anlattık.',
     intro: 'Ekran koruyucu küçük bir parça, ama yanlış seçildiğinde kenarlardan kalkar, kılıfla çakışır ya da dokunmayı zorlaştırır. Bu rehberde mağazamızdaki iki ana türü, 9D anti-static temperli camı ve 12D seramik koruyucuyu karşılaştırıyor, seçim ve takma ipuçlarını paylaşıyoruz.',
     datePublished: '2026-10-22',
-    dateModified: '2026-10-22',
+    dateModified: '2026-11-21',
     sections: [
         {
             id: '9d-12d-ne-demek',
@@ -87,6 +87,20 @@ export const ekranKoruyucuGuide: Guide = {
                 { type: 'p', text: 'Ekran koruyucuyu günlük olarak kuru bir mikrofiber bezle silmek yeterlidir. Yağ ve parmak izi lekelerinde bezi hafifçe nemlendirebilir ya da ekran için üretilmiş bir temizleme mendili kullanabilirsiniz. Çamaşır suyu, cam sil gibi sert kimyasallar ve kağıt havlu yüzeyde iz bırakabileceği için uygun değildir.' },
                 { type: 'p', text: 'Koruyucunun kenarına toz ya da kir birikiyorsa onu kaldırmaya çalışmayın: kaldırılan koruyucu çoğu zaman eskisi kadar iyi yapışmaz. Kenar açılmaya başladıysa yenisiyle değiştirmek en temiz çözümdür.' },
             ],
+        },
+    ],
+    quickAnswers: [
+        {
+            q: '9D ekran koruyucu nedir?',
+            a: 'Ekranı kenarlarına kadar kaplayan temperli cam koruyucudur. "9D" bir ölçü birimi ya da resmî standart değil, kavisli kenarlı tam kaplama camlar için kullanılan bir ürün adıdır.',
+        },
+        {
+            q: '12D seramik ekran koruyucu nedir?',
+            a: 'Esnek seramik malzemeden yapılan, ekranı tam kaplayan koruyucudur. Camdan daha esnektir ve darbede kolay çatlamaz; "12D" de 9D gibi bir standart değil, ürün adıdır.',
+        },
+        {
+            q: '9H ile 9D aynı şey mi?',
+            a: 'Hayır. 9H, kurşun kalem sertlik testine göre yüzeyin çizilmeye karşı direncini anlatır; 9D ise camın kenar yapısını ve kaplamasını tarif eden bir ürün adıdır.',
         },
     ],
     faq: [
